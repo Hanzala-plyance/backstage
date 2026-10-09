@@ -1,0 +1,652 @@
+﻿using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Cysharp.Threading.Tasks;
+using Newtonsoft.Json;
+using PlasticBand.Devices;
+using UnityEngine.InputSystem;
+using YARG.Core;
+using YARG.Core.Game;
+using YARG.Core.Logging;
+using YARG.Helpers;
+using YARG.Input;
+using YARG.Input.Bindings;
+using YARG.Localization;
+using YARG.Menu.MusicLibrary;
+using YARG.Menu.Filters;
+using YARG.Menu.Persistent;
+using YARG.Menu.ProfileList;
+using YARG.Settings;
+using YARG.Song;
+
+namespace YARG.Player
+{
+    /// <summary>
+    /// A class that manages all of the <see cref="YargProfile"/>s and <see cref="YargPlayer"/>s.
+    /// <br/><br/>
+    /// <see cref="YargProfile"/>s are used to store and serialize profile settings, names, etc.
+    /// Once a profile is "taken," it turns into a <see cref="YargPlayer"/>.
+    /// </summary>
+    public static class PlayerContainer
+    {
+        public  static string ProfilesDirectory => Path.Combine(PathHelper.PersistentDataPath, "profiles");
+        private static string ProfilesPath      => Path.Combine(ProfilesDirectory, "profiles.json");
+        private static string ProfilesBackupPath => Path.Combine(ProfilesDirectory, "profiles.json.bak");
+
+        private static readonly List<YargProfile> _profiles = new();
+        private static readonly List<YargPlayer>  _players  = new();
+
+        private static readonly Dictionary<Guid, YargProfile>       _profilesById     = new();
+        private static readonly Dictionary<YargProfile, YargPlayer> _playersByProfile = new();
+
+        public delegate void OnPlayerAdded(YargPlayer player);
+        public delegate void OnPlayerRemoved(YargPlayer player);
+
+        public static event OnPlayerAdded PlayerAdded;
+        public static event OnPlayerRemoved PlayerRemoved;
+
+        /// <summary>
+        /// A list of all of the profiles (taken or not).
+        /// </summary>
+        public static IReadOnlyList<YargProfile> Profiles => _profiles;
+
+        /// <summary>
+        /// A list of all of the active players.
+        /// </summary>
+        public static IReadOnlyList<YargPlayer> Players => _players;
+
+        /// <summary>
+        /// An enumerator over the list of all of the active players.
+        /// </summary>
+        public static List<YargPlayer>.Enumerator PlayerEnumerator => _players.GetEnumerator();
+
+        private static bool _isInitialized;
+
+        static PlayerContainer()
+        {
+            // Make sure the folder exists to prevent errors
+            Directory.CreateDirectory(ProfilesDirectory);
+
+            InputManager.DeviceAdded += OnDeviceAdded;
+            InputManager.DeviceRemoved += OnDeviceRemoved;
+        }
+
+        public static bool AddProfile(YargProfile profile)
+        {
+            if (_profiles.Contains(profile))
+            {
+                return false;
+            }
+
+            _profiles.Add(profile);
+            _profilesById.Add(profile.Id, profile);
+            ActiveProfilesChanged();
+            return true;
+        }
+
+        public static bool RemoveProfile(YargProfile profile)
+        {
+            if (!_profiles.Contains(profile))
+            {
+                return false;
+            }
+
+            // A profile that is taken can't be removed
+            if (_playersByProfile.ContainsKey(profile))
+            {
+                return false;
+            }
+
+            _profiles.Remove(profile);
+            _profilesById.Remove(profile.Id);
+            ActiveProfilesChanged();
+            return true;
+        }
+
+        public static YargProfile GetProfileById(Guid id)
+        {
+            return _profilesById.GetValueOrDefault(id);
+        }
+
+        public static bool IsProfileTaken(YargProfile profile)
+        {
+            return _playersByProfile.ContainsKey(profile);
+        }
+
+        public static YargPlayer CreatePlayerFromProfile(YargProfile profile, bool resolveDevices)
+        {
+            if (!_profiles.Contains(profile))
+            {
+                return null;
+            }
+
+            if (IsProfileTaken(profile))
+            {
+                return null;
+            }
+
+            var bindings = BindingsContainer.GetBindingsForProfile(profile);
+            if (resolveDevices)
+            {
+                bindings.ResolveDevices();
+            }
+
+            var player = new YargPlayer(profile, bindings);
+            player.EnableInputs();
+            _players.Add(player);
+            _playersByProfile.Add(profile, player);
+            ActiveProfilesChanged();
+            player.RefreshPresets();
+            profile.ClaimProfile();
+            PlayerAdded?.Invoke(player);
+            return player;
+        }
+
+        public static bool DisposePlayer(YargPlayer player)
+        {
+            if (!_players.Contains(player))
+            {
+                return false;
+            }
+
+            _players.Remove(player);
+            _playersByProfile.Remove(player.Profile);
+
+            PlayerRemoved?.Invoke(player);
+            player.Dispose();
+            ActiveProfilesChanged();
+            return true;
+        }
+
+        public static bool SwapPlayerToProfile(YargPlayer player, YargProfile newProfile)
+        {
+            if (!_players.Contains(player))
+            {
+                return false;
+            }
+
+            if (IsProfileTaken(newProfile))
+            {
+                return false;
+            }
+
+            _playersByProfile.Remove(player.Profile);
+            _playersByProfile.Add(newProfile, player);
+
+            var bindings = BindingsContainer.GetBindingsForProfile(newProfile);
+            player.SwapToProfile(newProfile, bindings, true);
+            ActiveProfilesChanged();
+            return true;
+        }
+
+        private static void ActiveProfilesChanged()
+        {
+            if (SettingsManager.Settings.LibrarySort == SortAttribute.Playable ||
+                SettingsManager.Settings.LibrarySort == SortAttribute.Playcount)
+            {
+                MusicLibraryMenu.SetReload(MusicLibraryReloadState.Full);
+            }
+
+            FiltersMenu.RefreshActiveFilterPredicate();
+            MusicLibraryMenu.NeedsReload();
+
+            StatsManager.Instance?.UpdateActivePlayers();
+        }
+
+        public static YargPlayer GetPlayerFromProfile(YargProfile profile)
+        {
+            if (!_playersByProfile.TryGetValue(profile, out var player))
+            {
+                return null;
+            }
+
+            return player;
+        }
+
+#nullable enable
+        public static YargProfile? GetProfileForDevice(InputDevice device)
+#nullable disable
+        {
+            var candidateProfiles = new List<YargProfile>();
+
+            foreach (var profile in _profiles)
+            {
+                if (IsProfileTaken(profile))
+                {
+                    continue;
+                }
+
+                var bindings = BindingsContainer.GetBindingsForProfile(profile);
+                if (bindings.MatchesDevice(device))
+                {
+                    candidateProfiles.Add(profile);
+                }
+            }
+
+            // Return the profile that has the most recent LastUsed time
+            return candidateProfiles.OrderByDescending(e => e.LastUsed).FirstOrDefault();
+        }
+
+        public static bool IsDeviceTaken(InputDevice device)
+        {
+            foreach (var player in _players)
+            {
+                if (player.Bindings.ContainsDevice(device))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void OnDeviceAdded(InputDevice device)
+        {
+            foreach (var player in _players)
+            {
+                player.Bindings.OnDeviceAdded(device);
+            }
+
+            if (!SettingsManager.Settings.AutoCreateProfiles.Value)
+            {
+                return;
+            }
+
+            _ = TryCreateProfile(device);
+        }
+
+        private static void OnDeviceRemoved(InputDevice device)
+        {
+            foreach (var player in _players)
+            {
+                player.Bindings.OnDeviceRemoved(device);
+            }
+        }
+
+        private static async UniTask<bool> TryCreateProfile(InputDevice device)
+        {
+            // Some devices don't appear in their final form immediately, so we have to wait a bit
+            await UniTask.Delay(2500, true);
+
+            if (IsDeviceTaken(device))
+            {
+                return false;
+            }
+
+            if (GetProfileForDevice(device) is not null)
+            {
+                return false;
+            }
+
+            return CreateProfileFromDevice(device);
+        }
+
+        public static bool TryConnectProfile(InputDevice device)
+        {
+            if (IsDeviceTaken(device))
+            {
+                return false;
+            }
+
+            var profile = GetProfileForDevice(device);
+            if (profile is null)
+            {
+                return false;
+            }
+
+            CreatePlayerFromProfile(profile, true);
+            return true;
+        }
+
+        public static int LoadProfiles()
+        {
+            bool usedBackup = false;
+
+            _profiles.Clear();
+            _profilesById.Clear();
+
+            // Players must be disposed
+            _players.ForEach(i => i.Dispose());
+            _players.Clear();
+
+            string profilesPath = ProfilesPath;
+            if (!File.Exists(profilesPath))
+            {
+                // If the file doesn't exist, then there are no profiles
+                _isInitialized = true;
+                return 0;
+            }
+
+            string profilesJson = File.ReadAllText(profilesPath);
+            List<YargProfile> profiles = null;
+            try
+            {
+                profiles = JsonConvert.DeserializeObject<List<YargProfile>>(profilesJson);
+            }
+            catch (Exception ex)
+            {
+                YargLogger.LogException(ex, "Error while loading profiles! Recovery will be attempted.");
+            }
+
+            if (profiles is null)
+            {
+                // Attempt to load from backup before giving up
+                profiles = LoadProfilesFromBackup();
+
+                if (profiles.Count > 0)
+                {
+                    // Flag that we used the backup so we can immediately save once everything is loaded
+                    YargLogger.LogWarning("Failed to load profiles from main file, using backup.");
+                    usedBackup = true;
+                }
+                else
+                {
+                    YargLogger.LogWarning("Failed to load profiles! Bindings loading will be skipped.");
+                    return 0;
+                }
+            }
+
+            _profiles.AddRange(profiles);
+
+            // Store profiles by ID
+            foreach (var profile in _profiles)
+            {
+                profile.GrandfatherIn();
+                _profilesById.Add(profile.Id, profile);
+            }
+
+            BindingsContainer.LoadBindings();
+
+            _isInitialized = true;
+
+            if (usedBackup)
+            {
+                // Rewrite the main profiles file with the backup data
+                SaveProfiles(false);
+            }
+            else
+            {
+                // If we didn't use the backup, that means loading was good so we should save a new backup
+                SaveBackupProfiles();
+            }
+
+            return _profiles.Count;
+        }
+
+        private static List<YargProfile> LoadProfilesFromBackup()
+        {
+            if (!File.Exists(ProfilesBackupPath))
+            {
+                return new List<YargProfile>();
+            }
+
+            string profilesJson = File.ReadAllText(ProfilesBackupPath);
+            try
+            {
+                return JsonConvert.DeserializeObject<List<YargProfile>>(profilesJson);
+            }
+            catch (Exception e)
+            {
+                YargLogger.LogFormatError("Failed to load profiles from backup file: {0}", e.Message);
+                return new List<YargProfile>();
+            }
+        }
+
+        public static int SaveProfiles(bool updateOrder = true)
+        {
+            if (!_isInitialized)
+            {
+                YargLogger.LogWarning("Profiles could not be saved as they were not loaded");
+                return 0;
+            }
+
+            if (updateOrder)
+            {
+                UpdateProfileOrder();
+            }
+
+            string profilesJson = JsonConvert.SerializeObject(_profiles, Formatting.Indented);
+
+            // We do this dance with the temporary file to avoid the possibility of corruption during saving
+            string tempPath = Path.Combine(ProfilesDirectory, Path.GetRandomFileName());
+
+            try
+            {
+                File.WriteAllText(tempPath, profilesJson);
+            }
+            catch (Exception e)
+            {
+                YargLogger.LogFormatError("Failed to write profiles to file: {0}", e.Message);
+                return 0;
+            }
+
+            // Verify that the newly written file is valid before replacing the old one
+            int? profileCount = VerifyProfileFile(tempPath);
+            if (profileCount is null || profileCount != _profiles.Count)
+            {
+                YargLogger.LogFormatError("Failed to verify new profiles file: {0} profiles were expected, but {1} were found", _profiles.Count, profileCount ?? -1);
+                File.Delete(tempPath);
+                return 0;
+            }
+
+            if (File.Exists(ProfilesPath))
+            {
+                File.Delete(ProfilesPath);
+            }
+
+            File.Move(tempPath, ProfilesPath);
+
+            BindingsContainer.SaveBindings();
+
+            return _profiles.Count;
+        }
+
+        private static bool SaveBackupProfiles()
+        {
+            if (!_isInitialized)
+            {
+                YargLogger.LogWarning("Profiles could not be saved as they were not loaded");
+                return false;
+            }
+
+            string profilesJson = JsonConvert.SerializeObject(_profiles, Formatting.Indented);
+            File.WriteAllText(ProfilesBackupPath, profilesJson);
+
+            return true;
+        }
+
+        private static int? VerifyProfileFile(string path)
+        {
+            if (!File.Exists(path))
+            {
+                return null;
+            }
+
+            List<YargProfile> profiles;
+
+            try
+            {
+                string profilesJson = File.ReadAllText(path);
+                profiles = JsonConvert.DeserializeObject<List<YargProfile>>(profilesJson);
+            }
+            catch (Exception e)
+            {
+                YargLogger.LogFormatError("Failed to verify profile file: {0}", e.Message);
+                return null;
+            }
+
+            return profiles.Count;
+        }
+
+        public static void Destroy()
+        {
+            // Can't `foreach` when modifying a collection, so this will do instead
+            while (_players.Count > 0)
+            {
+                DisposePlayer(_players[0]);
+            }
+        }
+
+        public static void EnsureValidInstruments()
+        {
+            foreach (var profile in _profiles)
+            {
+                profile.EnsureValidInstrument();
+            }
+        }
+
+        public static bool OnlyHasBotsActive()
+        {
+            foreach (var player in _players)
+            {
+                if (!player.Profile.IsBot)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public static bool HasAnyBotsActive()
+        {
+            return _players.Exists(i => i.Profile.IsBot);
+        }
+
+        public static int GetPlayerIndex(YargPlayer player)
+        {
+            int index = _players.IndexOf(player);
+            if (index == -1)
+            {
+                throw new ArgumentException("Player not found in the active player list");
+            }
+
+            return index;
+        }
+
+        public static void MoveUp(YargPlayer player)
+        {
+            int index = GetPlayerIndex(player);
+            if (index == 0)
+            {
+                return;
+            }
+
+            _players.RemoveAt(index);
+            _players.Insert(index - 1, player);
+        }
+
+        public static void MoveDown(YargPlayer player)
+        {
+            int index = GetPlayerIndex(player);
+            if (index == _players.Count - 1)
+            {
+                return;
+            }
+
+            _players.RemoveAt(index);
+            _players.Insert(index + 1, player);
+        }
+
+        public static void UpdateProfileOrder()
+        {
+            ClearProfileOrder();
+
+            for (int i = 0; i < _players.Count; i++)
+            {
+                _players[i].Profile.AutoConnectOrder = i;
+            }
+        }
+
+        public static void ClearProfileOrder()
+        {
+            foreach (var profile in Profiles)
+            {
+                profile.AutoConnectOrder = null;
+            }
+        }
+
+        public static void AutoConnectProfiles()
+        {
+            foreach (var profile in Profiles.Where(e => e.AutoConnectOrder != null).OrderBy(e => e.AutoConnectOrder))
+            {
+                CreatePlayerFromProfile(profile, true);
+            }
+        }
+
+        private static bool CreateProfileFromDevice(InputDevice device)
+        {
+            if (IsDeviceTaken(device))
+            {
+                return false;
+            }
+
+            GameMode gameMode = default;
+            string profileName = string.Empty;
+
+            if (device is FiveFretGuitar)
+            {
+                gameMode = GameMode.FiveFretGuitar;
+                profileName = "New Guitar Profile";
+            }
+            else if (device is FourLaneDrumkit)
+            {
+                gameMode = GameMode.FourLaneDrums;
+                profileName = "New Drums Profile";
+            }
+            else if (device is FiveLaneDrumkit)
+            {
+                gameMode = GameMode.FiveLaneDrums;
+                profileName = "New Drums Profile";
+            }
+            else if (device is ProKeyboard)
+            {
+                gameMode = GameMode.ProKeys;
+                profileName = "New Keys Profile";
+            }
+            else
+            {
+                // Filter out keyboard and mouse devices for the purposes of this message, otherwise we're just
+                // making noise about nothing for most players
+                if (device is Keyboard or Mouse or Pen)
+                {
+                    return false;
+                }
+
+                // TODO: Figure out why this triggers for non-input devices like stage kits so we can enable this
+                // var failMessage = Localize.KeyFormat("Menu.Toast.UnsupportedDevice", device.displayName);
+                // ToastManager.ToastWarning(failMessage);
+                return false;
+            }
+
+            var newProfile = new YargProfile
+            {
+                Name = ProfileListMenu.GetUniqueProfileName(profileName),
+                NoteSpeed = 5,
+                HighwayLength = 1,
+                GameMode = gameMode
+            };
+
+            AddProfile(newProfile);
+
+            var player = CreatePlayerFromProfile(newProfile, false);
+            if (player is null)
+            {
+                YargLogger.LogFormatError("Failed to connect profile {0}!", newProfile.Name);
+                return false;
+            }
+
+            player.Bindings.AddDevice(device);
+
+            if (!player.Bindings.ContainsBindingsForDevice(device))
+            {
+                player.Bindings.SetDefaultBinds(device);
+            }
+
+            var successMessage = Localize.KeyFormat("Menu.Toast.ProfileCreated", device.displayName);
+            ToastManager.ToastSuccess(successMessage);
+            return true;
+        }
+    }
+}

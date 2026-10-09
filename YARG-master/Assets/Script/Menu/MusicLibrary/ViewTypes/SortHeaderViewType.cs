@@ -1,0 +1,123 @@
+﻿using System;
+using System.Collections.Generic;
+using Cysharp.Text;
+using UnityEngine;
+using UnityEngine.AddressableAssets;
+using YARG.Core.Song;
+using YARG.Helpers;
+using YARG.Menu.Data;
+
+namespace YARG.Menu.MusicLibrary
+{
+    public class SortHeaderViewType : ViewType
+    {
+        public override BackgroundType Background => BackgroundType.Category;
+
+        public override bool UseWiderPrimaryText => true;
+
+        public override string StableId => _stableId;
+
+        public readonly  string HeaderText;
+        public readonly  string ShortcutName;
+        public readonly  string SourceCountText;
+        public readonly  string CharterCountText;
+        public readonly  string GenreCountText;
+        public readonly  string SubgenreCountText;
+        private readonly int    _songCount;
+        public           int    TotalStarsCount { get; set; }
+        public readonly  bool   Collapsed;
+        private readonly Action _onClicked;
+
+        private static readonly HashSet<string> SourceCounter  = new();
+        private static readonly HashSet<string> CharterCounter = new();
+        private static readonly HashSet<string> GenreCounter   = new();
+        private static readonly HashSet<string> SubgenreCounter = new();
+        private static readonly Dictionary<string, Sprite> IconCache = new();
+        private readonly string _stableId;
+
+        public SortHeaderViewType(string headerText, int songCount, string shortcutName, SongEntry[] songsUnderCategory,
+            bool collapsed = false, Action onClicked = null)
+        {
+            HeaderText = headerText;
+            _songCount = songCount;
+            ShortcutName = shortcutName;
+            Collapsed = collapsed;
+            _onClicked = onClicked;
+
+            _stableId = $"SortHeader:{headerText}:{shortcutName}";
+
+            foreach (var song in songsUnderCategory)
+            {
+                SourceCounter.Add(song.Source);
+                CharterCounter.Add(song.Charter);
+                GenreCounter.Add(song.Genre);
+                SubgenreCounter.Add(song.Subgenre);
+            }
+
+            SourceCountText = Pluralize("Source", SourceCounter.Count);
+            CharterCountText = Pluralize("Charter", CharterCounter.Count);
+            GenreCountText = Pluralize("Genre", GenreCounter.Count);
+            SubgenreCountText = Pluralize("Subgenre", SubgenreCounter.Count);
+            SourceCounter.Clear();
+            CharterCounter.Clear();
+            GenreCounter.Clear();
+            SubgenreCounter.Clear();
+        }
+
+        public override string GetPrimaryText(bool selected)
+        {
+            if (selected)
+            {
+                return TextColorer.StyleString(HeaderText, MenuData.Colors.HeaderSelectedPrimary, 600);
+            }
+            else
+            {
+                return TextColorer.StyleString(HeaderText, MenuData.Colors.HeaderPrimary, 600);
+            }
+        }
+
+        public override string GetSecondaryText(bool selected)
+        {
+            return CreateSongCountString(_songCount);
+        }
+
+        public override string GetSideText(bool selected)
+        {
+            var obtainedStars = TextColorer.StyleString(
+                ZString.Format("{0}", TotalStarsCount),
+                MenuData.Colors.HeaderSecondary,
+                700);
+
+            var totalStars = TextColorer.StyleString(
+                ZString.Format(" / {0}", _songCount * 5),
+                MenuData.Colors.HeaderTertiary,
+                600);
+
+            return ZString.Concat(obtainedStars, totalStars);
+        }
+
+        private static string Pluralize(string item, int count)
+        {
+            return $"{count} {item}{(count == 1 ? "" : "s")}";
+        }
+
+
+#nullable enable
+        public override Sprite? GetIcon()
+#nullable disable
+        {
+            string assetKey = Collapsed ? "MusicLibraryIcons[Right]" : "MusicLibraryIcons[Down]";
+            if (!IconCache.TryGetValue(assetKey, out var icon))
+            {
+                IconCache[assetKey] = icon = Addressables.LoadAssetAsync<Sprite>(assetKey).WaitForCompletion();
+            }
+
+            return icon;
+        }
+
+        public override void PrimaryButtonClick()
+        {
+            _onClicked?.Invoke();
+        }
+    }
+}

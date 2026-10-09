@@ -1,0 +1,6 @@
+node_modules/
+build/
+MacRiff.app/
+.DS_Store
+
+MacRiff Setup.app/

@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 3
+  tags:
+  - FileBrowser
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - FadeExclude
+  - Water
+  - UI
+  - Notes
+  - Track
+  - Settings Preview
+  - Venue
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0
+  - name: Harm1
+    uniqueID: 2649008323
+    locked: 0
+  - name: Harm2
+    uniqueID: 626877311
+    locked: 0
+  - name: Harm3
+    uniqueID: 3317812413
+    locked: 0
+  m_RenderingLayers:
+  - Default

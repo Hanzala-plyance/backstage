@@ -1,0 +1,1157 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using Cysharp.Threading.Tasks;
+using UnityEngine;
+using YARG.Assets.Script.Helpers;
+using YARG.Core;
+using YARG.Core.Audio;
+using YARG.Core.Chart;
+using YARG.Core.Engine;
+using YARG.Core.Logging;
+using YARG.Gameplay.HUD;
+using YARG.Gameplay.Visuals;
+using YARG.Helpers;
+using YARG.Playback;
+using YARG.Player;
+using YARG.Settings;
+using YARG.Themes;
+
+namespace YARG.Gameplay.Player
+{
+    public abstract class TrackPlayer : BasePlayer
+    {
+        public const float STRIKE_LINE_POS       = -2f;
+        public const float DEFAULT_ZERO_FADE_POS = 3f;
+        public const float NOTE_SPAWN_OFFSET     = 5f;
+
+        public const float TRACK_WIDTH  = 2f;
+
+        public static int HighwayCount = 1;
+
+        public double SpawnTimeOffset => (ZeroFadePosition + _spawnAheadDelay + -STRIKE_LINE_POS) / NoteSpeed;
+
+        protected TrackView TrackView { get; private set; }
+
+        [field: Header("Visuals")]
+        [field: SerializeField]
+        public Camera TrackCamera { get; private set; }
+
+        [SerializeField]
+        protected CameraPositioner CameraPositioner;
+        [SerializeField]
+        protected HighwayCameraRendering HighwayCameraRendering;
+        [SerializeField]
+        protected TrackMaterial TrackMaterial;
+        [SerializeField]
+        protected ComboMeter ComboMeter;
+        [SerializeField]
+        protected StarpowerBar StarpowerBar;
+        [SerializeField]
+        protected SunburstEffects SunburstEffects;
+        [SerializeField]
+        protected IndicatorStripes IndicatorStripes;
+        [SerializeField]
+        protected HitWindowDisplay HitWindowDisplay;
+
+        [SerializeField]
+        private Transform _hudLocation;
+
+        [Header("Pools")]
+        [SerializeField]
+        protected KeyedPool NotePool;
+        [SerializeField]
+        protected Pool LanePool;
+        [SerializeField]
+        protected Pool BeatlinePool;
+        [SerializeField]
+        protected Pool EffectPool;
+
+        public float ZeroFadePosition { get; private set; }
+        public float FadeSize         { get; private set; }
+
+        [field: Header("Star Power Trim Effect")]
+        [SerializeField]
+        protected StarPowerEffectElement StarPowerEffect;
+
+        protected List<Beatline> Beatlines;
+
+        protected int BeatlineIndex;
+
+        protected bool IsBass { get; private set; }
+
+        public int LaneCount { get; protected set; }
+
+        private float _spawnAheadDelay;
+
+        protected float SongLength;
+
+        protected LaneElement[] BRELanes;
+
+        public virtual void Initialize(int index, YargPlayer player, SongChart chart, TrackView trackView,
+            StemMixer mixer, int? lastHighScore)
+        {
+            if (IsInitialized)
+            {
+                return;
+            }
+
+            Initialize(index, player, chart, lastHighScore);
+
+            TrackView = trackView;
+
+            Beatlines = SyncTrack.Beatlines;
+            BeatlineIndex = 0;
+
+            var preset = player.EnginePreset;
+            IndicatorStripes.Initialize(preset);
+
+            // Set fade information and highway length
+            ZeroFadePosition = DEFAULT_ZERO_FADE_POS * Player.Profile.HighwayLength;
+            FadeSize = Player.CameraPreset.FadeLength;
+
+            _spawnAheadDelay = GameManager.IsPractice ? SettingsManager.Settings.PracticeRestartDelay.Value : 2;
+            if (player.Profile.HighwayLength > 1)
+            {
+                FadeSize *= player.Profile.HighwayLength;
+            }
+
+            // Move the HUD location based on the highway length
+            var change = ZeroFadePosition - DEFAULT_ZERO_FADE_POS;
+            _hudLocation.position = _hudLocation.position.AddZ(change);
+
+            // Must be done after the HUD location is set
+            StarPowerEffect.Initialize();
+            StarPowerEffect.gameObject.SetActive(false);
+
+            // Determine if a track is bass or not for the BASS GROOVE text notification
+            IsBass = Player.Profile.CurrentInstrument
+                is Instrument.FiveFretBass
+                or Instrument.SixFretBass
+                or Instrument.ProBass_17Fret
+                or Instrument.ProBass_22Fret;
+
+            TrackView.ShowPlayerName(player);
+        }
+
+        protected override void ResetVisuals()
+        {
+            // "Muting a stem" isn't technically a visual,
+            // but it's a form of feedback so we'll put it here.
+            SetStemMuteState(false);
+
+            ComboMeter.SetFullCombo(IsFc);
+            TrackView.ForceReset();
+            GameManager.ResetCoda();
+
+            NotePool.ReturnAllObjects();
+            LanePool.ReturnAllObjects();
+            BeatlinePool.ReturnAllObjects();
+
+            HitWindowDisplay.SetHitWindowSize();
+        }
+    }
+
+    public abstract class TrackPlayer<TEngine, TNote> : TrackPlayer
+        where TEngine : BaseEngine
+        where TNote : Note<TNote>
+    {
+        public TEngine Engine { get; private set; }
+
+        public override BaseEngine BaseEngine => Engine;
+
+        protected List<TNote> Notes { get; set; }
+
+        protected int NoteIndex { get; private set; }
+
+        public InstrumentDifficulty<TNote> NoteTrack { get; private set; }
+
+        private InstrumentDifficulty<TNote> OriginalNoteTrack { get; set; }
+
+        private int _currentMultiplier;
+        private int _previousMultiplier;
+
+        private bool _isHotStartChecked;
+        private bool _previousBassGrooveState;
+        private bool _newHighScoreShown;
+
+        private double _previousStarPowerAmount;
+
+        private bool _wasStarPowerActive;
+        private bool _didLowerTrack;
+
+        private Queue<TrackEffect> _upcomingEffects = new();
+        private List<TrackEffectElement> _currentEffects = new();
+        protected List<TrackEffect> _trackEffects = new();
+
+        private List<Phrase> _brePhrases = new();
+        private int _breIndex;
+
+        protected SongChart Chart;
+
+        private AutoCalibrator _autoCalibrator;
+
+        protected CodaSection CurrentCoda;
+
+        public override void Initialize(int index, YargPlayer player, SongChart chart, TrackView trackView,
+            StemMixer mixer, int? currentHighScore)
+        {
+            if (IsInitialized)
+            {
+                return;
+            }
+
+            // Get player count
+            if (index == 0)
+            {
+                // Reset
+                HighwayCount = 1;
+            }
+            else if (index + 1 > HighwayCount)
+            {
+                HighwayCount = index + 1;
+            }
+
+            // Consolidate tracks into a parent object for animation purposes
+            transform.SetParent(GameObject.Find("Visuals").transform);
+
+            base.Initialize(index, player, chart, trackView, mixer, currentHighScore);
+
+            SetupTheme();
+
+            Chart = chart;
+
+            OriginalNoteTrack = GetNotes(chart);
+            player.Profile.ApplyModifiers(OriginalNoteTrack, chart.SyncTrack);
+
+            NoteTrack = OriginalNoteTrack;
+            Notes = NoteTrack.Notes;
+
+            var events = NoteTrack.TextEvents;
+
+            Engine = CreateEngine();
+            base.ComboMeter.Initialize(player.EnginePreset, Engine.BaseParameters.MaxMultiplier, GameManager.Players.Count > 1);
+
+            Engine.OnComboIncrement += OnComboIncrement;
+            Engine.OnComboReset += OnComboReset;
+            if (GameManager.IsPractice)
+            {
+                Engine.SetSpeed(GameManager.SongSpeed >= 1 ? GameManager.SongSpeed : 1);
+            }
+            else if (Player.IsReplay)
+            {
+                // If it's a replay, the "SongSpeed" parameter should be set properly
+                // when it gets deserialized. Transfer this over to the engine.
+                Engine.SetSpeed(Player.EngineParameterOverride.SongSpeed);
+            }
+            else
+            {
+                Engine.SetSpeed(GameManager.SongSpeed);
+            }
+
+            GameManager.BeatEventHandler.Audio.Subscribe(MetronomeTick, BeatEventType.Measure);
+            GameManager.BeatEventHandler.Audio.Subscribe(MetronomeTock, BeatEventType.QuarterNote);
+            GameManager.BeatEventHandler.Visual.Subscribe(SunburstEffects.PulseSunburst, BeatEventType.StrongBeat);
+            InitializeTrackEffects();
+            InitializeCodaEvents();
+
+            ResetNoteCounters();
+
+            FinishInitialization();
+
+            SongLength = (float) chart.GetEndTime();
+
+            _autoCalibrator = new AutoCalibrator(GameManager);
+        }
+
+        protected override void FinishDestruction()
+        {
+            GameManager.BeatEventHandler.Audio.Unsubscribe(MetronomeTick);
+            GameManager.BeatEventHandler.Audio.Unsubscribe(MetronomeTock);
+            GameManager.BeatEventHandler.Visual.Unsubscribe(SunburstEffects.PulseSunburst);
+
+            _autoCalibrator?.Dispose();
+
+            base.FinishDestruction();
+        }
+
+        private void InitializeCodaEvents()
+        {
+            foreach (var phrase in NoteTrack.Phrases)
+            {
+                if (phrase.Type == PhraseType.BigRockEnding)
+                {
+                    _brePhrases.Add(phrase);
+                }
+            }
+        }
+
+        private void InitializeTrackEffects()
+        {
+
+            // If the user doesn't want track effects, generate no effects
+            if (!SettingsManager.Settings.EnableTrackEffects.Value)
+            {
+                return;
+            }
+
+            var phrases = new List<Phrase>();
+
+            foreach (var phrase in NoteTrack.Phrases)
+            {
+                // We only want solo and drum fill here. Unisons are added later
+                // and there are no track effects for the other phrase types
+                if (phrase.Type is PhraseType.Solo or PhraseType.DrumFill)
+                {
+                    // It turns out that some charts have drum fill phrases that aren't SP activation
+                    // (they have no notes), so we need to ignore those
+                    if (phrase.Type is PhraseType.DrumFill)
+                    {
+                        foreach (var note in Notes)
+                        {
+                            if (note.Time >= phrase.Time && note.Time <= phrase.TimeEnd)
+                            {
+                                phrases.Add(phrase);
+                                break;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        phrases.Add(phrase);
+                    }
+                }
+            }
+
+            phrases.AddRange(EngineContainer.UnisonPhrases);
+
+            var effects = TrackEffect.PhrasesToEffects(phrases);
+            _trackEffects.AddRange(effects);
+        }
+
+        private void FinalizeTrackEffects()
+        {
+            foreach (var effect in TrackEffect.SliceEffects(NoteSpeed, _trackEffects))
+            {
+                _upcomingEffects.Enqueue(effect);
+            }
+        }
+
+        private void SetupTheme()
+        {
+            var (gameMode, instrument) = (Player.Profile.GameMode, Player.Profile.CurrentInstrument);
+
+            var style = VisualStyleHelpers.GetVisualStyle(gameMode, instrument);
+
+            var themePrefab = ThemeManager.Instance.CreateNotePrefabFromTheme(
+                Player.ThemePreset, style, NotePool.Prefab);
+            NotePool.SetPrefabAndReset(themePrefab);
+        }
+
+        protected abstract InstrumentDifficulty<TNote> GetNotes(SongChart chart);
+        protected abstract TEngine CreateEngine();
+
+        protected virtual void FinishInitialization()
+        {
+            TrackMaterial.Initialize(Player.HighwayPreset);
+            CameraPositioner.Initialize(Player.CameraPreset);
+            FinalizeTrackEffects();
+        }
+
+        protected void ResetNoteCounters()
+        {
+            NoteIndex = 0;
+            TotalNotes = Notes.Where(n => !n.IsBigRockEnding).Sum(i => Engine.GetNumberOfNotes(i));
+        }
+
+        public override void ResetPracticeSection()
+        {
+            Engine.Reset(true);
+
+            if (NoteTrack.Notes.Count > 0)
+            {
+                NoteTrack.Notes[0].OverridePreviousNote();
+                NoteTrack.Notes[^1].OverrideNextNote();
+            }
+
+            BeatlineIndex = 0;
+            ResetNoteCounters();
+
+            CurrentCoda = null;
+            _breIndex = 0;
+
+            ResetLastHitTimes();
+
+            base.ResetPracticeSection();
+        }
+
+        protected virtual void ResetLastHitTimes()
+        {
+
+        }
+
+        public override void Rewind(double visualTime)
+        {
+            for (int index = NotePool.AllSpawned.Count - 1; index >= 0; index--)
+            {
+                var poolable = NotePool.AllSpawned[index];
+                if (poolable is INoteElement note)
+                {
+                    note.OnRewind();
+                }
+            }
+        }
+
+        public override void PostRewind(double visualTime)
+        {
+
+        }
+
+        protected override void UpdateVisuals(double visualTime)
+        {
+            // Allow the HUD to track the highway with animations
+            TrackView.UpdateHUDPosition(HighwayIndex, HighwayCount);
+
+            UpdateNotes(visualTime);
+            UpdateBeatlines(visualTime);
+            UpdateTrackEffects(visualTime);
+            UpdateCodaEvents(visualTime);
+
+            var stats = Engine.BaseStats;
+
+            int maxMultiplier = Engine.BaseParameters.MaxMultiplier;
+            if (stats.IsStarPowerActive)
+            {
+                maxMultiplier *= 2;
+            }
+
+            double currentStarPowerAmount = Engine.GetStarPowerBarAmount();
+
+            bool groove = stats.ScoreMultiplier == maxMultiplier;
+
+            _currentMultiplier = stats.ScoreMultiplier;
+
+            TrackMaterial.SetTrackScroll(visualTime, NoteSpeed);
+            TrackMaterial.GrooveMode = groove;
+            TrackMaterial.StarpowerMode = stats.IsStarPowerActive;
+
+            // In multiplayer, don't double the score multiplier in the strikeline element
+            // Otherwise, it looks like the band multiplier applies on top of the score multiplier
+            int displayMultiplier = GameManager.TotalPlayers > 1 && stats.IsStarPowerActive
+                ? stats.ScoreMultiplier / 2
+                : stats.ScoreMultiplier;
+
+            ComboMeter.SetCombo(stats.ScoreMultiplier, displayMultiplier, maxMultiplier, stats.Combo, Engine.CodaHasStarted);
+            StarpowerBar.SetStarpower(currentStarPowerAmount, stats.IsStarPowerActive, Engine.CodaHasStarted);
+            StarpowerBar.UpdateFlash(GameManager.BeatEventHandler.Visual.StrongBeat.CurrentPercentage);
+            SunburstEffects.SetSunburstEffects(groove, stats.IsStarPowerActive, _currentMultiplier);
+
+            TrackView.UpdateNoteStreak(stats.Combo);
+
+
+            // Could be if (!_isHotStartChecked && groove), but that would make it so hot start doesn't show
+            // for bass until 6x.
+            if (!_isHotStartChecked && stats.ScoreMultiplier == (!stats.IsStarPowerActive ? 4 : 8))
+            {
+                _isHotStartChecked = true;
+
+                if (IsFc)
+                {
+                    TrackView.ShowHotStart();
+                }
+            }
+
+            bool currentBassGrooveState = IsBass && groove;
+
+            if (!_previousBassGrooveState && currentBassGrooveState)
+            {
+                TrackView.ShowBassGroove();
+            }
+
+            _previousBassGrooveState = currentBassGrooveState;
+
+            if (stats.IsStarPowerActive && !_wasStarPowerActive && !_didLowerTrack)
+            {
+                CameraPositioner.Scoop();
+            }
+
+            _previousStarPowerAmount = currentStarPowerAmount;
+            _wasStarPowerActive = stats.IsStarPowerActive;
+
+            foreach (var haptics in SantrollerHaptics)
+            {
+                haptics.SetStarPowerFill((float) currentStarPowerAmount);
+            }
+
+            bool isSongEnd = visualTime > SongLength;
+            bool shouldLowerTrack = isSongEnd || GameManager.PlayerHasFailed;
+            if (!_didLowerTrack && shouldLowerTrack)
+            {
+                _didLowerTrack = true;
+                CameraPositioner.Lower(isSongEnd);
+            }
+            else if (_didLowerTrack && !shouldLowerTrack)
+            {
+                _didLowerTrack = false;
+                CameraPositioner.Raise(false);
+            }
+        }
+
+        private void UpdateNotes(double visualTime)
+        {
+            while (NoteIndex < Notes.Count && Notes[NoteIndex].Time <= visualTime + SpawnTimeOffset)
+            {
+                var note = Notes[NoteIndex];
+
+                // Skip this frame if the pool is full or note is part of a BRE
+                if (!NotePool.CanSpawnAmount(note.ChildNotes.Count + 1))
+                {
+                    break;
+                }
+
+                NoteIndex++;
+
+                // Don't spawn the note if it is under a BRE
+                if (note.IsBigRockEnding)
+                {
+                    continue;
+                }
+
+                OnNoteSpawned(note);
+
+                // Don't spawn hit or missed notes
+                if (note.WasHit || note.WasMissed)
+                {
+                    continue;
+                }
+
+                // Spawn all of the notes and child notes
+                foreach (var child in note.AllNotes)
+                {
+                    SpawnNote(child);
+                }
+            }
+        }
+
+        private void UpdateBeatlines(double time)
+        {
+            while (BeatlineIndex < Beatlines.Count && Beatlines[BeatlineIndex].Time <= time + SpawnTimeOffset)
+            {
+                if (BeatlineIndex + 1 < Beatlines.Count && Beatlines[BeatlineIndex + 1].Time <= time + SpawnTimeOffset)
+                {
+                    BeatlineIndex++;
+                    continue;
+                }
+
+                var beatline = Beatlines[BeatlineIndex];
+
+                if (Notes.Count > 0 && beatline.Time > Notes[^1].TimeEnd)
+                {
+                    return;
+                }
+
+                // Skip this frame if the pool is full
+                if (!BeatlinePool.CanSpawnAmount(1))
+                {
+                    break;
+                }
+
+                var poolable = BeatlinePool.TakeWithoutEnabling();
+                if (poolable == null)
+                {
+                    YargLogger.LogWarning("Attempted to spawn beatline, but it's at its cap!");
+                    break;
+                }
+
+                ((BeatlineElement) poolable).BeatlineRef = beatline;
+                poolable.EnableFromPool();
+
+                BeatlineIndex++;
+            }
+        }
+
+        private void UpdateCodaEvents(double time)
+        {
+            while (_breIndex < _brePhrases.Count && _brePhrases[_breIndex].Time <= time + SpawnTimeOffset)
+            {
+
+                var phrase = _brePhrases[_breIndex];
+                _breIndex++;
+
+                StartBRE(phrase.Time, phrase.TimeEnd);
+            }
+        }
+
+        private void UpdateTrackEffects(double time)
+        {
+            if (_upcomingEffects.TryPeek(out var nextEffect) && nextEffect.Time <= time + SpawnTimeOffset)
+            {
+                SpawnEffect(nextEffect, false);
+            }
+
+            // If any of the current effects are drum fill, we need to react
+            // when starpower goes from unavailable to available
+
+            // Remove past effects from current list
+            // This may actually fail if an effect is reused from the pool
+            // too quickly, but as long as it is only being used for setting
+            // drum fill visibility, it shouldn't break.
+            for (var i = 0; i < _currentEffects.Count; i++)
+            {
+                var trackEffectElement = _currentEffects[i];
+                if (!trackEffectElement.Active)
+                {
+                    _currentEffects.RemoveAt(i);
+                }
+                else
+                {
+                    // See if it's an invisible drum fill and if starpower has become available
+                    // Since we never change visibility on anything but drum fills, there's no need to check
+                    // the effect type.
+                    if ((trackEffectElement.Visibility < 1.0f && Engine.CanStarPowerActivate) && !Engine.BaseStats.IsStarPowerActive)
+                    {
+                        trackEffectElement.MakeVisible();
+                        // If start transition is disabled, previous should be disabled
+                        if (!trackEffectElement.EffectRef.StartTransitionEnable && i > 0)
+                        {
+                            _currentEffects[i - 1].SetEndTransitionVisible(false);
+                        }
+
+                        // If end transition is disabled, next should be disabled if it is spawned
+                        if (_currentEffects.Count > i + 1 && !trackEffectElement.EffectRef.EndTransitionEnable)
+                        {
+                            _currentEffects[i + 1].SetStartTransitionVisible(false);
+                        }
+                    }
+                    // We also need to make already spawned drum fills disappear if the player activated SP
+                    // And we do need to check effect type here
+                    if (trackEffectElement.EffectRef.EffectType == TrackEffectType.DrumFill &&
+                        (trackEffectElement.Visibility == 1.0f && Engine.BaseStats.IsStarPowerActive))
+                    {
+                        if (trackEffectElement.EffectRef.OriginalEffectType == TrackEffectType.DrumFillAndUnison)
+                        {
+                            // Turn this into a unison
+                            trackEffectElement.EffectRef.EffectType = TrackEffectType.Unison;
+                            SwapEffect(trackEffectElement);
+                            return;
+                        }
+
+                        if (trackEffectElement.EffectRef.OriginalEffectType == TrackEffectType.SoloAndDrumFill)
+                        {
+                            // Turn this into a solo
+                            trackEffectElement.EffectRef.EffectType = TrackEffectType.Solo;
+                            SwapEffect(trackEffectElement);
+                            return;
+                        }
+
+                        trackEffectElement.MakeVisible(false);
+
+                        if (!trackEffectElement.EffectRef.StartTransitionEnable && i > 0)
+                        {
+                            // Previous maybe needs end transition enabled since we're disappearing
+                            // (if the effect type doesn't have an end transition set, it won't
+                            //  be active regardless of what we do here, so a hard enable is ok)
+                            _currentEffects[i - 1].SetEndTransitionVisible(true);
+                        }
+
+                        if (!trackEffectElement.EffectRef.EndTransitionEnable)
+                        {
+                            // next needs start transition enabled, if it is spawned
+                            // if it isn't yet spawned, it should already be set correctly
+                            if (_currentEffects.Count > i + 1)
+                            {
+                                _currentEffects[i + 1].SetStartTransitionVisible(true);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private static async void SwapEffect(TrackEffectElement trackEffectElement)
+        {
+            await trackEffectElement.MakeVisibleAsync(false);
+            trackEffectElement.Reinitialize();
+            // ReSharper disable once MethodHasAsyncOverload
+            trackEffectElement.MakeVisible(true);
+        }
+
+        private void SpawnEffect(TrackEffect nextEffect, bool seeking)
+        {
+            var poolable = EffectPool.TakeWithoutEnabling();
+            if (poolable == null)
+            {
+                YargLogger.LogWarning("Attempted to spawn track effect, but it's at its cap!");
+                return;
+            }
+
+            // The seeking code handles this for us if we're seeking
+            if (!seeking)
+            {
+                _upcomingEffects.Dequeue();
+            }
+
+            // Do some magic to vanish drum fills if the player doesn't have enough SP to activate
+            // or if SP is already active.
+
+            if (Engine.BaseStats.IsStarPowerActive || !Engine.CanStarPowerActivate)
+            {
+                if (nextEffect.EffectType is TrackEffectType.DrumFill)
+                {
+                    nextEffect.Visibility = 0.0f;
+                    if (!nextEffect.StartTransitionEnable)
+                    {
+                        if (_currentEffects.Count > 0)
+                        {
+                            _currentEffects[^1].SetEndTransitionVisible(true);
+                            _currentEffects[^1].SetTransitionState();
+                        }
+                    }
+                    if (!nextEffect.EndTransitionEnable)
+                    {
+                        // Get next next and turn on its start transition
+                        // Since we are only spawning now, it shouldn't be possible
+                        // for next next to be spawned yet.
+                        if (_upcomingEffects.TryPeek(out var nextNextEffect))
+                        {
+                            nextNextEffect.StartTransitionEnable = true;
+                        }
+                    }
+
+                    if (!nextEffect.StartTransitionEnable)
+                    {
+                        // Turn on end transition for previous effect
+
+                        // Previous effect is by definition already spawned,
+                        // but we'll check that _currentEffects isn't length zero
+                        if (_currentEffects.Count > 0)
+                        {
+                            _currentEffects[^1].SetEndTransitionVisible(true);
+                        }
+                    }
+                }
+
+                if (nextEffect.EffectType is TrackEffectType.DrumFillAndUnison)
+                {
+                    nextEffect.EffectType = TrackEffectType.Unison;
+                }
+
+                if (nextEffect.EffectType is TrackEffectType.SoloAndDrumFill)
+                {
+                    nextEffect.EffectType = TrackEffectType.Solo;
+                }
+            }
+
+            ((TrackEffectElement) poolable).EffectRef = nextEffect;
+            _currentEffects.Add((TrackEffectElement) poolable);
+            poolable.EnableFromPool();
+        }
+
+        // ReSharper disable once InconsistentNaming
+        protected virtual void StartBRE(double timeStart, double timeEnd)
+        {
+            RescaleLanesForBRE();
+
+            if (!LanePool.CanSpawnAmount(BRELanes.Length))
+            {
+                return;
+            }
+
+            for (int i = 0; i < BRELanes.Length; i++)
+            {
+                var newLane = (LaneElement) LanePool.TakeWithoutEnabling();
+
+                if (newLane == null)
+                {
+                    YargLogger.LogWarning("Attempted to spawn BRE lane, but it's at its cap!");
+                    return;
+                }
+
+                newLane.SetTimeRange(timeStart, timeEnd);
+                InitializeSpawnedLane(newLane, i);
+                newLane.EnableFromPool();
+
+                newLane.SetEmissionColor(0);
+
+                BRELanes[i] = newLane;
+            }
+        }
+
+        protected virtual void OnNoteSpawned(TNote parentNote)
+        {
+            SpawnLanesFromNote(parentNote);
+        }
+
+        private void SpawnLanesFromNote(TNote parentNote)
+        {
+            if (!Engine.LanesExist || !Engine.BaseParameters.EnableLanes)
+            {
+                return;
+            }
+
+            if (!LanePool.CanSpawnAmount(1))
+            {
+                return;
+            }
+
+            bool containsLaneStart = false;
+            foreach (var childNote in parentNote.AllNotes)
+            {
+                if (childNote.IsLaneStart)
+                {
+                    containsLaneStart = true;
+                    break;
+                }
+            }
+
+            if (containsLaneStart)
+            {
+                var laneStartNotes = new Dictionary<int, TNote>();
+                var laneEndTimes = new Dictionary<int, double>();
+
+                // Iterate forward to find the length of all lanes in this phrase
+                var noteRef = parentNote;
+                var thisLaneFlag = parentNote.IsTrill ? NoteFlags.Trill : NoteFlags.Tremolo;
+
+                while (noteRef != null)
+                {
+                    // Create one lane for single notes, create multiple lanes for non-drum chords
+                    bool containsLaneEnd = false;
+                    foreach (var childNote in noteRef.AllNotes)
+                    {
+                        if (childNote.IsLaneEnd)
+                        {
+                            containsLaneEnd = true;
+                        }
+
+                        if (childNote.IsLane)
+                        {
+                            if (!laneStartNotes.ContainsKey(childNote.LaneNote))
+                            {
+                                laneStartNotes[childNote.LaneNote] = childNote;
+                            }
+
+                            laneEndTimes[childNote.LaneNote] = noteRef.Time;
+                        }
+                    }
+
+                    if (containsLaneEnd)
+                    {
+                        break;
+                    }
+
+                    noteRef = noteRef.NextNote;
+                }
+
+                foreach (var (laneIndex, note) in laneStartNotes)
+                {
+                    if (!laneEndTimes.ContainsKey(laneIndex))
+                    {
+                        // Ending note was not found, do not create lane
+                        continue;
+                    }
+
+                    var firstLaneNote = laneStartNotes[laneIndex];
+                    double startTime = firstLaneNote.Time;
+                    double endTime = laneEndTimes[laneIndex];
+
+                    // Extend a previous lane if possible instead of creating two adjoining lanes at the same index
+                    bool extendExisting = false;
+                    foreach (LaneElement existingLane in LanePool.AllSpawned)
+                    {
+                        if (existingLane.ContainsIndex(laneIndex))
+                        {
+                            if (startTime - existingLane.EndTime <= LaneElement.COMBINE_LANE_THRESHOLD)
+                            {
+                                // New lane will overlap with existing one
+                                // Determine if the previous notes in this chart should prevent combining
+                                int notesToSearch = firstLaneNote.IsTrill ? 2 : 1;
+                                noteRef = firstLaneNote.PreviousNote;
+                                for (int n = 0; n < notesToSearch; n++)
+                                {
+                                    if (noteRef == null)
+                                    {
+                                        break;
+                                    }
+
+                                    if (existingLane.ContainsIndex(noteRef.LaneNote) && (noteRef.Flags & thisLaneFlag) != 0)
+                                    {
+                                        extendExisting = true;
+                                        break;
+                                    }
+
+                                    noteRef = noteRef.PreviousNote;
+                                }
+                            }
+
+                            if (extendExisting)
+                            {
+                                existingLane.SetTimeRange(existingLane.ElementTime, Math.Max(endTime, existingLane.EndTime));
+                            }
+
+                            break;
+                        }
+                    }
+
+                    if (extendExisting)
+                    {
+                        continue;
+                    }
+
+                    // Create a new lane element at this index
+                    var newLane = (LaneElement) LanePool.TakeWithoutEnabling();
+                    newLane.SetTimeRange(startTime, endTime);
+                    InitializeSpawnedLane(newLane, note);
+                    ModifyLaneFromNote(newLane, firstLaneNote);
+
+                    newLane.EnableFromPool();
+                }
+            }
+        }
+
+        public override void SetPracticeSection(uint start, uint end)
+        {
+            var practiceNotes = OriginalNoteTrack.Notes.Where(n => n.Tick >= start && n.Tick < end).ToList();
+
+            YargLogger.LogFormatDebug("Practice notes: {0}", practiceNotes.Count);
+
+            var instrument = OriginalNoteTrack.Instrument;
+            var difficulty = OriginalNoteTrack.Difficulty;
+            var phrases = OriginalNoteTrack.Phrases;
+            var textEvents = OriginalNoteTrack.TextEvents;
+            var shiftEvents = OriginalNoteTrack.RangeShiftEvents;
+
+            NoteTrack = new InstrumentDifficulty<TNote>(instrument, difficulty, practiceNotes, phrases, textEvents, shiftEvents);
+            Notes = NoteTrack.Notes;
+
+            ResetNoteCounters();
+
+            BeatlineIndex = 0;
+
+            Engine = CreateEngine();
+
+            if (GameManager.IsPractice)
+            {
+                Engine.SetSpeed(GameManager.SongSpeed >= 1 ? GameManager.SongSpeed : 1);
+            }
+            else
+            {
+                Engine.SetSpeed(GameManager.SongSpeed);
+            }
+
+            ResetPracticeSection();
+        }
+
+        public override void SetReplayTime(double time)
+        {
+            BeatlineIndex = 0;
+            ResetNoteCounters();
+
+            // Reset the track effect overlay
+            ResetTrackEffectOverlay(time);
+
+            base.SetReplayTime(time);
+        }
+
+        private void ResetTrackEffectOverlay(double time)
+        {
+            // despawn any existing track effects, rebuild track effect structures, spawn any that are now in current
+            _upcomingEffects.Clear();
+            for(var i = 0; i < EffectPool.AllSpawned.Count; i++)
+            {
+                var poolable = EffectPool.AllSpawned[i];
+                poolable.ParentPool.Return(poolable);
+            }
+
+            foreach (var effect in TrackEffect.SliceEffects(NoteSpeed, _trackEffects))
+            {
+                if (effect.Time >= time)
+                {
+                    _upcomingEffects.Enqueue(effect);
+                } else if (effect.Time < time && time < effect.TimeEnd)
+                {
+                    // current effect, spawn it
+                    SpawnEffect(effect, true);
+                }
+            }
+        }
+
+        protected void SpawnNote(TNote note)
+        {
+            var poolable = NotePool.KeyedTakeWithoutEnabling(note);
+            if (poolable == null)
+            {
+                YargLogger.LogWarning("Attempted to spawn note, but it's at its cap!");
+                return;
+            }
+
+            InitializeSpawnedNote(poolable, note);
+            poolable.EnableFromPool();
+        }
+
+        protected abstract void InitializeSpawnedNote(IPoolable poolable, TNote note);
+        protected abstract void InitializeSpawnedLane(LaneElement lane, TNote note);
+        protected abstract void InitializeSpawnedLane(LaneElement lane, int laneIndex);
+        protected virtual void ModifyLaneFromNote(LaneElement lane, TNote note) {}
+
+        protected abstract void RescaleLanesForBRE();
+
+        protected virtual void OnNoteHit(int index, TNote note)
+        {
+            if (!Player.Profile.IsBot)
+            {
+                _autoCalibrator.RecordAccuracy(note.Time);
+            }
+
+            if (!GameManager.IsSeekingReplay)
+            {
+                SetStemMuteState(false);
+                if (_currentMultiplier != _previousMultiplier)
+                {
+                    _previousMultiplier = _currentMultiplier;
+
+                    foreach (var haptics in SantrollerHaptics)
+                    {
+                        haptics.SetMultiplier((byte) Math.Clamp(_currentMultiplier, 1, byte.MaxValue));
+                    }
+                }
+
+                if (index >= Notes.Count - 1 && note.ParentOrSelf.WasFullyHit())
+                {
+                    if (IsFc)
+                    {
+                        TrackView.ShowFullCombo();
+                    }
+                    else if (Combo >= 30) // 30 to coincide with 4x multiplier (including on bass)
+                    {
+                        TrackView.ShowStrongFinish();
+                    }
+                }
+            }
+
+            LastCombo = Combo;
+        }
+
+        protected virtual void OnNoteMissed(int index, TNote note)
+        {
+            if (IsFc)
+            {
+                ComboMeter.SetFullCombo(false);
+                IsFc = false;
+            }
+
+            if (!GameManager.IsSeekingReplay)
+            {
+                SetStemMuteState(true);
+
+                if (LastCombo >= 10)
+                {
+                    GlobalAudioHandler.PlaySoundEffect(SfxSample.NoteMiss);
+                    CameraPositioner.Punch();
+                }
+
+                foreach (var haptics in SantrollerHaptics)
+                {
+                    haptics.SetMultiplier(0);
+                }
+            }
+
+            LastCombo = Combo;
+        }
+
+        protected virtual void OnOverhit()
+        {
+            if (IsFc)
+            {
+                ComboMeter.SetFullCombo(false);
+                IsFc = false;
+            }
+
+            if (LastCombo >= 10)
+            {
+                CameraPositioner.Punch();
+            }
+
+            LastCombo = Combo;
+        }
+
+        protected virtual void OnSoloStart(SoloSection solo)
+        {
+            TrackView.StartSolo(solo);
+
+            foreach (var haptic in SantrollerHaptics)
+            {
+                haptic.SetSoloActive(true);
+            }
+        }
+
+        protected virtual void OnSoloEnd(SoloSection solo)
+        {
+            TrackView.EndSolo(solo.SoloBonus);
+
+            foreach (var haptic in SantrollerHaptics)
+            {
+                haptic.SetSoloActive(false);
+            }
+        }
+
+        protected virtual void OnCodaStart(CodaSection coda)
+        {
+            CurrentCoda = coda;
+            SetStemMuteState(false);
+        }
+
+        protected virtual void OnCodaEnd(CodaSection coda)
+        {
+
+        }
+
+        protected virtual void OnCountdownChange(double countdownLength, double endTime)
+        {
+            TrackView.UpdateCountdown(countdownLength, endTime);
+        }
+
+        protected virtual void OnStarPowerPhraseMissed(TNote note)
+        {
+            OnStarPowerPhraseMissed();
+        }
+
+        protected virtual void OnStarPowerPhraseHit(TNote note)
+        {
+            if (SettingsManager.Settings.EnableTrackEffects.Value)
+            {
+                StarPowerEffect.gameObject.SetActive(true);
+                StarPowerEffect.PlayAnimation();
+            }
+
+            OnStarPowerPhraseHit();
+        }
+
+        protected override void OnStarPowerReady()
+        {
+            base.OnStarPowerReady();
+            TrackView.ShowStarPowerReady();
+        }
+
+        public override void GameplayUpdate()
+        {
+            base.GameplayUpdate();
+
+            if (LastHighScore != null && !_newHighScoreShown && Score > LastHighScore)
+            {
+                _newHighScoreShown = true;
+                TrackView.ShowNewHighScore();
+            }
+        }
+
+        public void MetronomeTick()
+        {
+            GlobalAudioHandler.PlayMetronomeSoundEffect(SettingsManager.Settings.MetronomeSound.Value, MetronomePitch.Hi);
+        }
+
+        public void MetronomeTock()
+        {
+            GlobalAudioHandler.PlayMetronomeSoundEffect(SettingsManager.Settings.MetronomeSound.Value, MetronomePitch.Lo);
+        }
+    }
+}

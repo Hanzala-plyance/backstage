@@ -1,0 +1,8 @@
+[core]
+    # Ensure line endings stay consistent
+    # Always check in as LF, always check out as native
+    autocrlf = input
+	eol = native
+
+[blame]
+    ignoreRevsFile = ".git-blame-ignore-revs"
