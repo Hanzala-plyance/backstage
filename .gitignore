@@ -1,0 +1,17 @@
+.DS_Store
+node_modules/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.env
+.env.*
+!.env.example
+
+# Generated song conversion output stays local.
+/song-converter/output/
+
+.cache/
+*.log
+/release/local-evidence/

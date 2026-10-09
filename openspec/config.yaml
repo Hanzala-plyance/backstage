@@ -1,0 +1,4 @@
+# Shared planning lives in the separate backstage-specs repository.
+# Clone it and run npm ci && npm run store:register there.
+# Use its pinned OpenSpec CLI; store support is required.
+store: backstage
