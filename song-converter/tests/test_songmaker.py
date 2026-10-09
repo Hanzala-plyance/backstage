@@ -82,6 +82,7 @@ class FormatTests(unittest.TestCase):
             return Path('input.webm'), {'title': 'Downloaded'}, {'type': 'YouTube'}
         with tempfile.TemporaryDirectory() as tmp, patch.object(server, 'OUTPUT', Path(tmp)), \
              patch.object(server, 'jobs', {}), patch.object(server, 'convert', side_effect=fake_convert), \
+             patch.object(server, 'publish', return_value={'message': 'Installed'}), \
              patch.object(server, 'download_youtube', side_effect=fake_download), ThreadPoolExecutor(2) as executor:
             one = executor.submit(server.run_job, 'a' * 32, Path('input.wav'), {})
             two = executor.submit(server.run_job, 'b' * 32, None, {'youtube_url': 'https://youtu.be/jNQXAC9IVRw'})

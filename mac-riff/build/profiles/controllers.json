@@ -9,7 +9,8 @@
       "decoder": "xbox-gip-riffmaster",
       "games": {
         "clonehero": "bridge",
-        "yarg": "unsupported"
+        "yarg": "unsupported",
+        "backstage": "unsupported"
       },
       "pairing": "Connect the original USB receiver, turn on the guitar, and use the guitar/receiver pairing buttons if needed. Software checks the connection; the receiver performs wireless pairing."
     }

@@ -25,7 +25,7 @@ struct PlayerAssignment: Codable, Identifiable {
 struct BandPreset: Codable, Identifiable {
     var id = UUID().uuidString
     var name: String
-    var game = "clonehero"
+    var game = "backstage"
     var visiblePlayerCount: Int?
     var players = (1...4).map { PlayerAssignment(id: $0) }
 }
@@ -53,6 +53,7 @@ struct PresetStore: Codable { var selected: String; var presets: [BandPreset] }
     var nativeGame: URL?
     var sessionRoutes: [Int: String] = [:]
     var activeSession: URL?
+    var gameSearchRoots = [URL(fileURLWithPath: "/Applications"), FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
     var currentPresetIndex: Int { presets.firstIndex { $0.id == presetID } ?? 0 }
     var current: BandPreset { presets[currentPresetIndex] }
     var players: [PlayerAssignment] { current.players }
@@ -135,8 +136,8 @@ struct PresetStore: Codable { var selected: String; var presets: [BandPreset] }
         }
     }
     var gameURL: URL? {
-        let names = game == "clonehero" ? ["Clone Hero.app"] : ["YARG.app", "YARG (Nightly).app"]
-        for base in [URL(fileURLWithPath: "/Applications"), FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")] {
+        let names = game == "backstage" ? ["Backstage.app"] : game == "clonehero" ? ["Clone Hero.app"] : ["YARG.app", "YARG (Nightly).app"]
+        for base in gameSearchRoots {
             for name in names { let url = base.appendingPathComponent(name); if FileManager.default.fileExists(atPath: url.path) { return url } }
         }
         return nil
@@ -148,7 +149,7 @@ struct PresetStore: Codable { var selected: String; var presets: [BandPreset] }
         for p in active {
             if ["missing", "unsupported"].contains(route(p)) { return "Player \(p.id): \(routeLabel(p))" }
             if route(p) == "midi" && p.instrument != "drums" { return "Player \(p.id): choose Drums for the MIDI input." }
-            if route(p) == "bridge" && game != "clonehero" { return "Riffmaster bridging is available only for Clone Hero. Native YARG setups can launch directly." }
+            if route(p) == "bridge" && game != "clonehero" { return "Riffmaster bridging is available only for Clone Hero. Native Backstage/YARG setups can launch directly." }
         }
         return nil
     }

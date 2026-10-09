@@ -1,5 +1,5 @@
 function validatePlan(plan) {
-    if (!plan || !['clonehero', 'yarg'].includes(plan.game) || !Array.isArray(plan.players) || !plan.players.length || plan.players.length > 4) throw new Error('Choose between one and four players.');
+    if (!plan || !['clonehero', 'yarg', 'backstage'].includes(plan.game) || !Array.isArray(plan.players) || !plan.players.length || plan.players.length > 4) throw new Error('Choose between one and four players.');
     const players = new Set(), devices = new Set();
     for (const p of plan.players) {
         if (!Number.isInteger(p.player) || p.player < 1 || p.player > 4 || players.has(p.player)) throw new Error('Player slots must be unique (1–4).');

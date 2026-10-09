@@ -58,7 +58,7 @@ struct SetupView: View {
                 HStack {
                     Image(systemName: "guitars.fill").font(.largeTitle).foregroundColor(.accentColor)
                     VStack(alignment: .leading) {
-                        Text("MacRiff").font(.largeTitle.bold())
+                        Text("Backstage Controllers").font(.largeTitle.bold())
                         Text("Connect. Test. Play.").foregroundColor(.secondary)
                     }
                     Spacer()
@@ -137,10 +137,10 @@ struct SetupView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Picker("Game", selection: Binding(get: { model.game }, set: { model.setGame($0) })) {
-                                Text("Clone Hero").tag("clonehero"); Text("YARG").tag("yarg")
+                                Text("Backstage").tag("backstage"); Text("Clone Hero").tag("clonehero"); Text("YARG (upstream)").tag("yarg")
                             }.pickerStyle(.segmented).frame(width: 300).disabled(model.locked)
                             Spacer()
-                            Button(model.game == "clonehero" ? "Play Clone Hero" : "Play YARG") { model.launch() }
+                            Button(model.game == "backstage" ? "Play Backstage" : model.game == "clonehero" ? "Play Clone Hero" : "Play YARG") { model.launch() }
                                 .buttonStyle(.borderedProminent).controlSize(.large).disabled(!model.canPlay)
                             Button("Stop Game") { model.stop() }.disabled(!model.running || model.busy)
                         }
@@ -187,6 +187,10 @@ final class SetupDelegate: NSObject, NSApplicationDelegate {
                 DeviceRow(id: "midi:kit", name: "Drums", vendor: 0, product: 0, native: true, midi: true),
                 DeviceRow(id: "usb:1:2", name: "Riffmaster", vendor: 3695, product: 584, native: false, midi: false)]
             var p = BandPreset(name: "Test band")
+            m.gameSearchRoots = [m.root]
+            for name in ["Backstage.app", "Clone Hero.app"] {
+                try! FileManager.default.createDirectory(at: m.root.appendingPathComponent(name), withIntermediateDirectories: true)
+            }
             p.players[0].deviceKey = "hid:xbox"; p.players[0].instrument = "gamepad"
             p.players[1].deviceKey = "hid:ps3"; p.players[1].instrument = "gamepad"
             p.players[2].deviceKey = "midi:kit"; p.players[2].instrument = "drums"
@@ -194,6 +198,8 @@ final class SetupDelegate: NSObject, NSApplicationDelegate {
             precondition(m.configurationError == nil && m.bridges.isEmpty && m.canPlay)
             precondition(!m.canTest && m.route(p.players[0]) == "native" && m.route(p.players[1]) == "native")
             m.presets[0].players[3].deviceKey = "usb:1:2"
+            precondition(m.configurationError != nil && !m.canPlay, "Backstage must reject the Clone Hero bridge")
+            m.presets[0].game = "clonehero"
             precondition(m.bridges.map(\.id) == [4] && !m.canPlay)
             m.testing = true; m.states[4] = ["connected": true, "observed": 127]
             precondition(m.canPlay)
@@ -223,5 +229,5 @@ final class SetupDelegate: NSObject, NSApplicationDelegate {
             exit(model.runtimeError == nil ? 0 : 1)
         }
     }
-    var body: some Scene { Window("MacRiff Setup", id: "setup") { SetupView() }.windowResizability(.contentSize) }
+    var body: some Scene { Window("Backstage Controllers", id: "setup") { SetupView() }.windowResizability(.contentSize) }
 }

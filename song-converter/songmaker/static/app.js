@@ -80,14 +80,15 @@ function renderQueue(){
   for(const item of [...entries].reverse()){
     const row=document.createElement('article');row.className='queue-item card';row.dataset.job=item.id||'';
     const info=document.createElement('div');info.className='queue-info';const title=document.createElement('h3');title.textContent=item.title;
-    const status=document.createElement('p');status.className='help';status.textContent=item.message||item.status;
+    const status=document.createElement('p');status.className='help';status.textContent=item.library?.message||item.message||item.status;
     const bar=document.createElement('progress');bar.max=100;bar.value=item.progress||0;bar.setAttribute('aria-label',`${item.title} progress`);
     info.append(title,status);if(!['complete','error'].includes(item.status))info.append(bar);
     const actions=document.createElement('div');actions.className='queue-actions';
     if(item.status==='complete'){
       const open=document.createElement('button');open.type='button';open.className='secondary-button';open.textContent='Open';open.onclick=async()=>{if(dirty&&!await saveTrack())return;try{await showResult(item.id);}catch(e){toast(e.message);}};
       const download=document.createElement('a');download.className='primary-button small';download.textContent='Download';download.href=`/api/jobs/${item.id}/download`;
-      actions.append(open,download);
+      const install=document.createElement('button');install.type='button';install.className='secondary-button';install.textContent=item.library?.status==='installed'?'Installed in Backstage':'Install in Backstage';install.disabled=item.library?.status==='installed';install.onclick=async()=>{install.disabled=true;try{await api(`/api/jobs/${item.id}/install`,{method:'POST'});await refreshQueue();refreshSharedLibrary();toast('Installed. Use Scan Songs in Backstage.');}catch(e){install.disabled=false;toast(e.message);}};
+      actions.append(open,install,download);
     }else{const badge=document.createElement('span');badge.className='queue-state '+item.status;badge.textContent=item.status==='error'?'Needs attention':`${item.status} · ${item.progress||0}%`;actions.append(badge);}
     row.append(info,actions);$('#queue-list').append(row);
   }
@@ -95,9 +96,9 @@ function renderQueue(){
 async function refreshQueue(){
   if(queueRefreshing)return;queueRefreshing=true;clearTimeout(queueTimer);
   try{
-    queueItems=await api('/api/queue');renderQueue();const readyCount=queueItems.filter(item=>item.status==='complete').length;if(readyCount!==lastReadyCount){lastReadyCount=readyCount;refreshLibrary();}
+    queueItems=await api('/api/queue');renderQueue();const readyCount=queueItems.filter(item=>item.status==='complete').length;if(readyCount!==lastReadyCount){lastReadyCount=readyCount;refreshLibrary();refreshSharedLibrary();}
 
-  }catch(e){if(!$('#queue-panel').hidden)$('#queue-summary').textContent='Reconnecting to Autochart… Keep the app running.';}
+  }catch(e){if(!$('#queue-panel').hidden)$('#queue-summary').textContent='Reconnecting to Backstage… Keep the app running.';}
   queueRefreshing=false;queueTimer=setTimeout(refreshQueue,queueItems.some(i=>!['complete','error'].includes(i.status))?1600:5000);
 }
 function uploadJob(data, item){
@@ -105,7 +106,7 @@ function uploadJob(data, item){
     const request=new XMLHttpRequest();request.open('POST','/api/jobs');request.timeout=600000;
     request.upload.onprogress=e=>{if(e.lengthComputable){item.progress=Math.round(100*e.loaded/e.total);item.message=`Uploading · ${item.progress}%`;renderQueue();}};
     request.onload=()=>{let result;try{result=JSON.parse(request.responseText);}catch{reject(new Error('The server returned an unreadable response.'));return;}if(request.status>=200&&request.status<300)resolve(result);else reject(new Error(typeof result.detail==='string'?result.detail:'This song could not be added. Check the file and options.'));};
-    request.onerror=()=>reject(new Error('Upload interrupted. Keep Autochart running and add this song again.'));
+    request.onerror=()=>reject(new Error('Upload interrupted. Keep Backstage running and add this song again.'));
     request.ontimeout=()=>reject(new Error('Upload timed out. Add this song again.'));request.send(data);
   });
 }
@@ -178,7 +179,7 @@ async function showResult(id) {
   $('#volume-status').hidden = !currentResult.loudness?.enabled;
   $('#volume-status').textContent = currentResult.loudness?.enabled ? 'Volume matched across songs.' : '';
   $('#video-status').hidden = !currentResult.video?.included;
-  $('#video-status').textContent = currentResult.video?.included ? `${currentResult.video.source} video${currentResult.video.width && currentResult.video.height ? ` · ${currentResult.video.width} × ${currentResult.video.height}` : ''} included. Enable song videos in Clone Hero to play it.` : '';
+  $('#video-status').textContent = currentResult.video?.included ? `${currentResult.video.source} video${currentResult.video.width && currentResult.video.height ? ` · ${currentResult.video.width} × ${currentResult.video.height}` : ''} included. Enable song videos in Backstage to play it.` : '';
   $('#stats').textContent=`${Math.floor(duration/60)}:${String(Math.floor(duration%60)).padStart(2,'0')}  ·  ${currentResult.analysis.bpm} BPM`;
   $('#saved-path').textContent=`${outputRoot}/${id}/${currentResult.folder}`;
   $('#legacy-notice').hidden=!!currentResult.analysis.instruments;
@@ -302,8 +303,8 @@ $('#new-song').addEventListener('click',async()=>{if(dirty && !await saveTrack()
 $('#download-button').addEventListener('click',async e=>{if(dirty){e.preventDefault();if(await saveTrack())window.location.href=$('#download-button').href;}});
 window.addEventListener('beforeunload',e=>{if(dirty||uploadsInFlight||uploadTasks.length){e.preventDefault();e.returnValue='';}});
 async function init(){
-  try{const health=await api('/api/health');outputRoot=health.output;if(!health.ffmpeg)error('Install FFmpeg with “brew install ffmpeg”, then restart Autochart.');refreshLibrary();if(localStorage.getItem('autochart-view')==='queue')showQueue();refreshQueue();}
-  catch{error('Start Autochart on your computer, then refresh this page.');}
+  try{const health=await api('/api/health');outputRoot=health.output;if(!health.ffmpeg)error('Install FFmpeg with “brew install ffmpeg”, then restart Backstage.');refreshLibrary();if(localStorage.getItem('autochart-view')==='queue')showQueue();refreshQueue();}
+  catch{error('Start Backstage on your computer, then refresh this page.');}
 }
 init();
 
@@ -346,3 +347,10 @@ $('#chart-search-button').addEventListener('click', () => searchCharts());
 $('#chart-search-more').addEventListener('click', () => searchCharts(true));
 $('#chart-search-query').addEventListener('keydown', e => {if(e.key === 'Enter'){e.preventDefault();searchCharts();}});
 for (const selector of ['#chart-search-instrument', '#chart-search-difficulty']) $(selector).addEventListener('change', () => {if ($('#chart-search-query').value.trim().length >= 2) searchCharts();});
+
+async function refreshSharedLibrary(){
+  const status=document.querySelector('#backstage-library-status');
+  try{const library=await api('/api/library');status.textContent=`${library.songs.length} installed songs · ${library.path}`;}
+  catch(e){status.textContent=e.message;}
+}
+refreshSharedLibrary();

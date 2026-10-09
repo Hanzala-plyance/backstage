@@ -11,3 +11,7 @@ venv/
 
 # Generated song conversion output stays local.
 /song-converter/output/
+
+.cache/
+*.log
+/release/local-evidence/

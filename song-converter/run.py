@@ -10,7 +10,7 @@ os.environ.setdefault("NUMBA_CACHE_DIR", str(ROOT / ".cache" / "numba"))
 os.environ.setdefault("HF_HOME", str(ROOT / ".cache" / "huggingface"))
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Autochart — MP3 to Clone Hero")
+    parser = argparse.ArgumentParser(description="Backstage — MP3 to Backstage")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
     args = parser.parse_args()

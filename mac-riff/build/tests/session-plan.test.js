@@ -27,3 +27,11 @@ test('identical receivers are selected by USB port, never first-match guessing',
     assert.equal(receiverKey({...b,deviceAddress:55}),receiverKey(b));
     assert.throws(()=>selectReceiver([a],'usb:1:4'));
 });
+
+test('Backstage supports native guitars and MIDI drums, without a Clone Hero bridge', () => {
+    const plan = {game:'backstage', players:[player(1,'native'), player(2,'midi','drums')]};
+    assert.equal(validatePlan(plan), plan);
+    assert.deepEqual(bridgePlayers(plan), []);
+    assert.throws(() => validatePlan({game:'backstage', players:[player(1,'bridge')]}), /only in Clone Hero/);
+    assert.throws(() => validatePlan({game:'unknown', players:[player(1,'native')]}));
+});

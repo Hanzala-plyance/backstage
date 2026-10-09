@@ -84,7 +84,7 @@ def write_song(folder: Path, metadata: dict, analysis: dict, lyrics: list[dict])
               "diff_guitar": 3, "diff_band": 3 if 'instruments' in analysis else -1, "diff_bass": 3 if 'Bass' in validated else -1,
               "diff_rhythm": 3 if 'Rhythm' in validated else -1, "diff_drums": 3 if 'Drums' in validated else -1, "diff_keys": -1,
               "pro_drums": 1 if 'Drums' in validated else 0, "five_lane_drums": 0, "multiplier_note": 116,
-              "diff_guitarghl": -1, "diff_bassghl": -1, "loading_phrase": "Automatically charted with Autochart. Made for your music."}
+              "diff_guitarghl": -1, "diff_bassghl": -1, "loading_phrase": "Automatically charted with Backstage. Made for your music."}
     (folder / "song.ini").write_text("[song]\n" + "\n".join(f"{key} = {clean(value)}" for key, value in values.items()) + "\n", encoding="utf-8")
     (folder / "lyrics.lrc").write_text(to_lrc(lyrics), encoding="utf-8")
     return validated
@@ -117,13 +117,13 @@ def convert(job_dir: Path, audio: Path, options: dict, progress):
         metadata[key] = clean(options.get(key) or metadata.get(key) or "")
     metadata["title"] = metadata["title"] or options["original_stem"]
     metadata["artist"] = metadata["artist"] or "Unknown Artist"
-    metadata["charter"] = metadata["charter"] or "Autochart"
+    metadata["charter"] = metadata["charter"] or "Backstage"
     folder = job_dir / folder_name(f'{metadata["artist"]} - {metadata["title"]}')
     folder.mkdir()
     warnings = ["Instrument parts are estimated from the mixed audio. Review notes and lyrics before sharing."]
     loudness = normalize_audio(audio, folder / 'song.ogg', progress)
     # Safari does not play OGG/Vorbis consistently. Keep a separate browser
-    # preview so the Clone Hero song.ogg remains unchanged.
+    # preview so the Backstage song.ogg remains unchanged.
     ffmpeg(['-i', str(folder / 'song.ogg'), '-vn', '-map', '0:a:0', '-c:a', 'aac', '-b:a', '192k',
             '-movflags', '+faststart', str(job_dir / 'preview.m4a')])
     import soundfile as sf
@@ -182,7 +182,7 @@ def convert(job_dir: Path, audio: Path, options: dict, progress):
                 "-c:v", "libx264", "-preset", "ultrafast", "-tune", "stillimage", "-r", "24", "-pix_fmt", "yuv420p",
                 "-an", "-movflags", "+faststart", str(folder / "video.mp4")])
         video_source = 'Cover artwork'
-    progress(97, "Writing your Clone Hero folder…")
+    progress(97, "Writing your Backstage folder…")
     validated = write_song(folder, metadata, analysis, lyrics)
     result = {"metadata": metadata, "analysis": analysis, "lyrics": to_lrc(lyrics), "lyrics_status": lyrics_status,
               "loudness": loudness,

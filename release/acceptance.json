@@ -1,0 +1,16 @@
+{
+  "version": "0.1.0-dev",
+  "status": "blocked",
+  "tested_commit": "",
+  "artifact": "",
+  "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.1.0-foundation.md",
+  "reviewer": "",
+  "rollback": "Keep the current main release; do not deploy this candidate before acceptance.",
+  "checks": {
+    "unity_build": {"status": "not-run", "evidence": "Unity 6000.3.5f2 is not installed on the implementation machine."},
+    "song_import_gameplay": {"status": "not-run", "evidence": "Requires a built Backstage game and actual playback of a converted song."},
+    "controller_hardware": {"status": "not-run", "evidence": "Requires physical supported guitar/MIDI input testing in Backstage."},
+    "clean_install": {"status": "not-run", "evidence": "Requires the built game on a clean target machine."},
+    "recovery": {"status": "not-run", "evidence": "Requires game and device disconnect/reconnect testing."}
+  }
+}

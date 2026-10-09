@@ -22,6 +22,7 @@ from .artwork import save_image
 from .youtube import download_youtube, normalize_youtube_url, search_youtube
 from .midi import validate_midi
 from .chart_search import search_charts
+from .library import publish, install_status, songs_root
 
 OUTPUT = ROOT / "output"
 OUTPUT.mkdir(exist_ok=True)
@@ -34,7 +35,7 @@ MAX_QUEUE = 20
 ACTIVE_STATUSES = ('uploading', 'queued', 'downloading', 'processing')
 jobs: dict[str, dict] = {}
 edit_lock = Lock()
-app = FastAPI(title="Autochart", docs_url=None, redoc_url=None)
+app = FastAPI(title="Backstage · Add New Song", docs_url=None, redoc_url=None)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1", "testserver"])
 
 
@@ -107,7 +108,16 @@ def run_job(job_id: str, audio: Path | None, options: dict):
             phase = 'processing'
             convert(OUTPUT / job_id, audio, options,
                     (lambda p, m: progress(25 + int(.74 * p), m)) if options.get('youtube_url') else progress)
-        jobs[job_id] = {"status": "complete", "progress": 100, "message": "Your song is ready."}
+        try:
+            installed = publish(OUTPUT / job_id)
+            message = installed['message']
+        except Exception:
+            import logging
+            logging.exception('Backstage library installation failed; converted export retained')
+            installed = {'status': 'error', 'message': 'Converted, but installation failed. Check the Songs folder and retry.'}
+            (OUTPUT / job_id / 'library.json').write_text(json.dumps(installed))
+            message = installed['message']
+        jobs[job_id] = {"status": "complete", "progress": 100, "message": message}
     except Exception as exc:
         import logging
         logging.exception("Song conversion failed")
@@ -119,7 +129,32 @@ def run_job(job_id: str, audio: Path | None, options: dict):
 @app.get("/api/health")
 def health():
     return {"ffmpeg": bool(shutil.which("ffmpeg")), 'image_search': 'Playwright',
-            'queue_limit': MAX_QUEUE, "output": str(OUTPUT)}
+            'queue_limit': MAX_QUEUE, "output": str(OUTPUT),
+            'product': 'Backstage', 'songs_root': str(songs_root())}
+
+
+@app.get('/api/library')
+def library():
+    root = songs_root()
+    entries = []
+    if root.is_dir():
+        for marker in sorted(root.glob('*/.backstage.json')):
+            if marker.is_symlink() or marker.parent.is_symlink():
+                continue
+            try:
+                entries.append({**json.loads(marker.read_text()), 'path': str(marker.parent)})
+            except (OSError, ValueError):
+                continue
+    return {'path': str(root), 'songs': entries, 'refresh': 'Use Scan Songs in Backstage after installation.'}
+
+
+@app.post('/api/jobs/{job_id}/install')
+def install_job(job_id: str):
+    path, _ = result_for(job_id)
+    try:
+        return publish(path)
+    except (OSError, ValueError, KeyError) as exc:
+        raise HTTPException(409, 'Could not install this song. Check the export and Songs folder permissions.') from exc
 
 
 @app.get('/api/youtube/search')
@@ -243,9 +278,12 @@ def history():
 def job_status(job_id: str):
     path = job_path(job_id)
     if job_id in jobs:
-        return jobs[job_id]
+        status = dict(jobs[job_id])
+        if status.get('status') == 'complete':
+            status['library'] = install_status(path)
+        return status
     if (path / "result.json").exists():
-        return {"status": "complete", "progress": 100}
+        return {"status": "complete", "progress": 100, 'library': install_status(path)}
     if (path / "error.json").exists():
         return json.loads((path / "error.json").read_text())
     return {"status": "error", "message": "The app restarted before conversion finished. Upload the song again."}

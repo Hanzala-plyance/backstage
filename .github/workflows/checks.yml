@@ -1,0 +1,44 @@
+name: Backstage checks
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test promotion rules
+        run: python -m unittest discover -s scripts -p 'test_promotion.py'
+      - name: Install converter dependencies
+        if: hashFiles('song-converter/requirements.txt') != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libsndfile1
+          python -m pip install -r song-converter/requirements.txt
+      - name: Test converter and shared library
+        if: hashFiles('song-converter/requirements.txt') != ''
+        run: python -m unittest discover -s song-converter/tests -p 'test_*.py'
+        env:
+          PYTHONPATH: song-converter
+          BACKSTAGE_SONGS_DIR: ${{ runner.temp }}/backstage-test-songs
+      - name: Test controller routing
+        if: hashFiles('mac-riff/build/session-plan.js') != ''
+        run: node --test mac-riff/build/tests/*.test.js
+      - name: Check promotion route and release evidence
+        if: github.event_name == 'pull_request'
+        run: python scripts/check_promotion.py
+        env:
+          BACKSTAGE_BASE_BRANCH: ${{ github.base_ref }}
+          BACKSTAGE_HEAD_BRANCH: ${{ github.head_ref }}
+          BACKSTAGE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
