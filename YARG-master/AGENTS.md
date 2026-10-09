@@ -1,14 +1,14 @@
 <!-- BACKSTAGE-CONSTITUTION:START -->
-Generated from https://github.com/Hanzala-plyance/backstage-specs/tree/main/governance.
-Source SHA-256: `0d3c186ab057e53827f2c182282f9972a76b86a0eb66c829e00a371b0ff00510`.
+Generated from https://github.com/Hanzala-plyance/backstage-specs/tree/meta/governance.
+Source SHA-256: `7cc281b7f654cd65b99351a51afc86cc841e50c1ec34be991451980132ae5217`.
 Edit the canonical sources in backstage-specs; regenerate this managed block.
 
-# game: Unity rhythm game reference project
+# game: Backstage Unity game, derived from YARG
 
 Read the root AGENTS.md and the relevant shared specs first.
 
 - Preserve Unity .meta files, serialized assets, and the existing Git LFS rules.
-- Preserve YARG's attribution and license when moving reference code.
-- YARG.Core was an empty directory in the import; the nested .gitmodules file is reference metadata, not an initialized submodule. Plan dependency setup explicitly before claiming the project builds.
+- Public product branding is Backstage. Preserve YARG attribution, license notices, internal namespaces, serialized GUIDs, and dependency identities.
+- Build with the pinned Unity editor and initialized pinned YARG.Core submodule. A source-only check is not game-build or gameplay evidence.
 - Record the Unity editor version and any platform-specific build checks in the feature handoff.
 <!-- BACKSTAGE-CONSTITUTION:END -->
