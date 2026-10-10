@@ -739,35 +739,6 @@ export default function App() {
                 ＋ Add new songs
               </button>
             </div>
-            <section className="practice-banner">
-              <div className="record-art">
-                <div />
-                <span>B</span>
-              </div>
-              <div>
-                <span className="eyebrow">NEW HERE?</span>
-                <h2>Learn the stage in Soundcheck.</h2>
-                <p>
-                  Short lessons with demos: frets, chords, sustains,
-                  <br />
-                  HOPOs and Star Power, one skill at a time.
-                </p>
-                <button
-                  className="light-button"
-                  onClick={() => {
-                    setPage("soundcheck");
-                    later(() => focusFirst());
-                  }}
-                >
-                  Open Soundcheck <span>↗</span>
-                </button>
-              </div>
-              <span className="banner-corner">
-                {lessons.length} LESSONS
-                <br />
-                DEMO FIRST
-              </span>
-            </section>
             <div className="section-heading library-heading">
               <h2>
                 Your library <span>{librarySongs.length}</span>

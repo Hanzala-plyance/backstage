@@ -192,6 +192,9 @@ try {
     .click();
   await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
+  // Notes start at 0.6 s while the stage is still warming up: run the clock at
+  // half speed (judgment follows it, so timing rules are unchanged).
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.5));
   for (let i = 0; i < 5; i++) {
     await page.waitForFunction(
       (target) => window.__testAudio.currentTime >= target,
@@ -213,8 +216,9 @@ try {
       await page.keyboard.press("Shift");
       await expect(page.locator(".game-screen")).toHaveClass(/power-active/);
       await expect(page.locator(".amplifier > strong")).toHaveText("2×");
+      // Star Power must not change the song's speed.
       expect(await page.evaluate(() => window.__testAudio.playbackRate)).toBe(
-        1,
+        0.5,
       );
     }
   }
@@ -345,7 +349,10 @@ try {
       .evaluateAll((els) =>
         els.map((e) => Number(e.textContent.replace(/,/g, ""))),
       );
-  // Fixture Easy guitar: green at 0.6 s, red at 1.1 s.
+  // Fixture Easy guitar: green at 0.6 s, red at 1.1 s. The first note comes
+  // while the stage is still warming up, so run the clock at a fifth of real
+  // speed from the start (judgment follows the clock; rules are unchanged).
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.2));
   await page.waitForFunction(
     () => window.__testAudio.currentTime >= 0.57,
     {},

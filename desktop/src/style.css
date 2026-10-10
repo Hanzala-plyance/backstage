@@ -272,81 +272,6 @@ small {
 .wide {
   width: 100%;
 }
-.practice-banner {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 36px;
-  padding: 35px 36px;
-  min-height: 235px;
-  background: #bbb1a9;
-  color: #2d2824;
-  border-radius: 13px;
-  overflow: hidden;
-}
-.practice-banner .eyebrow {
-  font-size: 9px;
-  color: #5b5148;
-  margin-bottom: 11px;
-}
-.practice-banner h2 {
-  font-size: 29px;
-  letter-spacing: -1px;
-}
-.practice-banner p {
-  font-size: 12px;
-  color: #594f46;
-  margin-top: 9px;
-}
-.record-art {
-  width: 172px;
-  height: 172px;
-  flex-shrink: 0;
-  position: relative;
-  border-radius: 50%;
-  background: repeating-radial-gradient(
-    circle,
-    #2b2622 0,
-    #2b2622 2px,
-    #3b342f 3px,
-    #2b2622 4px
-  );
-  box-shadow: 10px 15px 30px #26301d30;
-  transform: rotate(-12deg);
-  display: grid;
-  place-items: center;
-}
-.record-art:after {
-  content: "";
-  position: absolute;
-  height: 9px;
-  width: 9px;
-  background: #c1b8b0;
-  border-radius: 50%;
-}
-.record-art div {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  background: #b97847;
-}
-.record-art span {
-  position: absolute;
-  font-size: 23px;
-  font-weight: 800;
-  top: 55px;
-  color: #e3bb8d;
-}
-.banner-corner {
-  position: absolute;
-  right: 25px;
-  top: 27px;
-  font-size: 8px;
-  letter-spacing: 1.8px;
-  text-align: right;
-  line-height: 1.8;
-  color: #6e6156;
-}
 .section-heading {
   display: flex;
   align-items: center;
@@ -1207,20 +1132,6 @@ kbd {
   .window-drag {
     left: 211px;
   }
-  .practice-banner {
-    gap: 26px;
-    padding: 28px;
-  }
-  .record-art {
-    width: 135px;
-    height: 135px;
-  }
-  .record-art span {
-    top: 38px;
-  }
-  .banner-corner {
-    display: none;
-  }
   .controller-layout {
     grid-template-columns: 230px 1fr;
   }
@@ -1244,7 +1155,6 @@ kbd {
   color: #f3e9dd;
 }
 h1,
-.practice-banner h2,
 .game-dialog h1 {
   font-family: Impact, "Arial Narrow", sans-serif;
   font-weight: 800;
@@ -1281,20 +1191,6 @@ h1 {
 }
 .primary:hover {
   background: #ffd49b;
-}
-.practice-banner {
-  background:
-    repeating-linear-gradient(108deg, transparent 0 33px, #ffffff04 34px 35px),
-    radial-gradient(ellipse at 84% 100%, #6a301f 0, transparent 55%), #252020;
-  border: 1px solid #6e4531;
-  border-radius: 7px;
-  box-shadow: inset 0 4px #e59955;
-}
-.practice-banner h2 {
-  font-size: 34px;
-}
-.practice-banner .eyebrow {
-  color: #eeb27d;
 }
 .song-row {
   border-radius: 3px;
@@ -1501,13 +1397,6 @@ h1 {
     transition: none !important;
   }
 }
-
-.practice-banner {
-  color: #f7ead9;
-}
-.practice-banner p {
-  color: #d3bdaa;
-}
 .practice-stamp {
   color: #c6a389;
 }
@@ -1554,7 +1443,6 @@ body {
 }
 h1,
 h2,
-.practice-banner h2,
 .game-dialog h1,
 .song-dialog h2 {
   font-family: var(--display);
@@ -1710,46 +1598,6 @@ select {
   background: #23304a;
   box-shadow: inset 0 0 0 2px var(--volt);
   outline: none;
-}
-
-/* Practice banner — tour poster */
-.practice-banner {
-  background:
-    repeating-linear-gradient(-62deg, transparent 0 22px, #ffffff06 22px 24px),
-    radial-gradient(ellipse at 90% 120%, #ff8a1f55 0, transparent 50%),
-    radial-gradient(ellipse at 0% 0%, #ff2e8840 0, transparent 55%),
-    linear-gradient(120deg, #1d1028, #120d1b);
-  border: 0;
-  border-radius: 0;
-  clip-path: var(--cut);
-  box-shadow: inset 0 0 0 1px #ff2e8840;
-  color: #fff;
-}
-.practice-banner h2 {
-  font-size: 40px;
-  text-shadow: 3px 3px 0 #ff2e8877;
-}
-.practice-banner .eyebrow {
-  color: var(--gold);
-}
-.practice-banner p {
-  color: #d6cde6;
-}
-.record-art {
-  box-shadow:
-    0 0 0 3px #ff2e8866,
-    12px 16px 40px #000a;
-}
-.record-art div {
-  background: conic-gradient(var(--hot), var(--amp), var(--gold), var(--hot));
-}
-.record-art span {
-  color: #fff;
-}
-.banner-corner {
-  color: #ffffff88;
-  font-family: var(--display);
-  font-weight: 800;
 }
 
 /* Library */
