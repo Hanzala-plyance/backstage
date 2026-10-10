@@ -70,6 +70,9 @@ try {
   app = await electron.launch({
     args: [
       ...(process.env.BACKSTAGE_APP_BINARY ? [] : ["."]),
+      // Chromium's synthetic camera: avatar tests never use a real camera.
+      "--use-fake-device-for-media-stream",
+      "--use-fake-ui-for-media-stream",
       ...(process.platform === "linux" && process.env.CI
         ? [
             "--no-sandbox",
@@ -99,6 +102,16 @@ try {
     await page.getByRole("button", { name: "Soundcheck", exact: true }).click();
     await page.getByRole("button", { name: /Full Soundcheck track/ }).click();
   };
+  await page.waitForLoadState("domcontentloaded");
+  // Only the test's own fake pad (window.__pad) is visible, so a controller
+  // attached to the machine running the tests can't press anything.
+  await app.context().addInitScript(() => {
+    Object.defineProperty(navigator, "getGamepads", {
+      configurable: true,
+      value: () => (window.__pad ? [window.__pad] : []),
+    });
+  });
+  await page.reload();
   await page.waitForLoadState("domcontentloaded");
   // Opening flow: title screen, then main menu, then the library.
   await expect(page.locator(".title-screen .press-start")).toBeVisible();
@@ -549,9 +562,84 @@ try {
     path: "/tmp/backstage-desktop-soundcheck.png",
     fullPage: true,
   });
+  // Avatars: names replace P1–P4; premade or camera avatars play along.
+  await page.getByRole("button", { name: "Avatars", exact: true }).click();
+  await page.getByRole("textbox", { name: "Player name" }).fill("shredder99");
+  await expect(page.getByRole("textbox", { name: "Player name" })).toHaveValue(
+    "SHREDDER",
+  );
+  await page.getByRole("button", { name: /Jinx/ }).click();
+  await expect(page.getByRole("button", { name: /Jinx/ })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByRole("tab", { name: /PLAYER 1/ })).toContainText(
+    "SHREDDER",
+  );
+  // Player 2 takes a camera avatar from the fake camera.
+  await page.getByRole("tab", { name: /PLAYER 2/ }).click();
+  await page.getByRole("button", { name: "Use my camera" }).click();
+  await page.getByRole("button", { name: "Turn on camera" }).click();
+  await expect
+    .poll(() =>
+      page
+        .getByLabel("Camera preview")
+        .evaluate((v) => v.readyState >= 2 && v.videoWidth),
+    )
+    .toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Take photo" }).click();
+  await expect(
+    page.getByRole("img", { name: "Your avatar photo" }),
+  ).toBeVisible({
+    timeout: 10000,
+  });
+  await page.screenshot({ path: "/tmp/backstage-desktop-camera.png" });
+  await page.getByRole("button", { name: "Use this photo" }).click();
+  await expect(
+    page.getByRole("tab", { name: /PLAYER 2/ }).locator("svg image"),
+  ).toHaveCount(1);
+  await page.screenshot({
+    path: "/tmp/backstage-desktop-avatars.png",
+    fullPage: true,
+  });
+  // On stage the avatar plays one strum per note hit.
+  await page.getByRole("button", { name: "Song library", exact: true }).click();
+  await page.getByRole("button", { name: /Renamed Song/ }).click();
+  await expect(page.locator(".lineup-row .player-badge").first()).toHaveText(
+    "SHREDDER",
+  );
+  // The two-player lineup from earlier is still set; play this one solo.
+  const removeP2 = page.getByRole("button", { name: "Remove player 2" });
+  if (await removeP2.count()) await removeP2.click();
+  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await page.getByRole("button", { name: /Start playing/ }).click();
+  await expect(page.locator(".stage-avatar .avatar-name")).toHaveText(
+    "SHREDDER",
+  );
+  await page.waitForFunction(
+    () => window.__testAudio.currentTime >= 0.3,
+    {},
+    { timeout: 10000, polling: 10 },
+  );
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.1));
+  await page.waitForFunction(
+    () => window.__testAudio.currentTime >= 0.57,
+    {},
+    { timeout: 10000, polling: 10 },
+  );
+  await page.keyboard.down("a");
+  await page.keyboard.press("Space");
+  await page.keyboard.up("a");
+  await expect(page.locator(".stage-avatar .avatar")).toHaveAttribute(
+    "data-hits",
+    "1",
+  );
+  await page.screenshot({ path: "/tmp/backstage-desktop-avatar-stage.png" });
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "← Library" }).click();
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel and Soundcheck lessons (demo, graded turn, progress).",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel, Soundcheck lessons (demo, graded turn, progress), player names and premade/camera avatars on stage.",
   );
 } catch (error) {
   if (page && !page.isClosed()) {

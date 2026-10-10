@@ -4,12 +4,17 @@ import { keyboardLanes, readPad } from "../core/input";
 import { isPad } from "../core/players";
 import { createHighway } from "./highway";
 import { applyDemo, type DemoInput } from "../core/lessons";
+import type { Look } from "../core/avatars";
 export type MidiPort = { id: string; name: string; input: MIDIInput };
 export type PlayerInit = {
   device: string;
   chart: Chart;
   profile: Profile;
+  /** Used in messages, e.g. "ACE’s controller disconnected". */
   label: string;
+  /** Short tag shown on stage: the player's name or P1–P4. */
+  name?: string;
+  look?: Look;
 };
 export type PadEdges = {
   connected: boolean;
@@ -205,6 +210,8 @@ export class PlayerRuntime {
     return {
       score: j.score,
       combo: finished ? j.maxCombo : j.combo,
+      hits: j.hits,
+      misses: j.misses,
       maxCombo: j.maxCombo,
       accuracy: j.accuracy,
       last: j.last,

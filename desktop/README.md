@@ -56,6 +56,17 @@ implemented yet.
 
 ### Library
 
+**Avatars** (main menu or sidebar) sets a name and look for each of the four
+players. Names are up to 8 letters or numbers and replace P1–P4 in the song dialog
+and on stage. Pick one of 10 premade avatars, or **Use my camera**: raise a hand
+(motion in the dashed upper corners starts a 3-2-1 countdown) or press **Take
+photo**; the photo is restyled in the stage colours. Camera avatars can't be
+customized, and photos stay on this computer (`band.json` in the app's data
+folder). Only video is requested; the microphone is never used. In game, each
+avatar plays the player's guitar, bass or drums: one strum or stick hit per note
+hit, a groove to the tempo, a flinch on a miss, a hyped face on a 10+ streak and a
+glowing aura during Star Power.
+
 Hover or move onto a song (mouse, arrow keys or strum) to hear a short looping
 preview, starting at the song's `preview_start_time` when it has one. To remove a
 song, open it and choose **Remove from library**, or press **blue** / **Delete** on a

@@ -39,6 +39,8 @@ import type { PlayerInit } from "./game/player";
 import Controllers from "./Controllers";
 import Soundcheck, { CHECK_ID, loadProgress, saveProgress } from "./Soundcheck";
 import ControllerCheck from "./game/ControllerCheck";
+import Avatars from "./Avatars";
+import { defaultLook, slotName, type Slot } from "./core/avatars";
 import { lessons } from "./core/lessons";
 import type { MidiPort } from "./game/Game";
 const Game = lazy(() => import("./game/Game"));
@@ -46,6 +48,7 @@ const LessonRun = lazy(() => import("./game/Lesson"));
 const pages = [
   "library",
   "soundcheck",
+  "avatars",
   "search",
   "queue",
   "controllers",
@@ -72,6 +75,11 @@ function Icon({ name }: { name: string }) {
       {name === "library" ? (
         <>
           <path d="M4 5h3v15H4zM10 5h3v15h-3zM16 4l3-1 4 15-3 1z" />
+        </>
+      ) : name === "avatars" ? (
+        <>
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 21c1-5 4-7 8-7s7 2 8 7" />
         </>
       ) : name === "soundcheck" ? (
         <>
@@ -125,6 +133,21 @@ export default function App() {
   const preview = useRef(new Preview());
   const [scores, setScores] = useState<Scores>({}),
     [focusId, setFocusId] = useState<string | null>(null);
+  // Player names and avatars; edits show at once and save in the background.
+  const [band, setBand] = useState<Slot[]>(() =>
+    [0, 1, 2, 3].map((i) => ({ name: "", look: defaultLook(i) })),
+  );
+  const saveSlot = (slot: number, value: Slot) => {
+    setBand((b) => b.map((s, i) => (i === slot ? value : s)));
+    void window.backstage
+      .saveSlot(slot, value)
+      .catch(() => setError("Couldn’t save that player. Try again."));
+  };
+  const performer = (i: number) => ({
+    name: slotName(i, band[i]),
+    look: band[i]?.look ?? defaultLook(i),
+    label: band[i]?.name || `Player ${i + 1}`,
+  });
   const loadScores = () =>
     void window.backstage
       .scores()
@@ -379,6 +402,10 @@ export default function App() {
       setSettings(await window.backstage.settings());
     }).then(tidy);
     loadScores();
+    void window.backstage
+      .band()
+      .then(setBand)
+      .catch(() => {});
   }, []);
   const installed = useRef(new Set<string>()),
     seeded = useRef(false);
@@ -515,7 +542,7 @@ export default function App() {
     if (!loaded) return;
     setPlaying({
       song: loaded,
-      players: [{ device, chart: loaded.chart, profile, label: "Player 1" }],
+      players: [{ device, chart: loaded.chart, profile, ...performer(0) }],
     });
   }
   // Start Soundcheck: the first step not yet done, in order.
@@ -545,7 +572,7 @@ export default function App() {
         device: p.device,
         chart: loaded[i].chart,
         profile: profileOf(p.device),
-        label: `Player ${i + 1}`,
+        ...performer(i),
       })),
     });
   }
@@ -662,6 +689,7 @@ export default function App() {
           {[
             ["library", "Song library"],
             ["soundcheck", "Soundcheck"],
+            ["avatars", "Avatars"],
             ["search", "Add new songs"],
             ["queue", "Preparation queue"],
             ["controllers", "Controllers"],
@@ -882,6 +910,7 @@ export default function App() {
             </p>
           </>
         )}
+        {page === "avatars" && <Avatars band={band} onSave={saveSlot} />}
         {page === "soundcheck" && (
           <Soundcheck
             done={lessonsDone}
@@ -1396,7 +1425,9 @@ export default function App() {
                   <div className="lineup" role="group" aria-label="Players">
                     {lineupAll().map((p, n) => (
                       <div className="lineup-row" key={n}>
-                        <b className={"player-badge p" + (n + 1)}>P{n + 1}</b>
+                        <b className={"player-badge p" + (n + 1)}>
+                          {slotName(n, band[n])}
+                        </b>
                         <button
                           className="lineup-device"
                           aria-label={`Player ${n + 1} controller`}

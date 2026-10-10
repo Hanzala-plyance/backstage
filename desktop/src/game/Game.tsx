@@ -6,6 +6,8 @@ import { activateFocused, focusFirst, moveFocus } from "../core/menu";
 import { isPad } from "../core/players";
 import ButtonHints, { type Hint } from "../ButtonHints";
 import Stars from "../Stars";
+import Avatar from "../Avatar";
+import { defaultLook, instrumentFor, moodFor, slotName } from "../core/avatars";
 import { baseScore, starsFor } from "../core/stars";
 import {
   PlayerRuntime,
@@ -23,6 +25,8 @@ const audioMessages = {
 const emptyStats = (): PlayerStats => ({
   score: 0,
   combo: 0,
+  hits: 0,
+  misses: 0,
   maxCombo: 0,
   accuracy: 100,
   last: "Ready",
@@ -63,6 +67,17 @@ export default function Game({
     [time, setTime] = useState(0),
     [results, setResults] = useState<{ stars: number; best: boolean }[]>([]),
     [volume, setVolume] = useState(0.65);
+  // When each player last missed, for the avatar's miss expression.
+  const missedAt = useRef<number[]>(players.map(() => -Infinity));
+  const shown = useRef<PlayerStats[]>(players.map(emptyStats));
+  const show = (next: PlayerStats[]) => {
+    next.forEach((s, i) => {
+      if (s.misses > shown.current[i].misses)
+        missedAt.current[i] = performance.now();
+    });
+    shown.current = next;
+    setStats(next);
+  };
   const setState = (value: string) => {
     status.current = value;
     setPhase(value);
@@ -136,6 +151,7 @@ export default function Game({
     music.pause();
     music.element.currentTime = 0;
     runtimes.current.forEach((r) => r.reset());
+    shown.current = players.map(emptyStats);
     setStats(players.map(emptyStats));
     setResults([]);
     setState("ready");
@@ -290,7 +306,7 @@ export default function Game({
         );
       for (const r of all) r.frame(t, status.current === "playing", now);
       if (now - lastUI > 80) {
-        setStats(snapshot());
+        show(snapshot());
         setTime(music.time);
         lastUI = now;
       }
@@ -314,6 +330,26 @@ export default function Game({
     };
   }, []);
   const solo = stats[0];
+  const performer = (i: number, className: string) => {
+    const p = players[i],
+      s = stats[i];
+    const bpm = p.chart.tempos?.[0]?.bpm || 120;
+    return (
+      <Avatar
+        look={p.look ?? defaultLook(i)}
+        instrument={instrumentFor(p.chart.part)}
+        hits={s.hits}
+        beat={60 / bpm}
+        playing={phase === "playing"}
+        mood={moodFor({
+          powerActive: s.powerActive,
+          combo: s.combo,
+          missedRecently: performance.now() - missedAt.current[i] < 700,
+        })}
+        className={className}
+      />
+    );
+  };
   const chart = players[0].chart;
   const duration = audio.current?.duration || song.duration;
   const clock = (s: number) =>
@@ -372,8 +408,9 @@ export default function Game({
                   }}
                   className="highway-mp"
                 />
+                {performer(i, "lane-avatar")}
                 <header className="player-tag">
-                  <b>P{i + 1}</b>
+                  <b>{p.name ?? slotName(i)}</b>
                   <span>
                     {p.chart.part} · {p.chart.level}
                   </span>
@@ -482,6 +519,10 @@ export default function Game({
             }}
             className="highway"
           />
+          <div className="stage-avatar">
+            {performer(0, "")}
+            <span className="avatar-name">{players[0].name ?? "P1"}</span>
+          </div>
           <div className={"hit-label " + solo.last.toLowerCase()}>
             {phase === "playing" ? solo.last : ""}
           </div>
@@ -546,7 +587,7 @@ export default function Game({
                 <div className="band-results">
                   {players.map((p, i) => (
                     <div key={i}>
-                      <span>P{i + 1}</span>
+                      <span>{p.name ?? slotName(i)}</span>
                       <small>
                         {p.chart.part} · {p.chart.level}
                       </small>

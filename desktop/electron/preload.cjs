@@ -25,6 +25,9 @@ contextBridge.exposeInMainWorld(
       "findCover",
       "scores",
       "saveScore",
+      "band",
+      "saveSlot",
+      "cameraAccess",
     ].map((name) => [name, invoke(name)]),
   ),
 );

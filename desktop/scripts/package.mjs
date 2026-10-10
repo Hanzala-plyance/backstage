@@ -68,6 +68,10 @@ try {
     name: "Backstage",
     appBundleId: "com.backstage.rhythm",
     appVersion: "0.2.0",
+    extendInfo: {
+      NSCameraUsageDescription:
+        "Backstage uses the camera only to take your avatar photo. Photos stay on this computer.",
+    },
     ...(process.platform === "darwin" ? { icon: "public/Backstage.icns" } : {}),
     out: "release",
     overwrite: true,
@@ -105,7 +109,12 @@ try {
         ],
         { stdio: "inherit" },
       );
-    if (process.platform === "darwin") execFileSync("codesign", ["--verify", "--deep", "--strict", path.join(folder, "Backstage.app")], { stdio: "inherit" });
+    if (process.platform === "darwin")
+      execFileSync(
+        "codesign",
+        ["--verify", "--deep", "--strict", path.join(folder, "Backstage.app")],
+        { stdio: "inherit" },
+      );
     console.log("Packaged:", folder);
   }
 } finally {

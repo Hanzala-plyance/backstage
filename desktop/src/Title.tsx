@@ -1,6 +1,6 @@
 import ButtonHints from "./ButtonHints";
 export type MenuChoice =
-  "quickplay" | "soundcheck" | "search" | "controllers" | "settings" | "quit";
+  "quickplay" | "soundcheck" | "avatars" | "search" | "controllers" | "settings" | "quit";
 const items: [MenuChoice, string, string][] = [
   [
     "quickplay",
@@ -8,6 +8,7 @@ const items: [MenuChoice, string, string][] = [
     "Pick a song and take the stage — up to 4 players",
   ],
   ["soundcheck", "Soundcheck", "Learn to play, step by step"],
+  ["avatars", "Avatars", "Your name and on-stage look"],
   ["search", "Add songs", "Search and prepare new music"],
   ["controllers", "Controllers", "Connect and map guitars, pads and drums"],
   ["settings", "Settings", "Timing, playing style and library"],
