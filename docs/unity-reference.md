@@ -1,10 +1,13 @@
-# Develop setup and verification
+# Unity reference (retired)
 
 Canonical product and feature context: [backstage-specs/meta](https://github.com/Hanzala-plyance/backstage-specs/tree/meta).
 
+The Unity fork is no longer on develop. Check out tag `unity-reference` to use the
+instructions in the Game section below; the remaining sections still apply.
+
 ## Game
 
-Initialize submodules, pull LFS assets, then open `Backstage/` in Unity 6000.3.5f2.
+At tag `unity-reference`, initialize submodules, pull LFS assets, then open `Backstage/` in Unity 6000.3.5f2.
 Let the package manager restore dependencies and resolve editor errors before
 building. Use Unity's Build Profiles to build a standalone player named Backstage.
 Place a macOS build in `Backstage/Builds/Backstage.app` or `/Applications/Backstage.app`,
@@ -57,8 +60,7 @@ python3 -m unittest discover -s scripts -p 'test_promotion.py'
 swiftc -typecheck mac-riff/build/setup-model.swift mac-riff/build/setup.swift
 ```
 
-Before stage, attach a successful Unity build and artifact to the release report.
-Before main, verify a converted song in the game, supported physical controllers,
+Desktop release gates are described in [development.md](development.md). Before main, verify a converted song in the game, supported physical controllers,
 clean installation, restart/disconnect recovery, and rollback. Record the tested
 commit; promotion checks reject subsequent executable/asset changes. The report
 starts blocked and must not be changed to passed without those checks.

@@ -15,3 +15,6 @@ venv/
 .cache/
 *.log
 /release/local-evidence/
+
+# Retired Unity fork (tag unity-reference); local leftovers stay untracked.
+/Backstage/

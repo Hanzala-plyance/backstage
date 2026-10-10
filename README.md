@@ -46,7 +46,9 @@ See [desktop setup, controls and limits](https://github.com/Hanzala-plyance/back
 - `desktop/`: active desktop application and rhythm runtime.
 - `song-converter/` and `Add New Song/`: optional Python preparation service.
 - `mac-riff/`: native controller tools and the separate Clone Hero bridge reference.
-- `Backstage/`: preserved YARG/Unity reference, not bundled in the new application.
+- The previous YARG/Unity fork is retired from develop. It is preserved at tag
+  [`unity-reference`](https://github.com/Hanzala-plyance/backstage/tree/unity-reference);
+  the unmodified upstream import remains on `starter`.
 
 Installed songs use `~/Music/Backstage/Songs` (or `BACKSTAGE_SONGS_DIR`). Desktop
 Settings can select a different library. Refresh after conversion. Python and
