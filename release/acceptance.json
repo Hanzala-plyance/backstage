@@ -1,8 +1,8 @@
 {
   "version": "0.2.0-dev",
   "status": "blocked",
-  "tested_commit": "",
-  "artifact": "",
+  "tested_commit": "30fe970ad246f1f748947aed809b4cb9b3fccde4",
+  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 4566ccfc0785bcc1f711e2d5b8653bd67fab75bac575b77a3f0c1a0e62d47dcc",
   "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md",
   "reviewer": "",
   "rollback": "Keep the current main release; do not deploy this candidate before acceptance.",
@@ -24,8 +24,8 @@
       "evidence": "Requires game and device disconnect/reconnect testing."
     },
     "runtime_build": {
-      "status": "not-run",
-      "evidence": "Record the final packaged desktop artifact and tested commit after build verification."
+      "status": "passed",
+      "evidence": "Native macOS arm64 package built and launched. Packaged Electron smoke verified audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad/disconnect, live search and strict bundle signature after service shutdown. See meta release report; hardware acceptance remains blocked."
     }
   },
   "runtime": "electron"
