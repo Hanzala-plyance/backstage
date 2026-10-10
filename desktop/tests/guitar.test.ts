@@ -297,3 +297,12 @@ test("enhanced-open and Phase Shift tap/open MIDI markers survive normalization"
   assert.equal(c.notes[1].open, true);
   assert.equal(c.notes[1].type, "tap");
 });
+
+test('song.ini HOPO and sustain thresholds are chart ticks and honor legacy options',()=>{
+ const m=new Midi();const t=m.addTrack();t.name='PART GUITAR';
+ t.addNote({midi:96,ticks:0,durationTicks:150});t.addNote({midi:97,ticks:200,durationTicks:160});
+ const bytes=m.toArray();const defaults=parseMidi(bytes)[0];assert.equal(defaults.notes[0].duration,0);assert.ok(defaults.notes[1].duration>0);assert.equal(defaults.notes[1].type,'strum');
+ assert.equal(parseMidi(bytes,{eighthnote_hopo:'true'})[0].notes[1].type,'hopo');
+ assert.equal(parseMidi(bytes,{hopofreq:'3'})[0].notes[1].type,'hopo');
+ const custom=parseMidi(bytes,{hopo_frequency:'199',sustain_cutoff_threshold:'0'})[0];assert.equal(custom.notes[1].type,'strum');assert.ok(custom.notes[0].duration>0);
+});
