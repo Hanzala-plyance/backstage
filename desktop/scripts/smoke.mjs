@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import midiPackage from "@tonejs/midi";
+import { execFileSync } from "node:child_process";
 const temp = await mkdtemp(path.join(os.tmpdir(), "backstage-smoke-"));
 let app;
 try {
@@ -244,5 +245,9 @@ try {
   );
 } finally {
   if (app) await app.close();
+  if (process.platform === "darwin" && process.env.BACKSTAGE_APP_BINARY) {
+    const bundle = path.resolve(process.env.BACKSTAGE_APP_BINARY, "../../..");
+    execFileSync("codesign", ["--verify", "--deep", "--strict", bundle]);
+  }
   await rm(temp, { recursive: true, force: true });
 }

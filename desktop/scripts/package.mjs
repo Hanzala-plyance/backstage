@@ -105,6 +105,7 @@ try {
         ],
         { stdio: "inherit" },
       );
+    if (process.platform === "darwin") execFileSync("codesign", ["--verify", "--deep", "--strict", path.join(folder, "Backstage.app")], { stdio: "inherit" });
     console.log("Packaged:", folder);
   }
 } finally {

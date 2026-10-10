@@ -47,6 +47,7 @@ class PreparationService {
       BACKSTAGE_OUTPUT_DIR: path.join(this.data, "output"),
       BACKSTAGE_CACHE_DIR: path.join(this.data, "cache"),
       PYTHONUNBUFFERED: "1",
+      PYTHONDONTWRITEBYTECODE: "1",
       PATH: [
         path.dirname(this.python),
         "/opt/homebrew/bin",
