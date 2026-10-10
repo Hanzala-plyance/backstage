@@ -1,7 +1,7 @@
 {
   "version": "0.2.0-dev",
   "status": "blocked",
-  "tested_commit": "fcd31a8c70e879551c7e5e27ef2ab2b5ac1c878a",
+  "tested_commit": "98869029f5e2b5b7959cdc85c51d2c21481377a2",
   "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 4566ccfc0785bcc1f711e2d5b8653bd67fab75bac575b77a3f0c1a0e62d47dcc",
   "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md",
   "reviewer": "",
