@@ -155,8 +155,28 @@ class Library {
             }
           // Display names drop YouTube decorations; song.ini is not rewritten.
           const clean = cleanSong(info.name, info.artist);
+          const field = (key) =>
+            String(info[key] ?? "")
+              .trim()
+              .slice(0, 120);
+          const intensity = (key) => {
+            const n = Number(info[key]);
+            return Number.isInteger(n) && n >= 0 && n <= 6 ? n : -1;
+          };
           const song = {
             id,
+            details: {
+              album: field("album"),
+              year: field("year"),
+              genre: field("genre"),
+              charter: field("charter"),
+            },
+            intensity: {
+              Guitar: intensity("diff_guitar"),
+              Bass: intensity("diff_bass"),
+              Rhythm: intensity("diff_rhythm"),
+              Drums: intensity("diff_drums"),
+            },
             title: clean.title || info.name || path.basename(dir),
             artist: clean.artist || "Unknown artist",
             // Changes when the cover file changes, so the UI can reload it.

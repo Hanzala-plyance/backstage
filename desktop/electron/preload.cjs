@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld(
       "removeSong",
       "tidyLibrary",
       "findCover",
+      "scores",
+      "saveScore",
     ].map((name) => [name, invoke(name)]),
   ),
 );

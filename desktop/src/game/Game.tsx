@@ -5,6 +5,8 @@ import { keyboardLanes } from "../core/input";
 import { activateFocused, focusFirst, moveFocus } from "../core/menu";
 import { isPad } from "../core/players";
 import ButtonHints, { type Hint } from "../ButtonHints";
+import Stars from "../Stars";
+import { baseScore, starsFor } from "../core/stars";
 import {
   PlayerRuntime,
   drumNotes,
@@ -56,6 +58,7 @@ export default function Game({
     [message, setMessage] = useState(""),
     [stats, setStats] = useState<PlayerStats[]>(() => players.map(emptyStats)),
     [time, setTime] = useState(0),
+    [results, setResults] = useState<{ stars: number; best: boolean }[]>([]),
     [volume, setVolume] = useState(0.65);
   const setState = (value: string) => {
     status.current = value;
@@ -95,6 +98,31 @@ export default function Game({
       starting.current = false;
     }
   };
+  // Rate each player and keep their best result for this chart.
+  const saveResults = async (final: PlayerStats[]) => {
+    setResults(
+      await Promise.all(
+        players.map(async (p, i) => {
+          const s = final[i];
+          const stars = starsFor(s.score, baseScore(p.chart), p.chart.part);
+          try {
+            const saved = await window.backstage.saveScore({
+              id: song.id,
+              part: p.chart.part,
+              level: p.chart.level,
+              score: s.score,
+              stars,
+              accuracy: Math.round(s.accuracy),
+              maxCombo: s.maxCombo,
+            });
+            return { stars, best: saved.best };
+          } catch {
+            return { stars, best: false };
+          }
+        }),
+      ),
+    );
+  };
   const exit = () => {
     pause();
     onExit();
@@ -106,6 +134,7 @@ export default function Game({
     music.element.currentTime = 0;
     runtimes.current.forEach((r) => r.reset());
     setStats(players.map(emptyStats));
+    setResults([]);
     setState("ready");
     void start();
   };
@@ -215,7 +244,9 @@ export default function Game({
     const ended = () => {
       all.forEach((r) => r.judge.finish(clock()));
       setState("finished");
-      setStats(snapshot());
+      const final = snapshot();
+      setStats(final);
+      void saveResults(final);
     };
     music.element.addEventListener("ended", ended);
     const failed = () => {
@@ -517,6 +548,14 @@ export default function Game({
                         {p.chart.part} · {p.chart.level}
                       </small>
                       <b>{stats[i].score.toLocaleString()}</b>
+                      {results[i] && (
+                        <>
+                          <Stars count={results[i].stars} small />
+                          {results[i].best && (
+                            <em className="new-best">NEW BEST</em>
+                          )}
+                        </>
+                      )}
                       <small>
                         {stats[i].accuracy}% · best streak {stats[i].maxCombo}
                       </small>
@@ -532,19 +571,29 @@ export default function Game({
                   </div>
                 </div>
               ) : (
-                <div className="results">
-                  <b>
-                    {solo.score.toLocaleString()}
-                    <small>points</small>
-                  </b>
-                  <b>
-                    {solo.accuracy}%<small>accuracy</small>
-                  </b>
-                  <b>
-                    {solo.maxCombo}
-                    <small>best streak</small>
-                  </b>
-                </div>
+                <>
+                  {results[0] && (
+                    <div className="result-stars">
+                      <Stars count={results[0].stars} />
+                      {results[0].best && (
+                        <em className="new-best">NEW BEST</em>
+                      )}
+                    </div>
+                  )}
+                  <div className="results">
+                    <b>
+                      {solo.score.toLocaleString()}
+                      <small>points</small>
+                    </b>
+                    <b>
+                      {solo.accuracy}%<small>accuracy</small>
+                    </b>
+                    <b>
+                      {solo.maxCombo}
+                      <small>best streak</small>
+                    </b>
+                  </div>
+                </>
               ))}
             <div className="menu-list">
               {phase === "finished" ? (
@@ -573,19 +622,16 @@ export default function Game({
               pad={anyPad}
               hints={
                 [
-                  { button: "up", label: "Browse" },
+                  { button: "up", label: "Up / Down" },
                   { button: "green", label: "Select" },
-                  {
-                    button: "red",
-                    label: phase === "paused" ? "Resume" : "Library",
-                    key: "Esc",
-                  },
+                  { button: "red", label: "Back", key: "Esc" },
                   ...(phase === "ready" || phase === "paused"
                     ? [
                         {
                           button: "start",
                           label: phase === "ready" ? "Start" : "Resume",
                           key: "Enter",
+                          extra: true,
                         },
                       ]
                     : []),

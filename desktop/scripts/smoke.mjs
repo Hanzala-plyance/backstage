@@ -271,16 +271,29 @@ try {
     );
     await frames();
   };
-  await tap(13);
+  // Strum releases as soon as focus moves: held past the auto-repeat delay
+  // (easy on slow software-rendered frames) it would browse a second row.
+  await page.evaluate(() => {
+    window.__pad.buttons[13].pressed = true;
+    window.addEventListener(
+      "focusin",
+      () => (window.__pad.buttons[13].pressed = false),
+      { once: true },
+    );
+  });
   await expect(page.locator(".song-row").first()).toBeFocused();
   await tap(7); // Green was remapped to button 7 above; menus follow it.
   await expect(page.locator(".song-dialog")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Take the stage/ }),
   ).toBeFocused();
-  await expect(page.locator(".app-hints")).toContainText("Close");
+  await expect(page.locator(".app-hints")).toContainText("Back");
   await tap(1);
   await expect(page.locator(".song-dialog")).toHaveCount(0);
+  // Core guitar navigation leads every hint bar; extras follow.
+  await expect(page.locator(".app-hints")).toHaveText(
+    /Up \/ Down.*Select.*Back.*Remove song.*Next section/,
+  );
   await page.getByRole("button", { name: /Try the practice track/ }).click();
   await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
@@ -371,7 +384,13 @@ try {
     };
   });
   await page.getByRole("button", { name: "← Library" }).click();
+  // Leaving a game focuses the first song for controller players; let that
+  // settle before pointing at another song.
+  await expect(page.locator(".song-row").first()).toBeFocused();
   const fixtureRow = page.getByRole("button", { name: /Stream fixture/ });
+  // Previews follow real pointer movement, not rows sliding under a resting
+  // cursor, so move the mouse onto the row from elsewhere.
+  await page.mouse.move(1, 1);
   await fixtureRow.hover();
   const fixtureId = await fixtureRow.getAttribute("data-song-id");
   await expect
@@ -389,6 +408,27 @@ try {
   await expect(page.locator(".toast")).toContainText("Removed");
   await stat(path.join(temp, "data", "test-trash", "fixture"));
   await expect(stat(fixtureFolder)).rejects.toThrow();
+  // Finishing a song saves the best result; results show stars and the song
+  // details panel shows the saved best.
+  const renamed = page.getByRole("button", { name: /Renamed Song/ });
+  await renamed.click();
+  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await page.getByRole("button", { name: /Start playing/ }).click();
+  await expect(page.getByRole("heading", { name: "Nice set." })).toBeVisible({
+    timeout: 20000,
+  });
+  await expect(page.locator(".game-dialog .stars").first()).toBeVisible();
+  await expect(page.locator(".game-dialog .new-best").first()).toBeVisible();
+  await page.getByRole("button", { name: "Back to library" }).click();
+  await expect(page.locator(".song-row").first()).toBeFocused();
+  // Previews follow real pointer movement, not rows sliding under a resting
+  // cursor, so move the mouse onto the row from elsewhere.
+  await page.mouse.move(1, 1);
+  await renamed.hover();
+  await expect(page.locator(".song-info h2")).toHaveText("Renamed Song");
+  await expect(page.locator(".song-info .part-best").first()).toContainText(
+    "Easy",
+  );
   if (process.env.BACKSTAGE_TEST_SERVICE) {
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({
@@ -420,7 +460,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming and album covers.",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars and the song details panel.",
   );
 } catch (error) {
   if (page && !page.isClosed()) {

@@ -1,8 +1,8 @@
 {
   "version": "0.2.0-dev",
   "status": "blocked",
-  "tested_commit": "a466cde0608934c6115a969f618be6e8d8edbe17",
-  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 6ffc54f338cfdf598f472e656beccb53c4666843ed658261a05cd9f9c2207058",
+  "tested_commit": "f4fd3c3640d82333e0c17210ffdee6da524f52c7",
+  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 799f0fb1e0c47d52d347f0cbb09294c2ae39a18d2ca4878d01555755a9b71b7c",
   "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md",
   "reviewer": "",
   "rollback": "Keep the current main release; do not deploy this candidate before acceptance.",
@@ -25,7 +25,7 @@
     },
     "runtime_build": {
       "status": "passed",
-      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified title screen and main menu, audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation, disconnect pause, two-player input routing (keyboard and pad score only for their owners), hover song preview, confirmed song removal to a trash, readable folder renaming, album cover display and strict bundle signature. 42 desktop unit, 50 converter, 11 controller-routing and promotion tests pass. Physical controllers (including two or more at once), audible timing, clean install and recovery remain unverified."
+      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified title screen and main menu, audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation with Up/Down, Select and Back leading every hint bar, disconnect pause, two-player input routing (keyboard and pad score only for their owners), hover song preview, confirmed song removal to a trash, readable folder renaming, album cover display, saved best scores with stars, song details panel, dev-mode covers and audio and strict bundle signature. 47 desktop unit, 50 converter, 11 controller-routing and promotion tests pass. Physical controllers (including two or more at once), audible timing, clean install and recovery remain unverified."
     }
   },
   "runtime": "electron"

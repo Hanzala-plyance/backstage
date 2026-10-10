@@ -62,6 +62,15 @@ looks up the iTunes catalog once (sending the artist and title to Apple) and use
 cover only when artist and title match; **Find cover online** in the song dialog
 retries. Fetched covers are copyrighted artwork for personal use.
 
+### Song details, scores and stars
+
+Hover or move onto a song to see its details beside the list (Clone Hero style):
+a large cover, album, year, genre, charter and length, and for each instrument its
+intensity, the difficulties it has (E/M/H/X) and your best result. Finishing a song
+saves each player's best score for that song, instrument and difficulty on this
+computer. Stars run from 0 to 5, with a gold sixth, based on YARG's thresholds
+relative to a full combo at 1×. Results show the stars and **New best**.
+
 ### Local multiplayer
 
 Up to four players can play one song together. In the track dialog choose

@@ -11,7 +11,8 @@
     "start": "node scripts/start.mjs",
     "test": "tsx --test tests/*.test.ts",
     "test:app": "node scripts/smoke.mjs",
-    "package": "npm run build && node scripts/package.mjs"
+    "package": "npm run build && node scripts/package.mjs",
+    "test:dev": "node scripts/smoke-dev.mjs"
   },
   "dependencies": {
     "@tonejs/midi": "2.0.28",
