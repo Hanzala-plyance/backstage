@@ -158,6 +158,8 @@ try {
   });
   await openFullTrack();
   await page.getByRole("button", { name: /Start playing/ }).click();
+  // Half-speed clock while the stage warms up (judgment follows it).
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.5));
   await page.waitForFunction(
     () => window.__testAudio?.currentTime >= 1.97,
     {},
