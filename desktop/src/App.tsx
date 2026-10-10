@@ -37,9 +37,19 @@ import SongInfo, { artUrl, bestStars, type Scores } from "./SongInfo";
 import Stars from "./Stars";
 import type { PlayerInit } from "./game/player";
 import Controllers from "./Controllers";
+import Soundcheck, { loadProgress, saveProgress } from "./Soundcheck";
+import { lessons } from "./core/lessons";
 import type { MidiPort } from "./game/Game";
 const Game = lazy(() => import("./game/Game"));
-const pages = ["library", "search", "queue", "controllers", "settings"];
+const LessonRun = lazy(() => import("./game/Lesson"));
+const pages = [
+  "library",
+  "soundcheck",
+  "search",
+  "queue",
+  "controllers",
+  "settings",
+];
 const levels: Level[] = ["Easy", "Medium", "Hard", "Expert"];
 const duration = (seconds: number | null) =>
   seconds
@@ -61,6 +71,11 @@ function Icon({ name }: { name: string }) {
       {name === "library" ? (
         <>
           <path d="M4 5h3v15H4zM10 5h3v15h-3zM16 4l3-1 4 15-3 1z" />
+        </>
+      ) : name === "soundcheck" ? (
+        <>
+          <path d="M9 3h6l4 18H5z" />
+          <path d="M8 15h8M12 15l4-9" />
         </>
       ) : name === "search" ? (
         <>
@@ -88,6 +103,8 @@ function Icon({ name }: { name: string }) {
 }
 export default function App() {
   const [page, setPage] = useState("library"),
+    [lesson, setLesson] = useState<number | null>(null),
+    [lessonsDone, setLessonsDone] = useState(loadProgress),
     [songs, setSongs] = useState<Song[]>([]),
     [warnings, setWarnings] = useState<string[]>([]),
     [root, setRoot] = useState(""),
@@ -162,12 +179,10 @@ export default function App() {
     if (choice === "quit") return window.close();
     setScreen("app");
     setError("");
-    if (choice === "quickplay" || choice === "practice") {
+    if (choice === "quickplay") {
       setPage("library");
       void action("library", refresh);
-      const practice = songs.find((s) => s.practice);
-      if (choice === "practice" && practice) choose(practice);
-      else later(() => focusFirst());
+      later(() => focusFirst());
     } else {
       setPage(choice);
       if (choice === "settings")
@@ -199,9 +214,11 @@ export default function App() {
       later(() => focusFirst());
     }
   };
-  // Guitar and gamepad menu navigation, using each pad's saved mapping.
+  // Guitar and gamepad menu navigation, using each pad's saved mapping. Off
+  // while a song or lesson owns the controllers.
+  const onStage = !!playing || lesson !== null;
   useEffect(() => {
-    if (playing) return;
+    if (onStage) return;
     const menu = new MenuPad(),
       profiles = new Map<string, ReturnType<typeof loadProfile>>();
     const profileFor = (pad: Gamepad) => {
@@ -236,9 +253,9 @@ export default function App() {
       cancelAnimationFrame(frame);
       window.removeEventListener("gamepadconnected", connected);
     };
-  }, [playing, device, profile]);
+  }, [onStage, device, profile]);
   useEffect(() => {
-    if (playing) return;
+    if (onStage) return;
     const keydown = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
       if (screen === "title") {
@@ -283,9 +300,9 @@ export default function App() {
   });
   // Previews only play while choosing in the library.
   useEffect(() => {
-    if (page !== "library" || screen !== "app" || playing)
+    if (page !== "library" || screen !== "app" || onStage)
       preview.current.stop();
-  }, [page, screen, playing]);
+  }, [page, screen, onStage]);
   useEffect(() => {
     if (!selected) preview.current.stop();
   }, [selected]);
@@ -400,10 +417,11 @@ export default function App() {
     const timer = setTimeout(() => setNotice(""), 5000);
     return () => clearTimeout(timer);
   }, [notice]);
+  // The Soundcheck track lives in Soundcheck, not among library songs.
+  const librarySongs = songs.filter((s) => !s.practice);
+  const practiceSong = songs.find((s) => s.practice);
   const focusSong =
-    songs.find((s) => s.id === focusId) ??
-    songs.find((s) => !s.practice) ??
-    songs[0];
+    librarySongs.find((s) => s.id === focusId) ?? librarySongs[0];
   // Installed songs (and installed songs since removed) leave the queue.
   const queued = jobs.filter(
     (j) => !["installed", "missing"].includes(j.library?.status ?? ""),
@@ -530,6 +548,35 @@ export default function App() {
       setJobs(await window.backstage.queue());
     }
   }
+  if (lesson !== null)
+    return (
+      <Suspense
+        fallback={<div className="loading">Getting your stage ready…</div>}
+      >
+        <LessonRun
+          key={lesson}
+          lesson={lessons[lesson]}
+          // Lessons teach guitar; a MIDI drum kit falls back to the keyboard.
+          device={device === "midi" ? "keyboard" : device}
+          profile={profile}
+          mode={mode}
+          offset={offset}
+          hasNext={lesson + 1 < lessons.length}
+          onPassed={(id) =>
+            setLessonsDone((done) => {
+              const next = done.includes(id) ? done : [...done, id];
+              saveProgress(next);
+              return next;
+            })
+          }
+          onNext={() => setLesson(lesson + 1)}
+          onExit={() => {
+            setLesson(null);
+            later(() => focusFirst());
+          }}
+        />
+      </Suspense>
+    );
   if (playing)
     return (
       <Suspense
@@ -541,6 +588,7 @@ export default function App() {
           midi={midi}
           offset={offset}
           mode={mode}
+          backTo={playing.song.practice ? "Soundcheck" : "Library"}
           onExit={() => {
             returnFocus.current = null;
             setPlaying(null);
@@ -567,6 +615,7 @@ export default function App() {
         <nav>
           {[
             ["library", "Song library"],
+            ["soundcheck", "Soundcheck"],
             ["search", "Add new songs"],
             ["queue", "Preparation queue"],
             ["controllers", "Controllers"],
@@ -650,31 +699,32 @@ export default function App() {
                 <span>B</span>
               </div>
               <div>
-                <span className="eyebrow">A LITTLE SOUNDCHECK</span>
-                <h2>Meet your new stage.</h2>
+                <span className="eyebrow">NEW HERE?</span>
+                <h2>Learn the stage in Soundcheck.</h2>
                 <p>
-                  A short original track. Get a feel for the notes
+                  Short lessons with demos: frets, chords, sustains,
                   <br />
-                  and check your controls before the main event.
+                  HOPOs and Star Power, one skill at a time.
                 </p>
                 <button
                   className="light-button"
-                  onClick={() => choose(songs.find((s) => s.practice)!)}
-                  disabled={!songs.length}
+                  onClick={() => {
+                    setPage("soundcheck");
+                    later(() => focusFirst());
+                  }}
                 >
-                  Try the practice track <span>↗</span>
+                  Open Soundcheck <span>↗</span>
                 </button>
               </div>
               <span className="banner-corner">
-                32 SEC
+                {lessons.length} LESSONS
                 <br />
-                ZERO PRESSURE
+                DEMO FIRST
               </span>
             </section>
             <div className="section-heading library-heading">
               <h2>
-                Your library{" "}
-                <span>{songs.filter((s) => !s.practice).length}</span>
+                Your library <span>{librarySongs.length}</span>
               </h2>
               <div className="inline-actions">
                 <label className="filter">
@@ -703,7 +753,7 @@ export default function App() {
                   <span>TIME</span>
                   <span />
                 </div>
-                {songs
+                {librarySongs
                   .filter((s) =>
                     (s.title + " " + s.artist)
                       .toLowerCase()
@@ -786,7 +836,7 @@ export default function App() {
                 />
               )}
             </div>
-            {songs.length === 1 && (
+            {songs.length > 0 && librarySongs.length === 0 && (
               <div className="empty-library">
                 <span>Room for your favorites.</span>
                 <p>
@@ -814,6 +864,16 @@ export default function App() {
               complete song audio file.
             </p>
           </>
+        )}
+        {page === "soundcheck" && (
+          <Soundcheck
+            done={lessonsDone}
+            onLesson={(i) => {
+              preview.current.stop();
+              setLesson(i);
+            }}
+            onFullTrack={() => practiceSong && choose(practiceSong)}
+          />
         )}
         {page === "search" && (
           <>

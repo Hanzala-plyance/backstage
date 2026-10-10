@@ -27,12 +27,18 @@ with this checkout's preparation environment. No Unity editor is required.
 ## Play
 
 The app opens on a title screen: press **Start** (or green / Enter), then pick
-**Quickplay** or **Practice** from the main menu. Menus work with a guitar or gamepad:
-strum to move, green to select, red to go back, yellow to switch section, Start to
-pause; the hint bar shows the buttons. Start with **Practice → Take the stage →
-Start playing**. The included
-Soundcheck backing is synthesized locally, works offline, and needs no downloaded
-music. Hold **A S D F G** for green/red/yellow/blue/orange and strum with
+**Quickplay** or **Soundcheck** from the main menu. Menus work with a guitar or
+gamepad: strum to move, green to select, red to go back, yellow to switch section,
+Start to pause; the hint bar shows the buttons.
+
+New players start in **Soundcheck**: six short lessons (frets & strum, chords,
+sustains, HOPOs & taps, Star Power, streaks & multiplier). Each lesson explains the
+skill with your own controls, plays a demo in which the game performs the chart on
+the real highway with cues for every note, then gives you a turn graded against a
+goal. Passed lessons are remembered on this computer. The last step plays the full
+Soundcheck track, which is not listed among library songs. Lessons use the
+Controllers selection (a MIDI kit falls back to the keyboard). The Soundcheck
+backing is synthesized locally, works offline, and needs no downloaded music. Hold **A S D F G** for green/red/yellow/blue/orange and strum with
 **Space / ↑ / ↓**. **Shift** activates Star Power; **W** whammies held Star Power
 sustains. In Settings, **Tap assist / drums** lets you hit gems with fret keys alone.
 Escape pauses. Focus loss and loss of the
@@ -51,7 +57,7 @@ Hover or move onto a song (mouse, arrow keys or strum) to hear a short looping
 preview, starting at the song's `preview_start_time` when it has one. To remove a
 song, open it and choose **Remove from library**, or press **blue** / **Delete** on a
 song in the list, then confirm. The song folder moves to the Trash, so it can be
-restored; the practice track can't be removed. Songs leave the Preparation queue once
+restored. Songs leave the Preparation queue once
 they are installed in the library.
 
 Song titles are shown without YouTube decorations ("(Official Video)", channel names
