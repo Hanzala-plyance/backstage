@@ -56,7 +56,8 @@ FFmpeg are needed for preparation; local playback and practice work independentl
 To set up preparation, run `python3 scripts/setup.py` and select that environment
 in the app if it is not already detected.
 
-The first desktop build supports single-player five-lane MIDI charts. Full YARG
+The desktop build supports five-lane MIDI charts for one to four local players, with
+a title screen and controller-driven menus. Vocals/karaoke are planned separately. Full YARG
 parity and universal controller compatibility are not claimed. Configure devices
 in **Controllers**, and verify physical behavior before venue use. Reservations,
 customer session controls, employee authorization and fleet management remain on
