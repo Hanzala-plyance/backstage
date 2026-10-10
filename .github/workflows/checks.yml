@@ -56,6 +56,10 @@ jobs:
         if: hashFiles('desktop/package-lock.json') != ''
         working-directory: desktop
         run: xvfb-run -a npm run test:app
+      - name: Smoke test desktop dev mode
+        if: hashFiles('desktop/package-lock.json') != ''
+        working-directory: desktop
+        run: xvfb-run -a npm run test:dev
       - name: Check promotion route and release evidence
         if: github.event_name == 'pull_request'
         run: python scripts/check_promotion.py
