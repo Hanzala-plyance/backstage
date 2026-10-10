@@ -6,7 +6,7 @@ import path from "node:path";
 import midiPackage from "@tonejs/midi";
 import { execFileSync } from "node:child_process";
 const temp = await mkdtemp(path.join(os.tmpdir(), "backstage-smoke-"));
-let app;
+let app, page;
 try {
   await mkdir(path.join(temp, "songs"));
   const fixtureFolder = path.join(temp, "songs", "fixture");
@@ -46,7 +46,7 @@ try {
     args: [
       ...(process.env.BACKSTAGE_APP_BINARY ? [] : ["."]),
       ...(process.platform === "linux" && process.env.CI
-        ? ["--no-sandbox"]
+        ? ["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--force-device-scale-factor=1"]
         : []),
     ],
     ...(process.env.BACKSTAGE_APP_BINARY
@@ -61,7 +61,7 @@ try {
         : "",
     },
   });
-  const page = await app.firstWindow();
+  page = await app.firstWindow();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.waitForLoadState("domcontentloaded");
@@ -243,6 +243,13 @@ try {
   console.log(
     "PASS: Electron isolation, offline library, real practice audio, keyboard score, pause timing, custom mapping and device disconnect pause.",
   );
+} catch (error) {
+  if (page && !page.isClosed()) {
+    console.error("Smoke screen:", await page.locator("body").innerText());
+    await mkdir("test-results", { recursive: true });
+    await page.screenshot({ path: "test-results/smoke-failure.png" }).catch(() => {});
+  }
+  throw error;
 } finally {
   if (app) await app.close();
   if (process.platform === "darwin" && process.env.BACKSTAGE_APP_BINARY) {
