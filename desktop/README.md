@@ -54,6 +54,14 @@ song in the list, then confirm. The song folder moves to the Trash, so it can be
 restored; the practice track can't be removed. Songs leave the Preparation queue once
 they are installed in the library.
 
+Song titles are shown without YouTube decorations ("(Official Video)", channel names
+as artists), without rewriting `song.ini`. Backstage stores converted songs in
+`Artist - Title` folders and renames older job-ID folders the same way; folders you
+named yourself are left alone. For songs with a generated or missing cover, the app
+looks up the iTunes catalog once (sending the artist and title to Apple) and uses a
+cover only when artist and title match; **Find cover online** in the song dialog
+retries. Fetched covers are copyrighted artwork for personal use.
+
 ### Local multiplayer
 
 Up to four players can play one song together. In the track dialog choose

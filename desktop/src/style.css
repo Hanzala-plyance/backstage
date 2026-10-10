@@ -2931,3 +2931,34 @@ kbd {
   outline: 2px solid #fff;
   outline-offset: -5px;
 }
+
+/* ── Album covers ── */
+.cover {
+  overflow: hidden;
+}
+.cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.dialog-cover {
+  display: block;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto 22px;
+  object-fit: cover;
+  clip-path: var(--cut);
+  box-shadow: 0 0 34px #ff2e8855;
+}
+.dialog-links {
+  display: flex;
+  justify-content: center;
+  gap: 22px;
+}
+.dialog-links .remove-link {
+  margin: 14px 0 0;
+}
+.dialog-links .remove-link:first-child:hover {
+  color: var(--volt);
+}

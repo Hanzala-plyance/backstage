@@ -8,6 +8,7 @@ const {
   dialog,
   shell,
   Menu,
+  nativeImage,
 } = require("electron");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
@@ -17,6 +18,7 @@ const { Readable } = require("node:stream");
 const { pathToFileURL } = require("node:url");
 const { Library } = require("./library.cjs");
 const { PreparationService, validVideo } = require("./service.cjs");
+const covers = require("./covers.cjs");
 app.setName("Backstage");
 if (process.env.BACKSTAGE_TEST_DATA)
   app.setPath("userData", process.env.BACKSTAGE_TEST_DATA);
@@ -153,6 +155,16 @@ app.whenReady().then(async () => {
       const url = new URL(request.url);
       if (url.hostname !== "app" || request.method !== "GET")
         return new Response("Not found", { status: 404 });
+      if (url.pathname.startsWith("/art/")) {
+        const id = url.pathname.slice(5);
+        if (!/^[a-f0-9]{32}$/.test(id))
+          return new Response("Not found", { status: 404 });
+        const file = await library.art(id);
+        const type = file.endsWith(".png") ? "image/png" : "image/jpeg";
+        return new Response(await fsp.readFile(file), {
+          headers: { "Content-Type": type, "Cache-Control": "no-cache" },
+        });
+      }
       if (url.pathname.startsWith("/audio/")) {
         const id = url.pathname.slice(7);
         if (!/^[a-f0-9]{32}$/.test(id))
@@ -332,6 +344,88 @@ app.whenReady().then(async () => {
     await shell.openExternal(url);
   });
   handle("showSongs", () => shell.openPath(settings.songsRoot));
+  // Library tidying: readable folders, then covers for placeholder art. Each
+  // song is looked up once (results kept in userData); "Find cover" retries.
+  const coverLog = path.join(app.getPath("userData"), "covers.json");
+  const coverState = () => {
+    try {
+      return JSON.parse(fs.readFileSync(coverLog, "utf8"));
+    } catch {
+      return {};
+    }
+  };
+  const remember = (key, value) => {
+    const state = { ...coverState(), [key]: value };
+    const temporary = coverLog + ".tmp";
+    fs.writeFileSync(temporary, JSON.stringify(state));
+    fs.renameSync(temporary, coverLog);
+  };
+  // The converter's generated cover: 768 px square on a fixed dark green.
+  const placeholder = (file) => {
+    const image = nativeImage.createFromPath(file);
+    const { width, height } = image.getSize();
+    if (width !== 768 || height !== 768) return false;
+    const [b, g, r] = image
+      .crop({ x: 2, y: 2, width: 1, height: 1 })
+      .toBitmap();
+    return r === 0x11 && g === 0x17 && b === 0x13;
+  };
+  const coverKey = (t) => `${t.artist}\u0000${t.title}`.toLowerCase();
+  const applyCover = async (target) => {
+    const bytes = await covers.findCover(
+      net.fetch,
+      target.title,
+      target.artist,
+    );
+    remember(coverKey(target), bytes ? "found" : "none");
+    if (!bytes) return false;
+    const png = nativeImage.createFromBuffer(bytes);
+    if (png.isEmpty()) return false;
+    await library.saveCover(target.id, png.toPNG());
+    return true;
+  };
+  let tidying = null;
+  handle(
+    "tidyLibrary",
+    () =>
+      (tidying ??= (async () => {
+        if (!library.entries.size) await library.scan();
+        const renamed = await library.renameFolders();
+        if (renamed) await library.scan();
+        const tried = coverState();
+        let found = 0;
+        // Automated test runs never call the online catalog.
+        const online = !process.env.BACKSTAGE_TEST_DATA;
+        for (const target of online ? library.coverTargets(placeholder) : []) {
+          if (target.artist === "Unknown artist" || tried[coverKey(target)])
+            continue;
+          try {
+            if (await applyCover(target)) found++;
+          } catch {
+            break; // Offline or the catalog is unavailable: try again next time.
+          }
+        }
+        if (found) await library.scan();
+        return { renamed, covers: found };
+      })().finally(() => (tidying = null))),
+  );
+  handle("findCover", async (id) => {
+    const target = library
+      .coverTargets(() => true)
+      .find((t) => t.id === text(id, 32));
+    if (!target) throw Error("Song unavailable. Refresh your library.");
+    if (target.artist === "Unknown artist")
+      throw Error("Add the artist to this song to look up its cover.");
+    let ok;
+    try {
+      ok = await applyCover(target);
+    } catch {
+      throw Error("Couldn’t reach the cover search. Check your connection.");
+    }
+    if (!ok) throw Error("No matching cover was found for this song.");
+    await library.scan();
+    return true;
+  });
   handle("removeSong", (id) =>
     library.remove(text(id, 32), async (dir) => {
       // Test runs keep removed songs out of the real Trash.
@@ -341,7 +435,9 @@ app.whenReady().then(async () => {
         await fsp.rename(dir, path.join(bin, path.basename(dir)));
       } else
         await shell.trashItem(dir).catch(() => {
-          throw Error("Couldn’t move the song to the Trash. It was not removed.");
+          throw Error(
+            "Couldn’t move the song to the Trash. It was not removed.",
+          );
         });
     }),
   );

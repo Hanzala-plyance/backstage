@@ -1,6 +1,6 @@
 delete process.env.ELECTRON_RUN_AS_NODE;
 import { _electron as electron, expect } from "@playwright/test";
-import { mkdtemp, mkdir, rm, writeFile, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile, stat, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import midiPackage from "@tonejs/midi";
@@ -46,6 +46,27 @@ try {
       44 + i * 2,
     );
   await writeFile(path.join(fixtureFolder, "song.wav"), wav);
+  // A converter-style song in a job-ID folder with a cover: the app should
+  // rename it to "Artist - Title" and show the cover.
+  const jobFolder = path.join(temp, "songs", "c".repeat(32));
+  await mkdir(jobFolder);
+  await writeFile(path.join(jobFolder, "notes.mid"), midi.toArray());
+  await writeFile(path.join(jobFolder, "song.wav"), wav);
+  await writeFile(
+    path.join(jobFolder, "song.ini"),
+    "[song]\nname=Smoke Band - Renamed Song (Official Video)\nartist=Some Channel",
+  );
+  await writeFile(
+    path.join(jobFolder, ".backstage.json"),
+    JSON.stringify({ job_id: "c".repeat(32) }),
+  );
+  await writeFile(
+    path.join(jobFolder, "album.png"),
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+      "base64",
+    ),
+  );
   app = await electron.launch({
     args: [
       ...(process.env.BACKSTAGE_APP_BINARY ? [] : ["."]),
@@ -86,6 +107,19 @@ try {
   await expect(
     page.getByRole("button", { name: /Soundcheck Practice/ }),
   ).toBeVisible();
+  // Library tidying: readable folder name, cleaned title, cover served.
+  await expect
+    .poll(() => readdir(path.join(temp, "songs")))
+    .toContain("Smoke Band - Renamed Song");
+  const renamedRow = page.getByRole("button", { name: /Renamed Song/ });
+  await expect(renamedRow).toContainText("Smoke Band");
+  await expect
+    .poll(() =>
+      renamedRow
+        .locator(".cover img")
+        .evaluate((img) => img.complete && img.naturalWidth),
+    )
+    .toBe(1);
   expect(await page.evaluate(() => typeof window.require)).toBe("undefined");
   expect(await page.evaluate(() => typeof window.process)).toBe("undefined");
   const streamed = await page.evaluate(async () => {
@@ -386,7 +420,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview and confirmed song removal.",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming and album covers.",
   );
 } catch (error) {
   if (page && !page.isClosed()) {

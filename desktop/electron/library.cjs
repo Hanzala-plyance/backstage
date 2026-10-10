@@ -2,6 +2,10 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { parseMidi } = require("./chart.cjs");
+const { cleanSong, folderName } = require("./names.cjs");
+const ART = ["album.png", "album.jpg", "album.jpeg"];
+// Backstage's converter originally named song folders by job ID.
+const JOB_FOLDER = /^[a-f0-9]{32}$/;
 function ini(text) {
   const result = {};
   let song = false;
@@ -52,6 +56,14 @@ function practiceChart(part, level) {
     })),
   };
 }
+async function exists(file) {
+  try {
+    await fs.lstat(file);
+    return true;
+  } catch {
+    return false;
+  }
+}
 class Library {
   constructor(root) {
     this.root = root;
@@ -101,11 +113,27 @@ class Library {
           }
           if (!audio || audio.stat.size > 250 * 1024 * 1024)
             throw Error("Missing audio or audio exceeds 250 MB.");
-          const id = crypto
+          // Converter songs keep their job ID, so renaming the folder doesn't
+          // change the song's identity; other songs are identified by path.
+          let id = crypto
             .createHash("sha256")
             .update(dir)
             .digest("hex")
             .slice(0, 32);
+          if (list.some((e) => e.name === ".backstage.json" && e.isFile())) {
+            try {
+              const marker = await safeFile(".backstage.json");
+              const job = JSON.parse(
+                await fs.readFile(marker.file, "utf8"),
+              ).job_id;
+              if (
+                marker.stat.size < 4096 &&
+                /^[a-f0-9]{32}$/.test(job) &&
+                !entries.has(job)
+              )
+                id = job;
+            } catch {}
+          }
           const duration = Math.max(
             ...charts.map(
               (c) =>
@@ -119,10 +147,20 @@ class Library {
             Number.isFinite(authored) && authored > 0 && authored < duration
               ? authored
               : Math.max(0, duration / 3);
+          let art = null;
+          for (const name of ART)
+            if (list.some((e) => e.name === name && e.isFile())) {
+              art = await safeFile(name);
+              break;
+            }
+          // Display names drop YouTube decorations; song.ini is not rewritten.
+          const clean = cleanSong(info.name, info.artist);
           const song = {
             id,
-            title: info.name || path.basename(dir),
-            artist: info.artist || "Unknown artist",
+            title: clean.title || info.name || path.basename(dir),
+            artist: clean.artist || "Unknown artist",
+            // Changes when the cover file changes, so the UI can reload it.
+            art: art ? Math.round(art.stat.mtimeMs) : 0,
             duration,
             preview,
             charts: charts.map((c) => ({
@@ -131,7 +169,13 @@ class Library {
               count: c.notes.length,
             })),
           };
-          entries.set(id, { song, charts, audio: audio.file, dir });
+          entries.set(id, {
+            song,
+            charts,
+            audio: audio.file,
+            art: art?.file,
+            dir,
+          });
           songs.push(song);
         } catch (error) {
           warnings.push(path.basename(dir) + ": " + error.message);
@@ -165,6 +209,13 @@ class Library {
    * directory strictly inside the real Songs root can be removed. */
   async remove(id, trash) {
     if (id === "practice") throw Error("The practice track can’t be removed.");
+    const { entry, dir } = await this.folder(id);
+    await trash(dir);
+    this.entries.delete(id);
+    return { title: entry.song.title };
+  }
+  /** Real directory of a scanned song, re-checked against the library root. */
+  async folder(id) {
     const entry = this.entries.get(id);
     if (!entry) throw Error("Song unavailable. Refresh your library.");
     const root = await fs.realpath(this.root);
@@ -174,9 +225,57 @@ class Library {
     const dir = await fs.realpath(entry.dir);
     if (dir === root || !dir.startsWith(root + path.sep))
       throw Error("Song is outside the library.");
-    await trash(dir);
-    this.entries.delete(id);
-    return { title: entry.song.title };
+    return { entry, dir };
+  }
+  /** Renames job-ID folders to "Artist - Title". Folders with any other name
+   * were named by a person and are left alone; nothing is overwritten. */
+  async renameFolders() {
+    let renamed = 0;
+    for (const id of [...this.entries.keys()]) {
+      const entry = this.entries.get(id);
+      if (!JOB_FOLDER.test(path.basename(entry.dir))) continue;
+      try {
+        const { dir } = await this.folder(id);
+        const base = folderName(
+          entry.song.title,
+          entry.song.artist === "Unknown artist" ? "" : entry.song.artist,
+        );
+        let target = path.join(path.dirname(dir), base);
+        for (let n = 2; await exists(target); n++)
+          target = path.join(path.dirname(dir), `${base} (${n})`);
+        await fs.rename(dir, target);
+        renamed++;
+      } catch {
+        // A folder that changed or vanished is skipped; the next scan sees it.
+      }
+    }
+    return renamed;
+  }
+  /** Songs whose cover is missing or a generated placeholder. */
+  coverTargets(isPlaceholder) {
+    return [...this.entries.values()]
+      .filter((e) => !e.art || isPlaceholder(e.art))
+      .map((e) => ({
+        id: e.song.id,
+        title: e.song.title,
+        artist: e.song.artist,
+      }));
+  }
+  /** Atomically writes album.png into a scanned song's folder. */
+  async saveCover(id, png) {
+    const { dir } = await this.folder(id);
+    const temporary = path.join(dir, ".album.png.tmp");
+    await fs.writeFile(temporary, png);
+    await fs.rename(temporary, path.join(dir, "album.png"));
+  }
+  async art(id) {
+    const entry = this.entries.get(id);
+    if (!entry?.art) throw Error("No cover.");
+    const actual = await fs.realpath(entry.art);
+    const root = await fs.realpath(this.root);
+    if (actual !== entry.art || !actual.startsWith(root + path.sep))
+      throw Error("Cover changed. Refresh your library.");
+    return actual;
   }
   async audio(id) {
     const entry = this.entries.get(id);

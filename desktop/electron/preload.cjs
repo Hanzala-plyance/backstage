@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld(
       "openChart",
       "showSongs",
       "removeSong",
+      "tidyLibrary",
+      "findCover",
     ].map((name) => [name, invoke(name)]),
   ),
 );

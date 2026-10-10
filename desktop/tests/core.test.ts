@@ -183,6 +183,101 @@ test("removing a song trashes only its scanned folder inside the library", async
     await rm(root, { recursive: true, force: true });
   }
 });
+test("job-ID folders get readable names; named folders and clashes are safe", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "backstage-names-"));
+  try {
+    const make = async (
+      folder: string,
+      name: string,
+      artist: string,
+      art = false,
+    ) => {
+      const dir = path.join(root, folder);
+      await mkdir(dir);
+      await writeFile(
+        path.join(dir, "song.ini"),
+        `[song]\nname = ${name}\nartist = ${artist}`,
+      );
+      await writeFile(path.join(dir, "notes.mid"), fixture());
+      await writeFile(path.join(dir, "song.ogg"), "fixture");
+      if (art) await writeFile(path.join(dir, "album.png"), "placeholder");
+    };
+    await make(
+      "a".repeat(32),
+      "Daft Punk - One More Time (Official Video)",
+      "Daft Punk",
+      true,
+    );
+    await make("b".repeat(32), "Drake - Janice STFU", "Drake");
+    await make("Drake - Janice STFU", "Something else", "Me"); // clash, user-named
+    await make("My Mix", "Mine", "Me");
+    const library = new Library(root);
+    const { songs } = await library.scan();
+    const daft = songs.find((s: any) => s.title === "One More Time");
+    assert.equal(daft.artist, "Daft Punk", "display names are cleaned");
+    assert.ok(daft.art > 0);
+    await writeFile(
+      path.join(root, "b".repeat(32), ".backstage.json"),
+      JSON.stringify({ job_id: "b".repeat(32) }),
+    );
+    const before = (await library.scan()).songs.find(
+      (s: any) => s.title === "Janice STFU",
+    ).id;
+    assert.equal(before, "b".repeat(32), "converter songs keep their job ID");
+    assert.equal(await library.renameFolders(), 2);
+    assert.ok(
+      (await library.scan()).songs.some((s: any) => s.id === before),
+      "renaming keeps the song's identity",
+    );
+    const { readdir } = await import("node:fs/promises");
+    assert.deepEqual((await readdir(root)).sort(), [
+      "Daft Punk - One More Time",
+      "Drake - Janice STFU",
+      "Drake - Janice STFU (2)",
+      "My Mix",
+    ]);
+    const { readFile } = await import("node:fs/promises");
+    assert.match(
+      await readFile(
+        path.join(root, "Drake - Janice STFU", "song.ini"),
+        "utf8",
+      ),
+      /Something else/,
+      "existing folder untouched",
+    );
+    // Covers: only missing or placeholder art is targeted; saving is atomic.
+    const rescanned = (await library.scan()).songs;
+    const targets = library.coverTargets((file: string) =>
+      file.endsWith("album.png"),
+    );
+    assert.equal(
+      targets.length,
+      rescanned.length - 1,
+      "all but practice need covers",
+    );
+    const none = library.coverTargets(() => false);
+    assert.equal(none.length, rescanned.length - 2, "real art is kept");
+    const janice = rescanned.find((s: any) => s.title === "Janice STFU");
+    await library.saveCover(janice.id, Buffer.from("png"));
+    assert.equal(
+      await readFile(
+        path.join(root, "Drake - Janice STFU (2)", "album.png"),
+        "utf8",
+      ),
+      "png",
+    );
+    await assert.rejects(
+      library.art(janice.id),
+      /No cover/,
+      "stale scan has no art yet",
+    );
+    await library.scan();
+    const fresh = library.coverTargets(() => false);
+    assert.ok(!fresh.some((t: any) => t.title === "Janice STFU"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 test("library metadata ignores unrelated ini sections and strips BOM", () => {
   assert.deepEqual(ini("\uFEFF[song]\nname=One\n[other]\nname=Two"), {
     name: "One",
