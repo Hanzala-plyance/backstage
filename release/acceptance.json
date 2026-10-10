@@ -1,8 +1,8 @@
 {
   "version": "0.2.0-dev",
   "status": "blocked",
-  "tested_commit": "1535c5377e1259ff5257b917ace2d2b55f790f70",
-  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 10d3ee858835a5e0061386cb69567aa657b870213bba55a3be0c9c2c8301898d",
+  "tested_commit": "13cd64ca220bb1cebdff792a11b5907d4b01bb97",
+  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 2d592e67d67626df4e32498f5ccdee00780082e108a900231e2aaff629071633",
   "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md",
   "reviewer": "",
   "rollback": "Keep the current main release; do not deploy this candidate before acceptance.",
@@ -25,7 +25,7 @@
     },
     "runtime_build": {
       "status": "passed",
-      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation (strum/green/red with remapped green), disconnect pause and strict bundle signature. 30 desktop unit, 47 converter, 11 controller-routing and promotion tests pass. Physical controllers, audible timing, clean install and recovery remain unverified."
+      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation (strum/green/red with remapped green), disconnect pause and strict bundle signature. 30 desktop unit, 47 converter, 11 controller-routing and promotion tests pass. GitHub Linux CI (SwiftShader) passed the same checks and smoke on the tested commit. Physical controllers, audible timing, clean install and recovery remain unverified."
     }
   },
   "runtime": "electron"
