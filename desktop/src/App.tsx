@@ -18,6 +18,21 @@ import {
   type MenuButton,
 } from "./core/menu";
 import ButtonHints, { type Hint } from "./ButtonHints";
+import {
+  MAX_PLAYERS,
+  addPlayer,
+  cycleDevice,
+  cycleLevel,
+  cyclePart,
+  deviceLabel,
+  fitToSong,
+  freeDevices,
+  isPad,
+  lineupProblem,
+  type PlayerSetup,
+} from "./core/players";
+import { MainMenu, TitleScreen, type MenuChoice } from "./Title";
+import type { PlayerInit } from "./game/player";
 import Controllers from "./Controllers";
 import type { MidiPort } from "./game/Game";
 const Game = lazy(() => import("./game/Game"));
@@ -77,7 +92,13 @@ export default function App() {
     [selected, setSelected] = useState<Song | null>(null),
     [part, setPart] = useState<Part>("Guitar"),
     [level, setLevel] = useState<Level>("Easy"),
-    [playing, setPlaying] = useState<LoadedSong | null>(null);
+    [playing, setPlaying] = useState<{
+      song: LoadedSong;
+      players: PlayerInit[];
+    } | null>(null),
+    [screen, setScreen] = useState<"title" | "menu" | "app">("title"),
+    [lineup, setLineup] = useState<PlayerSetup[]>([]),
+    [pads, setPads] = useState<Gamepad[]>([]);
   const [query, setQuery] = useState(""),
     [provider, setProvider] = useState<"youtube" | "charts">("youtube"),
     [results, setResults] = useState<SearchResult[]>([]),
@@ -111,14 +132,46 @@ export default function App() {
       setError("");
       void action("library", refresh);
       later(() => focusFirst());
+    } else {
+      setScreen("menu");
+      later(() => focusFirst());
+    }
+  };
+  const enterMenu = () => {
+    setScreen("menu");
+    later(() => focusFirst());
+  };
+  const chooseMenu = (choice: MenuChoice) => {
+    if (choice === "quit") return window.close();
+    setScreen("app");
+    setError("");
+    if (choice === "quickplay" || choice === "practice") {
+      setPage("library");
+      void action("library", refresh);
+      const practice = songs.find((s) => s.practice);
+      if (choice === "practice" && practice) choose(practice);
+      else later(() => focusFirst());
+    } else {
+      setPage(choice);
+      if (choice === "settings")
+        void window.backstage.settings().then(setSettings);
+      later(() => focusFirst());
     }
   };
   navigate.current = (b) => {
     setPadHints(true);
+    if (screen === "title") {
+      if (b === "green" || b === "start") enterMenu();
+      return;
+    }
+    if (screen === "menu" && b === "red") {
+      setScreen("title");
+      return;
+    }
     if (b === "up" || b === "down") moveFocus(b === "up" ? -1 : 1);
     else if (b === "green") activateFocused();
     else if (b === "red") back();
-    else if (b === "yellow" && !selected) {
+    else if (b === "yellow" && !selected && screen === "app") {
       const next = pages[(pages.indexOf(page) + 1) % pages.length];
       setPage(next);
       setError("");
@@ -139,9 +192,20 @@ export default function App() {
       if (!p) profiles.set(pad.id, (p = loadProfile(pad.id)));
       return p;
     };
-    let frame = 0;
+    let frame = 0,
+      padKey = "";
     const tick = (now: number) => {
-      const pressed = menu.poll(now, navigator.getGamepads(), profileFor);
+      const all = navigator.getGamepads();
+      // Track connected pads for the player lobby.
+      const connected = Array.from(all).filter(
+        (p): p is Gamepad => !!p?.connected,
+      );
+      const key = connected.map((p) => `${p.index}:${p.id}`).join("|");
+      if (key !== padKey) {
+        padKey = key;
+        setPads(connected);
+      }
+      const pressed = menu.poll(now, all, profileFor);
       // Controllers captures raw presses while remapping.
       if (!document.body.hasAttribute("data-capturing"))
         pressed.forEach((b) => navigate.current(b));
@@ -159,7 +223,18 @@ export default function App() {
     if (playing) return;
     const keydown = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
-      if (e.key === "Escape") {
+      if (screen === "title") {
+        if (e.key === "Enter" || e.key === " ") {
+          setPadHints(false);
+          e.preventDefault();
+          enterMenu();
+        }
+        return;
+      }
+      if (e.key === "Escape" && screen === "menu") {
+        setPadHints(false);
+        setScreen("title");
+      } else if (e.key === "Escape") {
         setPadHints(false);
         e.preventDefault();
         back();
@@ -257,8 +332,37 @@ export default function App() {
   const active = jobs.filter(
     (j) => !["complete", "error"].includes(j.status),
   ).length;
+  const available = [
+    "keyboard",
+    ...(midi ? ["midi"] : []),
+    ...pads.map((p) => `pad:${p.index}:${p.id}`),
+  ];
+  const padId = (d: string) => d.split(":").slice(2).join(":");
+  const profileOf = (d: string) =>
+    d === device
+      ? profile
+      : isPad(d)
+        ? loadProfile(padId(d))
+        : defaultProfile();
+  const lineupAll = (): PlayerSetup[] => [{ device, part, level }, ...lineup];
+  // Player 1 is the Controllers selection; changing it here changes that too.
+  const applyLineup = (next: PlayerSetup[]) => {
+    const [first, ...rest] = next;
+    if (first.device !== device) {
+      setDevice(first.device);
+      setProfile(
+        isPad(first.device)
+          ? loadProfile(padId(first.device))
+          : defaultProfile(),
+      );
+    }
+    setPart(first.part);
+    setLevel(first.level);
+    setLineup(rest);
+  };
   const choose = (song: Song) => {
     setSelected(song);
+    setLineup((l) => fitToSong(l, song));
     const chart =
       song.charts.find((c) => c.part === "Guitar" && c.level === "Easy") ||
       song.charts[0];
@@ -272,10 +376,24 @@ export default function App() {
   };
   async function play() {
     if (!selected) return;
-    const song = await action("play", () =>
-      window.backstage.loadSong(selected.id, part, level),
+    const all = lineupAll();
+    const problem = lineup.length ? lineupProblem(all, available) : null;
+    if (problem) return setError(problem);
+    const loaded = await action("play", () =>
+      Promise.all(
+        all.map((p) => window.backstage.loadSong(selected.id, p.part, p.level)),
+      ),
     );
-    if (song) setPlaying(song);
+    if (!loaded) return;
+    setPlaying({
+      song: loaded[0],
+      players: all.map((p, i) => ({
+        device: p.device,
+        chart: loaded[i].chart,
+        profile: profileOf(p.device),
+        label: `Player ${i + 1}`,
+      })),
+    });
   }
   async function enqueue(result: SearchResult) {
     const job = await action(result.id, () =>
@@ -310,9 +428,8 @@ export default function App() {
         fallback={<div className="loading">Getting your stage ready…</div>}
       >
         <Game
-          song={playing}
-          device={device}
-          profile={profile}
+          song={playing.song}
+          players={playing.players}
           midi={midi}
           offset={offset}
           mode={mode}
@@ -326,6 +443,10 @@ export default function App() {
         />
       </Suspense>
     );
+  if (screen === "title")
+    return <TitleScreen pad={padHints} onStart={enterMenu} />;
+  if (screen === "menu")
+    return <MainMenu pad={padHints} onChoose={chooseMenu} />;
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -942,49 +1063,123 @@ export default function App() {
             <span className="eyebrow">UP NEXT</span>
             <h2>{selected.title}</h2>
             <p>{selected.artist}</p>
-            <div className="choice-group" role="group" aria-label="Instrument">
-              <span>Instrument</span>
-              <div>
-                {[...new Set(selected.charts.map((c) => c.part))].map((p) => (
-                  <button
-                    key={p}
-                    aria-pressed={p === part}
-                    onClick={() => changePart(p)}
-                  >
-                    {p}
-                  </button>
+            {lineup.length === 0 ? (
+              <>
+                <div
+                  className="choice-group"
+                  role="group"
+                  aria-label="Instrument"
+                >
+                  <span>Instrument</span>
+                  <div>
+                    {[...new Set(selected.charts.map((c) => c.part))].map(
+                      (p) => (
+                        <button
+                          key={p}
+                          aria-pressed={p === part}
+                          onClick={() => changePart(p)}
+                        >
+                          {p}
+                        </button>
+                      ),
+                    )}
+                  </div>
+                </div>
+                <div
+                  className="choice-group"
+                  role="group"
+                  aria-label="Difficulty"
+                >
+                  <span>Difficulty</span>
+                  <div>
+                    {levels
+                      .filter((l) =>
+                        selected.charts.some(
+                          (c) => c.part === part && c.level === l,
+                        ),
+                      )
+                      .map((l) => (
+                        <button
+                          key={l}
+                          aria-pressed={l === level}
+                          className={"level-" + l.toLowerCase()}
+                          onClick={() => setLevel(l)}
+                        >
+                          <i aria-hidden="true">
+                            {Array.from(
+                              { length: levels.indexOf(l) + 1 },
+                              (_, k) => (
+                                <b key={k} />
+                              ),
+                            )}
+                          </i>
+                          {l}
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="lineup" role="group" aria-label="Players">
+                {lineupAll().map((p, n) => (
+                  <div className="lineup-row" key={n}>
+                    <b className={"player-badge p" + (n + 1)}>P{n + 1}</b>
+                    <button
+                      className="lineup-device"
+                      aria-label={`Player ${n + 1} controller`}
+                      onClick={() =>
+                        applyLineup(cycleDevice(lineupAll(), n, available))
+                      }
+                    >
+                      {deviceLabel(p.device, pads)}
+                    </button>
+                    <button
+                      aria-label={`Player ${n + 1} instrument`}
+                      onClick={() =>
+                        applyLineup(cyclePart(lineupAll(), n, selected))
+                      }
+                    >
+                      {p.part}
+                    </button>
+                    <button
+                      aria-label={`Player ${n + 1} difficulty`}
+                      onClick={() =>
+                        applyLineup(cycleLevel(lineupAll(), n, selected))
+                      }
+                    >
+                      {p.level}
+                    </button>
+                    {n > 0 && (
+                      <button
+                        className="lineup-remove"
+                        aria-label={`Remove player ${n + 1}`}
+                        onClick={() =>
+                          applyLineup(lineupAll().filter((_, k) => k !== n))
+                        }
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
-            </div>
-            <div className="choice-group" role="group" aria-label="Difficulty">
-              <span>Difficulty</span>
-              <div>
-                {levels
-                  .filter((l) =>
-                    selected.charts.some(
-                      (c) => c.part === part && c.level === l,
-                    ),
-                  )
-                  .map((l) => (
-                    <button
-                      key={l}
-                      aria-pressed={l === level}
-                      className={"level-" + l.toLowerCase()}
-                      onClick={() => setLevel(l)}
-                    >
-                      <i aria-hidden="true">
-                        {Array.from(
-                          { length: levels.indexOf(l) + 1 },
-                          (_, k) => (
-                            <b key={k} />
-                          ),
-                        )}
-                      </i>
-                      {l}
-                    </button>
-                  ))}
-              </div>
-            </div>
+            )}
+            {lineup.length + 1 < MAX_PLAYERS && (
+              <button
+                className="add-player"
+                disabled={
+                  !freeDevices(lineupAll(), lineup.length + 1, available).length
+                }
+                onClick={() =>
+                  applyLineup(addPlayer(lineupAll(), available, selected))
+                }
+              >
+                ＋ Add player
+                {!freeDevices(lineupAll(), lineup.length + 1, available)
+                  .length && <small>Connect another controller</small>}
+              </button>
+            )}
+            {error && <p className="dialog-error">{error}</p>}
             <div className="song-facts">
               <span>{duration(selected.duration)}</span>
               <span>
@@ -996,11 +1191,9 @@ export default function App() {
                 notes
               </span>
               <span>
-                {device === "keyboard"
-                  ? "Keyboard"
-                  : device === "midi"
-                    ? "MIDI drums"
-                    : "Gamepad"}
+                {lineup.length
+                  ? `${lineup.length + 1} players`
+                  : deviceLabel(device, pads)}
               </span>
             </div>
             <button
