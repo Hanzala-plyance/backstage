@@ -32,6 +32,7 @@ import {
   type PlayerSetup,
 } from "./core/players";
 import { MainMenu, TitleScreen, type MenuChoice } from "./Title";
+import { Preview } from "./core/preview";
 import type { PlayerInit } from "./game/player";
 import Controllers from "./Controllers";
 import type { MidiPort } from "./game/Game";
@@ -98,7 +99,11 @@ export default function App() {
     } | null>(null),
     [screen, setScreen] = useState<"title" | "menu" | "app">("title"),
     [lineup, setLineup] = useState<PlayerSetup[]>([]),
-    [pads, setPads] = useState<Gamepad[]>([]);
+    [pads, setPads] = useState<Gamepad[]>([]),
+    [confirmRemove, setConfirmRemove] = useState(false);
+  const preview = useRef(new Preview());
+  const selectedRef = useRef<Song | null>(null);
+  selectedRef.current = selected;
   const [query, setQuery] = useState(""),
     [provider, setProvider] = useState<"youtube" | "charts">("youtube"),
     [results, setResults] = useState<SearchResult[]>([]),
@@ -125,7 +130,10 @@ export default function App() {
   const later = (fn: () => void) => setTimeout(fn, 40);
   const back = () => {
     const el = document.activeElement as HTMLElement | null;
-    if (selected) setSelected(null);
+    if (confirmRemove) {
+      setConfirmRemove(false);
+      later(() => focusFirst());
+    } else if (selected) setSelected(null);
     else if (el?.matches("input, select")) el.blur();
     else if (page !== "library") {
       setPage("library");
@@ -171,6 +179,7 @@ export default function App() {
     if (b === "up" || b === "down") moveFocus(b === "up" ? -1 : 1);
     else if (b === "green") activateFocused();
     else if (b === "red") back();
+    else if (b === "blue" && !selected && screen === "app") askRemove();
     else if (b === "yellow" && !selected && screen === "app") {
       const next = pages[(pages.indexOf(page) + 1) % pages.length];
       setPage(next);
@@ -247,6 +256,13 @@ export default function App() {
         setPadHints(false);
         e.preventDefault();
         moveFocus(e.key === "ArrowUp" ? -1 : 1);
+      } else if (
+        (e.key === "Delete" || e.key === "Backspace") &&
+        el?.matches(".song-row")
+      ) {
+        setPadHints(false);
+        e.preventDefault();
+        askRemove();
       } else if (e.key === "Enter" && (!el || el === document.body)) {
         setPadHints(false);
         e.preventDefault();
@@ -256,6 +272,17 @@ export default function App() {
     window.addEventListener("keydown", keydown);
     return () => window.removeEventListener("keydown", keydown);
   });
+  // Previews only play while choosing in the library.
+  useEffect(() => {
+    if (page !== "library" || screen !== "app" || playing)
+      preview.current.stop();
+  }, [page, screen, playing]);
+  useEffect(() => {
+    if (!selected) preview.current.stop();
+  }, [selected]);
+  useEffect(() => {
+    if (confirmRemove) later(() => focusFirst());
+  }, [confirmRemove]);
   useEffect(() => {
     if (selected) {
       returnFocus.current ??= document.activeElement as HTMLElement;
@@ -313,7 +340,14 @@ export default function App() {
             j.library?.status === "installed" && !installed.current.has(j.id),
         );
         fresh.forEach((j) => installed.current.add(j.id));
-        if (fresh.length && seeded.current) void refresh();
+        if (fresh.length && seeded.current) {
+          void refresh();
+          setNotice(
+            fresh.length === 1
+              ? `“${fresh[0].title}” is ready in your library`
+              : `${fresh.length} songs added to your library`,
+          );
+        }
         seeded.current = true;
       } catch {}
     };
@@ -329,6 +363,10 @@ export default function App() {
     const timer = setTimeout(() => setNotice(""), 5000);
     return () => clearTimeout(timer);
   }, [notice]);
+  // Installed songs (and installed songs since removed) leave the queue.
+  const queued = jobs.filter(
+    (j) => !["installed", "missing"].includes(j.library?.status ?? ""),
+  );
   const active = jobs.filter(
     (j) => !["complete", "error"].includes(j.status),
   ).length;
@@ -362,6 +400,8 @@ export default function App() {
   };
   const choose = (song: Song) => {
     setSelected(song);
+    setConfirmRemove(false);
+    preview.current.hover(song);
     setLineup((l) => fitToSong(l, song));
     const chart =
       song.charts.find((c) => c.part === "Guitar" && c.level === "Easy") ||
@@ -374,8 +414,33 @@ export default function App() {
     if (!selected?.charts.some((c) => c.part === p && c.level === level))
       setLevel(selected!.charts.find((c) => c.part === p)!.level);
   };
+  // Blue (or Delete) on a focused song asks to remove it.
+  const askRemove = () => {
+    const id = (document.activeElement as HTMLElement | null)?.dataset?.songId;
+    const song = songs.find((s) => s.id === id);
+    if (!song || song.practice || page !== "library") return;
+    choose(song);
+    setConfirmRemove(true);
+  };
+  async function removeSong() {
+    if (!selected || selected.practice) return;
+    preview.current.stop();
+    const removed = await action("remove", () =>
+      window.backstage.removeSong(selected.id),
+    );
+    if (!removed) return;
+    returnFocus.current = null;
+    setConfirmRemove(false);
+    setSelected(null);
+    await refresh();
+    setNotice(
+      `Removed “${removed.title}”. It’s in the Trash if you change your mind.`,
+    );
+    later(() => focusFirst());
+  }
   async function play() {
     if (!selected) return;
+    preview.current.stop();
     const all = lineupAll();
     const problem = lineup.length ? lineupProblem(all, available) : null;
     if (problem) return setError(problem);
@@ -604,7 +669,23 @@ export default function App() {
                     className="song-row"
                     key={song.id}
                     data-menu-default={i === 0 ? "" : undefined}
+                    data-song-id={song.id}
                     onClick={() => choose(song)}
+                    onMouseEnter={() => preview.current.hover(song)}
+                    onFocus={() => preview.current.hover(song)}
+                    onMouseLeave={() => {
+                      if (selectedRef.current?.id !== song.id)
+                        preview.current.leave(song);
+                    }}
+                    onBlur={() =>
+                      setTimeout(() => {
+                        if (
+                          selectedRef.current?.id !== song.id &&
+                          !document.activeElement?.closest(".song-row")
+                        )
+                          preview.current.leave(song);
+                      })
+                    }
                   >
                     <div className="track-cell">
                       <span className={"cover cover-" + (i % 4)}>
@@ -828,7 +909,7 @@ export default function App() {
               </div>
               <span className="pill">{active} in progress</span>
             </div>
-            {!jobs.length ? (
+            {!queued.length ? (
               <div className="empty-state">
                 <span className="empty-symbol">≋</span>
                 <h2>A little quiet backstage.</h2>
@@ -839,7 +920,7 @@ export default function App() {
               </div>
             ) : (
               <div className="queue-list">
-                {jobs.map((job) => (
+                {queued.map((job) => (
                   <article className="panel queue-item" key={job.id}>
                     <div className="section-heading">
                       <strong>{job.title}</strong>
@@ -1028,7 +1109,10 @@ export default function App() {
             ? [
                 { button: "up", label: "Browse" },
                 { button: "green", label: "Select" },
-                { button: "red", label: "Close" },
+                {
+                  button: "red",
+                  label: confirmRemove ? "Cancel" : "Close",
+                },
               ]
             : [
                 { button: "up", label: "Browse" },
@@ -1036,9 +1120,13 @@ export default function App() {
                   button: "green",
                   label: page === "library" ? "Choose song" : "Select",
                 },
+                {
+                  button: "red",
+                  label: page === "library" ? "Main menu" : "Library",
+                },
                 ...(page === "library"
-                  ? []
-                  : [{ button: "red", label: "Library" }]),
+                  ? [{ button: "blue", label: "Remove song", key: "Delete" }]
+                  : []),
                 { button: "yellow", label: "Next section" },
               ]) as Hint[]
         }
@@ -1063,147 +1151,184 @@ export default function App() {
             <span className="eyebrow">UP NEXT</span>
             <h2>{selected.title}</h2>
             <p>{selected.artist}</p>
-            {lineup.length === 0 ? (
-              <>
-                <div
-                  className="choice-group"
-                  role="group"
-                  aria-label="Instrument"
-                >
-                  <span>Instrument</span>
-                  <div>
-                    {[...new Set(selected.charts.map((c) => c.part))].map(
-                      (p) => (
-                        <button
-                          key={p}
-                          aria-pressed={p === part}
-                          onClick={() => changePart(p)}
-                        >
-                          {p}
-                        </button>
-                      ),
-                    )}
-                  </div>
+            {confirmRemove ? (
+              <div className="remove-confirm" role="alert">
+                <strong>Remove this song from your library?</strong>
+                <p>
+                  Its folder moves to the Trash, so you can restore it later.
+                </p>
+                {error && <p className="dialog-error">{error}</p>}
+                <div className="menu-list">
+                  <button
+                    className="danger"
+                    disabled={!!busy}
+                    onClick={() => void removeSong()}
+                  >
+                    {busy === "remove" ? "Removing…" : "Remove song"}
+                  </button>
+                  <button
+                    className="secondary"
+                    data-menu-default
+                    onClick={() => setConfirmRemove(false)}
+                  >
+                    Keep it
+                  </button>
                 </div>
-                <div
-                  className="choice-group"
-                  role="group"
-                  aria-label="Difficulty"
-                >
-                  <span>Difficulty</span>
-                  <div>
-                    {levels
-                      .filter((l) =>
-                        selected.charts.some(
-                          (c) => c.part === part && c.level === l,
-                        ),
-                      )
-                      .map((l) => (
-                        <button
-                          key={l}
-                          aria-pressed={l === level}
-                          className={"level-" + l.toLowerCase()}
-                          onClick={() => setLevel(l)}
-                        >
-                          <i aria-hidden="true">
-                            {Array.from(
-                              { length: levels.indexOf(l) + 1 },
-                              (_, k) => (
-                                <b key={k} />
-                              ),
-                            )}
-                          </i>
-                          {l}
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="lineup" role="group" aria-label="Players">
-                {lineupAll().map((p, n) => (
-                  <div className="lineup-row" key={n}>
-                    <b className={"player-badge p" + (n + 1)}>P{n + 1}</b>
-                    <button
-                      className="lineup-device"
-                      aria-label={`Player ${n + 1} controller`}
-                      onClick={() =>
-                        applyLineup(cycleDevice(lineupAll(), n, available))
-                      }
-                    >
-                      {deviceLabel(p.device, pads)}
-                    </button>
-                    <button
-                      aria-label={`Player ${n + 1} instrument`}
-                      onClick={() =>
-                        applyLineup(cyclePart(lineupAll(), n, selected))
-                      }
-                    >
-                      {p.part}
-                    </button>
-                    <button
-                      aria-label={`Player ${n + 1} difficulty`}
-                      onClick={() =>
-                        applyLineup(cycleLevel(lineupAll(), n, selected))
-                      }
-                    >
-                      {p.level}
-                    </button>
-                    {n > 0 && (
-                      <button
-                        className="lineup-remove"
-                        aria-label={`Remove player ${n + 1}`}
-                        onClick={() =>
-                          applyLineup(lineupAll().filter((_, k) => k !== n))
-                        }
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                ))}
               </div>
+            ) : (
+              <>
+                {lineup.length === 0 ? (
+                  <>
+                    <div
+                      className="choice-group"
+                      role="group"
+                      aria-label="Instrument"
+                    >
+                      <span>Instrument</span>
+                      <div>
+                        {[...new Set(selected.charts.map((c) => c.part))].map(
+                          (p) => (
+                            <button
+                              key={p}
+                              aria-pressed={p === part}
+                              onClick={() => changePart(p)}
+                            >
+                              {p}
+                            </button>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                    <div
+                      className="choice-group"
+                      role="group"
+                      aria-label="Difficulty"
+                    >
+                      <span>Difficulty</span>
+                      <div>
+                        {levels
+                          .filter((l) =>
+                            selected.charts.some(
+                              (c) => c.part === part && c.level === l,
+                            ),
+                          )
+                          .map((l) => (
+                            <button
+                              key={l}
+                              aria-pressed={l === level}
+                              className={"level-" + l.toLowerCase()}
+                              onClick={() => setLevel(l)}
+                            >
+                              <i aria-hidden="true">
+                                {Array.from(
+                                  { length: levels.indexOf(l) + 1 },
+                                  (_, k) => (
+                                    <b key={k} />
+                                  ),
+                                )}
+                              </i>
+                              {l}
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="lineup" role="group" aria-label="Players">
+                    {lineupAll().map((p, n) => (
+                      <div className="lineup-row" key={n}>
+                        <b className={"player-badge p" + (n + 1)}>P{n + 1}</b>
+                        <button
+                          className="lineup-device"
+                          aria-label={`Player ${n + 1} controller`}
+                          onClick={() =>
+                            applyLineup(cycleDevice(lineupAll(), n, available))
+                          }
+                        >
+                          {deviceLabel(p.device, pads)}
+                        </button>
+                        <button
+                          aria-label={`Player ${n + 1} instrument`}
+                          onClick={() =>
+                            applyLineup(cyclePart(lineupAll(), n, selected))
+                          }
+                        >
+                          {p.part}
+                        </button>
+                        <button
+                          aria-label={`Player ${n + 1} difficulty`}
+                          onClick={() =>
+                            applyLineup(cycleLevel(lineupAll(), n, selected))
+                          }
+                        >
+                          {p.level}
+                        </button>
+                        {n > 0 && (
+                          <button
+                            className="lineup-remove"
+                            aria-label={`Remove player ${n + 1}`}
+                            onClick={() =>
+                              applyLineup(lineupAll().filter((_, k) => k !== n))
+                            }
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {lineup.length + 1 < MAX_PLAYERS && (
+                  <button
+                    className="add-player"
+                    disabled={
+                      !freeDevices(lineupAll(), lineup.length + 1, available)
+                        .length
+                    }
+                    onClick={() =>
+                      applyLineup(addPlayer(lineupAll(), available, selected))
+                    }
+                  >
+                    ＋ Add player
+                    {!freeDevices(lineupAll(), lineup.length + 1, available)
+                      .length && <small>Connect another controller</small>}
+                  </button>
+                )}
+                {error && <p className="dialog-error">{error}</p>}
+                <div className="song-facts">
+                  <span>{duration(selected.duration)}</span>
+                  <span>
+                    {
+                      selected.charts.find(
+                        (c) => c.part === part && c.level === level,
+                      )?.count
+                    }{" "}
+                    notes
+                  </span>
+                  <span>
+                    {lineup.length
+                      ? `${lineup.length + 1} players`
+                      : deviceLabel(device, pads)}
+                  </span>
+                </div>
+                <button
+                  className="primary wide"
+                  data-menu-default
+                  disabled={!!busy}
+                  onClick={play}
+                >
+                  {busy === "play" ? "Getting ready…" : "Take the stage"} →
+                </button>
+                {!selected.practice && (
+                  <button
+                    className="remove-link"
+                    onClick={() => setConfirmRemove(true)}
+                  >
+                    Remove from library
+                  </button>
+                )}
+              </>
             )}
-            {lineup.length + 1 < MAX_PLAYERS && (
-              <button
-                className="add-player"
-                disabled={
-                  !freeDevices(lineupAll(), lineup.length + 1, available).length
-                }
-                onClick={() =>
-                  applyLineup(addPlayer(lineupAll(), available, selected))
-                }
-              >
-                ＋ Add player
-                {!freeDevices(lineupAll(), lineup.length + 1, available)
-                  .length && <small>Connect another controller</small>}
-              </button>
-            )}
-            {error && <p className="dialog-error">{error}</p>}
-            <div className="song-facts">
-              <span>{duration(selected.duration)}</span>
-              <span>
-                {
-                  selected.charts.find(
-                    (c) => c.part === part && c.level === level,
-                  )?.count
-                }{" "}
-                notes
-              </span>
-              <span>
-                {lineup.length
-                  ? `${lineup.length + 1} players`
-                  : deviceLabel(device, pads)}
-              </span>
-            </div>
-            <button
-              className="primary wide"
-              data-menu-default
-              disabled={!!busy}
-              onClick={play}
-            >
-              {busy === "play" ? "Getting ready…" : "Take the stage"} →
-            </button>
           </section>
         </div>
       )}

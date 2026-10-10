@@ -332,6 +332,19 @@ app.whenReady().then(async () => {
     await shell.openExternal(url);
   });
   handle("showSongs", () => shell.openPath(settings.songsRoot));
+  handle("removeSong", (id) =>
+    library.remove(text(id, 32), async (dir) => {
+      // Test runs keep removed songs out of the real Trash.
+      if (process.env.BACKSTAGE_TEST_DATA) {
+        const bin = path.join(app.getPath("userData"), "test-trash");
+        await fsp.mkdir(bin, { recursive: true });
+        await fsp.rename(dir, path.join(bin, path.basename(dir)));
+      } else
+        await shell.trashItem(dir).catch(() => {
+          throw Error("Couldn’t move the song to the Trash. It was not removed.");
+        });
+    }),
+  );
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {

@@ -31,6 +31,7 @@ export type Song = {
   title: string;
   artist: string;
   duration: number;
+  preview?: number;
   charts: { part: Part; level: Level; count: number }[];
   practice?: boolean;
 };
@@ -102,6 +103,7 @@ export interface Bridge {
   openPreparation(): Promise<void>;
   openChart(url: string): Promise<void>;
   showSongs(): Promise<void>;
+  removeSong(id: string): Promise<{ title: string }>;
 }
 declare global {
   interface Window {
