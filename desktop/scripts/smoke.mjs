@@ -302,8 +302,12 @@ try {
   await page.keyboard.up("a");
   await expect.poll(scores).toEqual([0, 50]);
   // P1 strums note 1 (red) on the pad; the remapped green (button 7) is not used.
+  // Pads are polled once per frame, and software-rendered CI frames are slow, so
+  // run the song clock at quarter speed: the hit window widens in real time
+  // while judgment, which follows the song clock, is unchanged.
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.25));
   await page.waitForFunction(
-    () => window.__testAudio.currentTime >= 2 + 28 / 48 - 0.1,
+    () => window.__testAudio.currentTime >= 2 + 28 / 48 - 0.04,
     {},
     { timeout: 10000, polling: 10 },
   );
@@ -316,6 +320,7 @@ try {
     window.__pad.buttons[13].pressed = false;
   });
   await expect.poll(scores).toEqual([50, 50]);
+  await page.evaluate(() => (window.__testAudio.playbackRate = 1));
   await page.screenshot({ path: "/tmp/backstage-desktop-multiplayer.png" });
   await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: "Paused." })).toBeVisible();
