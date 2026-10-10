@@ -35,6 +35,20 @@ jobs:
       - name: Test controller routing
         if: hashFiles('mac-riff/build/session-plan.js') != ''
         run: node --test mac-riff/build/tests/*.test.js
+      - name: Install desktop dependencies
+        if: hashFiles('desktop/package-lock.json') != ''
+        working-directory: desktop
+        run: npm ci
+      - name: Test and build desktop
+        if: hashFiles('desktop/package-lock.json') != ''
+        working-directory: desktop
+        run: |
+          npm test
+          npm run build
+      - name: Smoke test desktop
+        if: hashFiles('desktop/package-lock.json') != ''
+        working-directory: desktop
+        run: xvfb-run -a npm run test:app
       - name: Check promotion route and release evidence
         if: github.event_name == 'pull_request'
         run: python scripts/check_promotion.py

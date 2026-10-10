@@ -1,0 +1,248 @@
+delete process.env.ELECTRON_RUN_AS_NODE;
+import { _electron as electron, expect } from "@playwright/test";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import midiPackage from "@tonejs/midi";
+const temp = await mkdtemp(path.join(os.tmpdir(), "backstage-smoke-"));
+let app;
+try {
+  await mkdir(path.join(temp, "songs"));
+  const fixtureFolder = path.join(temp, "songs", "fixture");
+  await mkdir(fixtureFolder);
+  const midi = new midiPackage.Midi();
+  const track = midi.addTrack();
+  track.name = "PART GUITAR";
+  for (let i = 0; i < 5; i++)
+    track.addNote({ midi: 60 + i, time: 0.6 + i * 0.5, duration: 0.05 });
+  track.addNote({ midi: 116, time: 0.5, duration: 0.75 });
+  track.addNote({ midi: 116, time: 1.5, duration: 0.75 });
+  await writeFile(path.join(fixtureFolder, "notes.mid"), midi.toArray());
+  await writeFile(
+    path.join(fixtureFolder, "song.ini"),
+    "[song]\nname=Stream fixture\nartist=Automated test",
+  );
+  const wav = Buffer.alloc(44 + 22050 * 4 * 2);
+  wav.write("RIFF");
+  wav.writeUInt32LE(wav.length - 8, 4);
+  wav.write("WAVEfmt ", 8);
+  wav.writeUInt32LE(16, 16);
+  wav.writeUInt16LE(1, 20);
+  wav.writeUInt16LE(1, 22);
+  wav.writeUInt32LE(22050, 24);
+  wav.writeUInt32LE(44100, 28);
+  wav.writeUInt16LE(2, 32);
+  wav.writeUInt16LE(16, 34);
+  wav.write("data", 36);
+  wav.writeUInt32LE(wav.length - 44, 40);
+  for (let i = 0; i < 22050 * 4; i++)
+    wav.writeInt16LE(
+      Math.round(Math.sin((i / 22050) * 440 * Math.PI * 2) * 4000),
+      44 + i * 2,
+    );
+  await writeFile(path.join(fixtureFolder, "song.wav"), wav);
+  app = await electron.launch({
+    args: [
+      ...(process.env.BACKSTAGE_APP_BINARY ? [] : ["."]),
+      ...(process.platform === "linux" && process.env.CI
+        ? ["--no-sandbox"]
+        : []),
+    ],
+    ...(process.env.BACKSTAGE_APP_BINARY
+      ? { executablePath: process.env.BACKSTAGE_APP_BINARY }
+      : {}),
+    env: {
+      ...process.env,
+      BACKSTAGE_TEST_DATA: path.join(temp, "data"),
+      BACKSTAGE_SONGS_DIR: path.join(temp, "songs"),
+      BACKSTAGE_PYTHON: process.env.BACKSTAGE_TEST_SERVICE
+        ? process.env.BACKSTAGE_PYTHON
+        : "",
+    },
+  });
+  const page = await app.firstWindow();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.waitForLoadState("domcontentloaded");
+  await expect(
+    page.getByRole("heading", { name: "Good music. Great company." }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Soundcheck Practice/ }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => typeof window.require)).toBe("undefined");
+  expect(await page.evaluate(() => typeof window.process)).toBe("undefined");
+  const streamed = await page.evaluate(async () => {
+    const library = await window.backstage.library();
+    const song = library.songs.find((s) => s.title === "Stream fixture");
+    const loaded = await window.backstage.loadSong(song.id, "Guitar", "Easy");
+    const response = await fetch(loaded.audioUrl, {
+      headers: { Range: "bytes=0-43" },
+    });
+    return {
+      status: response.status,
+      size: (await response.arrayBuffer()).byteLength,
+    };
+  });
+  expect(streamed).toEqual({ status: 206, size: 44 });
+  await page.screenshot({
+    path: "/tmp/backstage-desktop-library.png",
+    fullPage: true,
+  });
+  await page.evaluate(() => {
+    const Audio = window.Audio;
+    window.Audio = class extends Audio {
+      constructor(...args) {
+        super(...args);
+        window.__testAudio = this;
+      }
+    };
+  });
+  await page.getByRole("button", { name: /Try the practice track/ }).click();
+  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await page.getByRole("button", { name: /Start playing/ }).click();
+  await page.waitForFunction(
+    () => window.__testAudio?.currentTime >= 1.97,
+    {},
+    { timeout: 10000 },
+  );
+  await page.keyboard.down("a");
+  await page.keyboard.press("Space");
+  await page.keyboard.up("a");
+  await expect
+    .poll(async () =>
+      Number(
+        await page.locator(".game-metrics > div:first-child b").textContent(),
+      ),
+    )
+    .toBeGreaterThan(0);
+  await page.screenshot({ path: "/tmp/backstage-desktop-playing.png" });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "Paused." })).toBeVisible();
+  const before = await page.evaluate(() => window.__testAudio.currentTime);
+  await page.waitForTimeout(250);
+  expect(
+    Math.abs(
+      (await page.evaluate(() => window.__testAudio.currentTime)) - before,
+    ),
+  ).toBeLessThan(0.03);
+  await page.screenshot({ path: "/tmp/backstage-desktop-game.png" });
+  await page.getByRole("button", { name: "← Library" }).click();
+  // Earn and deploy real phrase-based Star Power through the rendered game.
+  await page
+    .getByRole("button", { name: /Stream fixture Automated test/ })
+    .click();
+  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await page.getByRole("button", { name: /Start playing/ }).click();
+  for (let i = 0; i < 5; i++) {
+    await page.waitForFunction(
+      (target) => window.__testAudio.currentTime >= target,
+      0.58 + i * 0.5,
+      { timeout: 10000 },
+    );
+    await page.keyboard.down(["a", "s", "d", "f", "g"][i]);
+    await page.keyboard.press("Space");
+    await page.keyboard.up(["a", "s", "d", "f", "g"][i]);
+    if (i === 3) {
+      await expect
+        .poll(
+          async () =>
+            await page
+              .locator(".power-meter [role=meter]")
+              .getAttribute("aria-valuenow"),
+        )
+        .toBe("50");
+      await page.keyboard.press("Shift");
+      await expect(page.locator(".game-screen")).toHaveClass(/power-active/);
+      await expect(page.locator(".amplifier > strong")).toHaveText("2×");
+      expect(await page.evaluate(() => window.__testAudio.playbackRate)).toBe(
+        1,
+      );
+
+    }
+  }
+  await expect
+    .poll(
+      async () =>
+        await page.locator(".game-metrics > div:first-child b").textContent(),
+    )
+    .toBe("300");
+  await page.screenshot({ path: "/tmp/backstage-desktop-star-power.png" });
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "← Library" }).click();
+  await page.getByRole("button", { name: "Controllers", exact: true }).click();
+  await page.evaluate(() => {
+    window.__pad = {
+      index: 0,
+      id: "Test generic gamepad",
+      connected: true,
+      mapping: "",
+      buttons: Array.from({ length: 16 }, () => ({
+        pressed: false,
+        value: 0,
+        touched: false,
+      })),
+      axes: [0, 0],
+    };
+    Object.defineProperty(navigator, "getGamepads", {
+      configurable: true,
+      value: () => (window.__pad ? [window.__pad] : []),
+    });
+  });
+  await page.getByRole("button", { name: /Test generic gamepad/ }).click();
+  await page.locator(".mapping-row").first().getByRole("button").click();
+  await page.evaluate(() => (window.__pad.buttons[7].pressed = true));
+  await expect(page.locator(".mapping-row").first()).toContainText("Button 7");
+  await page.evaluate(() => (window.__pad.buttons[7].pressed = false));
+  await page.screenshot({
+    path: "/tmp/backstage-desktop-controllers.png",
+    fullPage: true,
+  });
+  await page.getByRole("button", { name: "Song library", exact: true }).click();
+  await page.getByRole("button", { name: /Try the practice track/ }).click();
+  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await page.getByRole("button", { name: /Start playing/ }).click();
+  await page.evaluate(() => {
+    window.__pad = null;
+  });
+  await expect(page.getByRole("heading", { name: "Paused." })).toBeVisible();
+  await expect(page.locator(".game-dialog")).toContainText(
+    "Controller disconnected",
+  );
+  if (process.env.BACKSTAGE_TEST_SERVICE) {
+    await app.evaluate(({ dialog }) => {
+      dialog.showMessageBox = async () => ({
+        response: 1,
+        checkboxChecked: false,
+      });
+    });
+    await page.getByRole("button", { name: "← Library" }).click();
+    await page
+      .getByRole("button", { name: "Add new songs", exact: true })
+      .first()
+      .click();
+    await page
+      .getByRole("textbox", { name: "Search songs", exact: true })
+      .fill("Kevin MacLeod");
+    await page
+      .getByRole("button", { name: "Search songs", exact: true })
+      .click();
+    await expect(page.locator(".search-result").first()).toBeVisible({
+      timeout: 60000,
+    });
+    await page.screenshot({
+      path: "/tmp/backstage-desktop-search.png",
+      fullPage: true,
+    });
+    console.log(
+      "PASS: packaged app starts optional service and renders live song search results.",
+    );
+  }
+  expect(errors).toEqual([]);
+  console.log(
+    "PASS: Electron isolation, offline library, real practice audio, keyboard score, pause timing, custom mapping and device disconnect pause.",
+  );
+} finally {
+  if (app) await app.close();
+  await rm(temp, { recursive: true, force: true });
+}

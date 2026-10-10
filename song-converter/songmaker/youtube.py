@@ -1,6 +1,7 @@
 """Single-video YouTube import, with explicit size and duration limits."""
 from pathlib import Path
 import re
+import os
 import shutil
 from functools import lru_cache
 from time import time
@@ -112,7 +113,7 @@ def download_youtube(url: str, job_dir: Path, progress, include_video: bool = Fa
         'socket_timeout': 20, 'retries': 2, 'fragment_retries': 2,
         'concurrent_fragment_downloads': 4, 'progress_hooks': [hook],
         'logger': QuietLog(), 'quiet': True, 'no_warnings': True,
-        'cachedir': str(Path(__file__).resolve().parent.parent / '.cache' / 'yt-dlp'),
+        'cachedir': str(Path(os.environ.get('BACKSTAGE_CACHE_DIR', str(Path(__file__).resolve().parent.parent / '.cache'))) / 'yt-dlp'),
         'js_runtimes': runtimes,
     }
     progress(2, 'Reading the YouTube video…')

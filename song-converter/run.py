@@ -6,8 +6,9 @@ import threading
 import webbrowser
 
 ROOT = Path(__file__).resolve().parent
-os.environ.setdefault("NUMBA_CACHE_DIR", str(ROOT / ".cache" / "numba"))
-os.environ.setdefault("HF_HOME", str(ROOT / ".cache" / "huggingface"))
+CACHE = Path(os.environ.get("BACKSTAGE_CACHE_DIR", str(ROOT / ".cache")))
+os.environ.setdefault("NUMBA_CACHE_DIR", str(CACHE / "numba"))
+os.environ.setdefault("HF_HOME", str(CACHE / "huggingface"))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Backstage — MP3 to Backstage")
