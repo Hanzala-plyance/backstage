@@ -4,6 +4,7 @@ from threading import Lock, Semaphore
 from time import time
 from typing import Literal
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -24,8 +25,8 @@ from .midi import validate_midi
 from .chart_search import search_charts
 from .library import publish, install_status, songs_root
 
-OUTPUT = ROOT / "output"
-OUTPUT.mkdir(exist_ok=True)
+OUTPUT = Path(os.environ.get("BACKSTAGE_OUTPUT_DIR", str(ROOT / "output"))).expanduser().resolve()
+OUTPUT.mkdir(parents=True, exist_ok=True)
 pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix='song-queue')
 download_slots = Semaphore(2)
 conversion_slot = Semaphore(1)

@@ -1,16 +1,32 @@
 {
-  "version": "0.1.0-dev",
+  "version": "0.2.0-dev",
   "status": "blocked",
-  "tested_commit": "",
-  "artifact": "",
-  "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.1.0-foundation.md",
+  "tested_commit": "13cd64ca220bb1cebdff792a11b5907d4b01bb97",
+  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 2d592e67d67626df4e32498f5ccdee00780082e108a900231e2aaff629071633",
+  "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md",
   "reviewer": "",
   "rollback": "Keep the current main release; do not deploy this candidate before acceptance.",
   "checks": {
-    "unity_build": {"status": "not-run", "evidence": "Unity 6000.3.5f2 is not installed on the implementation machine."},
-    "song_import_gameplay": {"status": "not-run", "evidence": "Requires a built Backstage game and actual playback of a converted song."},
-    "controller_hardware": {"status": "not-run", "evidence": "Requires physical supported guitar/MIDI input testing in Backstage."},
-    "clean_install": {"status": "not-run", "evidence": "Requires the built game on a clean target machine."},
-    "recovery": {"status": "not-run", "evidence": "Requires game and device disconnect/reconnect testing."}
-  }
+    "song_import_gameplay": {
+      "status": "not-run",
+      "evidence": "Automated original practice audio and generated-song import checks are separate from audible timing and physical acceptance."
+    },
+    "controller_hardware": {
+      "status": "not-run",
+      "evidence": "Requires physical supported guitar/MIDI input testing in Backstage."
+    },
+    "clean_install": {
+      "status": "not-run",
+      "evidence": "Requires the built game on a clean target machine."
+    },
+    "recovery": {
+      "status": "not-run",
+      "evidence": "Requires game and device disconnect/reconnect testing."
+    },
+    "runtime_build": {
+      "status": "passed",
+      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation (strum/green/red with remapped green), disconnect pause and strict bundle signature. 30 desktop unit, 47 converter, 11 controller-routing and promotion tests pass. GitHub Linux CI (SwiftShader) passed the same checks and smoke on the tested commit. Physical controllers, audible timing, clean install and recovery remain unverified."
+    }
+  },
+  "runtime": "electron"
 }

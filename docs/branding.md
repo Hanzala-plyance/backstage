@@ -1,9 +1,10 @@
 # Backstage branding
 
-Source asset names: `Backstage/Assets/Art/UI/Backstage_Logo.png`,
-`Backstage_Logo_White.png`, `Backstage_Splash.png`, `Backstage_Icon.png`, and `Backstage_Mark.png`.
-They retain the previous Unity metadata GUIDs so scenes and player icons keep
-valid references. Public localized values change; internal keys/namespaces and
+Desktop assets: `desktop/public/wordmark.png`, `icon.png` and `Backstage.icns`.
+Unity source assets (`Backstage/Assets/Art/UI/Backstage_Logo.png`,
+`Backstage_Logo_White.png`, `Backstage_Splash.png`, `Backstage_Icon.png`,
+`Backstage_Mark.png`) are preserved at tag `unity-reference` with their original
+metadata GUIDs. Public localized values change; internal keys/namespaces and
 upstream attribution remain. These development assets need in-game visual acceptance.
 
 Generated using the built-in imagegen tool. Wordmark prompt: “Create a horizontal

@@ -1,6 +1,6 @@
 <!-- BACKSTAGE-CONSTITUTION:START -->
 Generated from https://github.com/Hanzala-plyance/backstage-specs/tree/meta/governance.
-Source SHA-256: `7cc281b7f654cd65b99351a51afc86cc841e50c1ec34be991451980132ae5217`.
+Source SHA-256: `adaaefbc16e2205d60e39d1092ef0db5b4796e4e46149af5c15186748f342d62`.
 Edit the canonical sources in backstage-specs; regenerate this managed block.
 
 # controllers: MacRiff controller setup and bridge reference project

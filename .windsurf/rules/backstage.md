@@ -4,7 +4,7 @@ trigger: always_on
 
 <!-- BACKSTAGE-CONSTITUTION:START -->
 Generated from https://github.com/Hanzala-plyance/backstage-specs/tree/meta/governance.
-Source SHA-256: `7cc281b7f654cd65b99351a51afc86cc841e50c1ec34be991451980132ae5217`.
+Source SHA-256: `adaaefbc16e2205d60e39d1092ef0db5b4796e4e46149af5c15186748f342d62`.
 Edit the canonical sources in backstage-specs; regenerate this managed block.
 
 This is an implementation checkout. Open the separate backstage-specs checkout
@@ -26,7 +26,7 @@ Explicit user instructions and higher-priority platform instructions take preced
 - Use the pinned repo-local OpenSpec CLI. Register the meta checkout as store
   `backstage`. Do not fork specifications into implementation branches.
 - Treat the supplied product brief as business intent. Decision records identify
-  later changes: the initial game foundation is now Backstage, a YARG-based fork.
+  later changes: the active runtime is a Backstage desktop web app; the YARG fork remains reference.
   Keep upstream attribution and licenses; public branding is Backstage.
 
 ## Develop, stage, main
@@ -47,7 +47,7 @@ Explicit user instructions and higher-priority platform instructions take preced
   Keep the last known stable release while fixing the candidate on develop.
 - Record exact candidate commit, build artifact, automated checks, hardware/game
   results, known limitations, rollback, and reviewer in a release report on meta.
-  Missing Unity or hardware evidence means blocked promotion, never assumed success.
+  Missing selected-runtime build or hardware evidence means blocked promotion, never assumed success.
 - Use PRs and required checks for promotions. Do not force-push shared branches or
   bypass branch protection. User authorization can change scope, not test results.
 
