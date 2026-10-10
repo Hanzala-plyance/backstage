@@ -37,9 +37,20 @@ import SongInfo, { artUrl, bestStars, type Scores } from "./SongInfo";
 import Stars from "./Stars";
 import type { PlayerInit } from "./game/player";
 import Controllers from "./Controllers";
+import Soundcheck, { CHECK_ID, loadProgress, saveProgress } from "./Soundcheck";
+import ControllerCheck from "./game/ControllerCheck";
+import { lessons } from "./core/lessons";
 import type { MidiPort } from "./game/Game";
 const Game = lazy(() => import("./game/Game"));
-const pages = ["library", "search", "queue", "controllers", "settings"];
+const LessonRun = lazy(() => import("./game/Lesson"));
+const pages = [
+  "library",
+  "soundcheck",
+  "search",
+  "queue",
+  "controllers",
+  "settings",
+];
 const levels: Level[] = ["Easy", "Medium", "Hard", "Expert"];
 const duration = (seconds: number | null) =>
   seconds
@@ -61,6 +72,11 @@ function Icon({ name }: { name: string }) {
       {name === "library" ? (
         <>
           <path d="M4 5h3v15H4zM10 5h3v15h-3zM16 4l3-1 4 15-3 1z" />
+        </>
+      ) : name === "soundcheck" ? (
+        <>
+          <path d="M9 3h6l4 18H5z" />
+          <path d="M8 15h8M12 15l4-9" />
         </>
       ) : name === "search" ? (
         <>
@@ -88,6 +104,9 @@ function Icon({ name }: { name: string }) {
 }
 export default function App() {
   const [page, setPage] = useState("library"),
+    [lesson, setLesson] = useState<number | null>(null),
+    [checking, setChecking] = useState(false),
+    [lessonsDone, setLessonsDone] = useState(loadProgress),
     [songs, setSongs] = useState<Song[]>([]),
     [warnings, setWarnings] = useState<string[]>([]),
     [root, setRoot] = useState(""),
@@ -162,12 +181,10 @@ export default function App() {
     if (choice === "quit") return window.close();
     setScreen("app");
     setError("");
-    if (choice === "quickplay" || choice === "practice") {
+    if (choice === "quickplay") {
       setPage("library");
       void action("library", refresh);
-      const practice = songs.find((s) => s.practice);
-      if (choice === "practice" && practice) choose(practice);
-      else later(() => focusFirst());
+      later(() => focusFirst());
     } else {
       setPage(choice);
       if (choice === "settings")
@@ -199,9 +216,11 @@ export default function App() {
       later(() => focusFirst());
     }
   };
-  // Guitar and gamepad menu navigation, using each pad's saved mapping.
+  // Guitar and gamepad menu navigation, using each pad's saved mapping. Off
+  // while a song or lesson owns the controllers.
+  const onStage = !!playing || lesson !== null || checking;
   useEffect(() => {
-    if (playing) return;
+    if (onStage) return;
     const menu = new MenuPad(),
       profiles = new Map<string, ReturnType<typeof loadProfile>>();
     const profileFor = (pad: Gamepad) => {
@@ -236,9 +255,9 @@ export default function App() {
       cancelAnimationFrame(frame);
       window.removeEventListener("gamepadconnected", connected);
     };
-  }, [playing, device, profile]);
+  }, [onStage, device, profile]);
   useEffect(() => {
-    if (playing) return;
+    if (onStage) return;
     const keydown = (e: KeyboardEvent) => {
       const el = document.activeElement as HTMLElement | null;
       if (screen === "title") {
@@ -283,9 +302,9 @@ export default function App() {
   });
   // Previews only play while choosing in the library.
   useEffect(() => {
-    if (page !== "library" || screen !== "app" || playing)
+    if (page !== "library" || screen !== "app" || onStage)
       preview.current.stop();
-  }, [page, screen, playing]);
+  }, [page, screen, onStage]);
   useEffect(() => {
     if (!selected) preview.current.stop();
   }, [selected]);
@@ -400,10 +419,10 @@ export default function App() {
     const timer = setTimeout(() => setNotice(""), 5000);
     return () => clearTimeout(timer);
   }, [notice]);
+  // The Soundcheck track lives in Soundcheck, not among library songs.
+  const librarySongs = songs.filter((s) => !s.practice);
   const focusSong =
-    songs.find((s) => s.id === focusId) ??
-    songs.find((s) => !s.practice) ??
-    songs[0];
+    librarySongs.find((s) => s.id === focusId) ?? librarySongs[0];
   // Installed songs (and installed songs since removed) leave the queue.
   const queued = jobs.filter(
     (j) => !["installed", "missing"].includes(j.library?.status ?? ""),
@@ -480,6 +499,33 @@ export default function App() {
     );
     later(() => focusFirst());
   }
+  const markDone = (id: string) =>
+    setLessonsDone((done) => {
+      const next = done.includes(id) ? done : [...done, id];
+      saveProgress(next);
+      return next;
+    });
+  // The full Soundcheck track starts straight away on Easy for player 1.
+  async function playPractice() {
+    preview.current.stop();
+    const drums = device === "midi";
+    const loaded = await action("play", () =>
+      window.backstage.loadSong("practice", drums ? "Drums" : "Guitar", "Easy"),
+    );
+    if (!loaded) return;
+    setPlaying({
+      song: loaded,
+      players: [{ device, chart: loaded.chart, profile, label: "Player 1" }],
+    });
+  }
+  // Start Soundcheck: the first step not yet done, in order.
+  const startSoundcheck = () => {
+    preview.current.stop();
+    if (!lessonsDone.includes(CHECK_ID)) return setChecking(true);
+    const next = lessons.findIndex((l) => !lessonsDone.includes(l.id));
+    if (next >= 0) setLesson(next);
+    else void playPractice();
+  };
   async function play() {
     if (!selected) return;
     preview.current.stop();
@@ -530,6 +576,53 @@ export default function App() {
       setJobs(await window.backstage.queue());
     }
   }
+  if (checking)
+    return (
+      <ControllerCheck
+        device={device === "midi" ? "keyboard" : device}
+        profile={profile}
+        onPassed={() => markDone(CHECK_ID)}
+        onNext={() => {
+          setChecking(false);
+          setLesson(0);
+        }}
+        onExit={() => {
+          setChecking(false);
+          later(() => focusFirst());
+        }}
+      />
+    );
+  if (lesson !== null)
+    return (
+      <Suspense
+        fallback={<div className="loading">Getting your stage ready…</div>}
+      >
+        <LessonRun
+          key={lesson}
+          lesson={lessons[lesson]}
+          // Lessons teach guitar; a MIDI drum kit falls back to the keyboard.
+          device={device === "midi" ? "keyboard" : device}
+          profile={profile}
+          mode={mode}
+          offset={offset}
+          nextLabel={
+            lesson + 1 < lessons.length ? "Next lesson" : "Play the full track"
+          }
+          onPassed={markDone}
+          onNext={() => {
+            if (lesson + 1 < lessons.length) setLesson(lesson + 1);
+            else {
+              setLesson(null);
+              void playPractice();
+            }
+          }}
+          onExit={() => {
+            setLesson(null);
+            later(() => focusFirst());
+          }}
+        />
+      </Suspense>
+    );
   if (playing)
     return (
       <Suspense
@@ -541,6 +634,7 @@ export default function App() {
           midi={midi}
           offset={offset}
           mode={mode}
+          backTo={playing.song.practice ? "Soundcheck" : "Library"}
           onExit={() => {
             returnFocus.current = null;
             setPlaying(null);
@@ -567,6 +661,7 @@ export default function App() {
         <nav>
           {[
             ["library", "Song library"],
+            ["soundcheck", "Soundcheck"],
             ["search", "Add new songs"],
             ["queue", "Preparation queue"],
             ["controllers", "Controllers"],
@@ -644,37 +739,9 @@ export default function App() {
                 ＋ Add new songs
               </button>
             </div>
-            <section className="practice-banner">
-              <div className="record-art">
-                <div />
-                <span>B</span>
-              </div>
-              <div>
-                <span className="eyebrow">A LITTLE SOUNDCHECK</span>
-                <h2>Meet your new stage.</h2>
-                <p>
-                  A short original track. Get a feel for the notes
-                  <br />
-                  and check your controls before the main event.
-                </p>
-                <button
-                  className="light-button"
-                  onClick={() => choose(songs.find((s) => s.practice)!)}
-                  disabled={!songs.length}
-                >
-                  Try the practice track <span>↗</span>
-                </button>
-              </div>
-              <span className="banner-corner">
-                32 SEC
-                <br />
-                ZERO PRESSURE
-              </span>
-            </section>
             <div className="section-heading library-heading">
               <h2>
-                Your library{" "}
-                <span>{songs.filter((s) => !s.practice).length}</span>
+                Your library <span>{librarySongs.length}</span>
               </h2>
               <div className="inline-actions">
                 <label className="filter">
@@ -703,7 +770,7 @@ export default function App() {
                   <span>TIME</span>
                   <span />
                 </div>
-                {songs
+                {librarySongs
                   .filter((s) =>
                     (s.title + " " + s.artist)
                       .toLowerCase()
@@ -786,7 +853,7 @@ export default function App() {
                 />
               )}
             </div>
-            {songs.length === 1 && (
+            {songs.length > 0 && librarySongs.length === 0 && (
               <div className="empty-library">
                 <span>Room for your favorites.</span>
                 <p>
@@ -814,6 +881,21 @@ export default function App() {
               complete song audio file.
             </p>
           </>
+        )}
+        {page === "soundcheck" && (
+          <Soundcheck
+            done={lessonsDone}
+            onStart={startSoundcheck}
+            onCheck={() => {
+              preview.current.stop();
+              setChecking(true);
+            }}
+            onLesson={(i) => {
+              preview.current.stop();
+              setLesson(i);
+            }}
+            onFullTrack={() => void playPractice()}
+          />
         )}
         {page === "search" && (
           <>

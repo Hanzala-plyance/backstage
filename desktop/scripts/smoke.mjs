@@ -95,18 +95,26 @@ try {
   page = await app.firstWindow();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  const openFullTrack = async () => {
+    await page.getByRole("button", { name: "Soundcheck", exact: true }).click();
+    await page.getByRole("button", { name: /Full Soundcheck track/ }).click();
+  };
   await page.waitForLoadState("domcontentloaded");
   // Opening flow: title screen, then main menu, then the library.
   await expect(page.locator(".title-screen .press-start")).toBeVisible();
   await page.keyboard.press("Enter");
   await expect(page.getByRole("button", { name: /Quickplay/ })).toBeFocused();
+  await expect(
+    page.getByRole("button", { name: /Soundcheck Learn to play/ }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /Quickplay/ }).click();
   await expect(
     page.getByRole("heading", { name: "Good music. Great company." }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: /Soundcheck Practice/ }),
-  ).toBeVisible();
+  // The Soundcheck track lives in Soundcheck, not among library songs.
+  await expect(page.locator('.song-row[data-song-id="practice"]')).toHaveCount(
+    0,
+  );
   // Library tidying: readable folder name, cleaned title, cover served.
   await expect
     .poll(() => readdir(path.join(temp, "songs")))
@@ -148,9 +156,16 @@ try {
       }
     };
   });
-  await page.getByRole("button", { name: /Try the practice track/ }).click();
-  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await openFullTrack();
   await page.getByRole("button", { name: /Start playing/ }).click();
+  // Just before the first note, run the clock at a tenth of real speed so
+  // slow machines can't carry it past the hit window (judgment follows it).
+  await page.waitForFunction(
+    () => window.__testAudio?.currentTime >= 1.6,
+    {},
+    { timeout: 10000, polling: 10 },
+  );
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.1));
   await page.waitForFunction(
     () => window.__testAudio?.currentTime >= 1.97,
     {},
@@ -177,13 +192,17 @@ try {
     ),
   ).toBeLessThan(0.03);
   await page.screenshot({ path: "/tmp/backstage-desktop-game.png" });
-  await page.getByRole("button", { name: "← Library" }).click();
+  await page.getByRole("button", { name: "← Soundcheck" }).click();
+  await page.getByRole("button", { name: "Song library", exact: true }).click();
   // Earn and deploy real phrase-based Star Power through the rendered game.
   await page
     .getByRole("button", { name: /Stream fixture Automated test/ })
     .click();
   await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
+  // Notes start at 0.6 s while the stage is still warming up: run the clock at
+  // half speed (judgment follows it, so timing rules are unchanged).
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.5));
   for (let i = 0; i < 5; i++) {
     await page.waitForFunction(
       (target) => window.__testAudio.currentTime >= target,
@@ -205,8 +224,9 @@ try {
       await page.keyboard.press("Shift");
       await expect(page.locator(".game-screen")).toHaveClass(/power-active/);
       await expect(page.locator(".amplifier > strong")).toHaveText("2×");
+      // Star Power must not change the song's speed.
       expect(await page.evaluate(() => window.__testAudio.playbackRate)).toBe(
-        1,
+        0.5,
       );
     }
   }
@@ -216,6 +236,8 @@ try {
         await page.locator(".game-metrics > div:first-child b").textContent(),
     )
     .toBe("300");
+  // The fixture is 6 s long; keep it from ending before the pause below.
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.1));
   await page.screenshot({ path: "/tmp/backstage-desktop-star-power.png" });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "← Library" }).click();
@@ -294,8 +316,7 @@ try {
   await expect(page.locator(".app-hints")).toHaveText(
     /Up \/ Down.*Select.*Back.*Remove song.*Next section/,
   );
-  await page.getByRole("button", { name: /Try the practice track/ }).click();
-  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await openFullTrack();
   await page.getByRole("button", { name: /Start playing/ }).click();
   await page.evaluate(() => {
     window.__pad = null;
@@ -320,8 +341,9 @@ try {
       axes: [0, 0],
     };
   });
-  await page.getByRole("button", { name: "← Library" }).click();
-  await page.getByRole("button", { name: /Try the practice track/ }).click();
+  await page.getByRole("button", { name: "← Soundcheck" }).click();
+  await page.getByRole("button", { name: "Song library", exact: true }).click();
+  await page.getByRole("button", { name: /Renamed Song/ }).click();
   await page.getByRole("button", { name: /Add player/ }).click();
   await expect(
     page.getByRole("button", { name: "Player 2 controller" }),
@@ -335,9 +357,12 @@ try {
       .evaluateAll((els) =>
         els.map((e) => Number(e.textContent.replace(/,/g, ""))),
       );
-  // Soundcheck Easy: note i at 2 + i * 28/48 s on lane i % 5.
+  // Fixture Easy guitar: green at 0.6 s, red at 1.1 s. The first note comes
+  // while the stage is still warming up, so run the clock at a fifth of real
+  // speed from the start (judgment follows the clock; rules are unchanged).
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.2));
   await page.waitForFunction(
-    () => window.__testAudio.currentTime >= 1.97,
+    () => window.__testAudio.currentTime >= 0.57,
     {},
     {
       timeout: 10000,
@@ -355,7 +380,7 @@ try {
   await expect.poll(scores).toEqual([0, 50]);
   // P1 frets red and strums at once, like a player, just before note 1.
   await page.waitForFunction(
-    () => window.__testAudio.currentTime >= 2 + 28 / 48 - 0.05,
+    () => window.__testAudio.currentTime >= 1.1 - 0.05,
     {},
     { timeout: 20000, polling: 10 },
   );
@@ -458,9 +483,75 @@ try {
       "PASS: packaged app starts optional service and renders live song search results.",
     );
   }
+  // Soundcheck: demo-first lessons in their own section. Lessons follow the
+  // Controllers selection, so play this one on the keyboard.
+  await page.getByRole("button", { name: "Controllers", exact: true }).click();
+  await page.getByRole("button", { name: /Keyboard Always ready/ }).click();
+  await page.getByRole("button", { name: "Soundcheck", exact: true }).click();
+  await expect(page.locator(".lesson-card")).toHaveCount(8);
+  // Start runs every step in order, beginning with the controller check.
+  await page.getByRole("button", { name: /Start Soundcheck/ }).click();
+  await expect(page.locator(".check-count")).toHaveText("0 of 8 working");
+  for (const key of ["a", "s", "d", "f", "g", "Space", "Shift", "w"])
+    await page.keyboard.press(key);
+  await expect(
+    page.getByRole("heading", { name: "You’re all set." }),
+  ).toBeVisible();
+  await page.screenshot({ path: "/tmp/backstage-desktop-check.png" });
+  await page.getByRole("button", { name: /Start the lessons/ }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Frets & strum" }),
+  ).toContainText("press Space to strum");
+  await page.getByRole("button", { name: /Watch the demo/ }).click();
+  await expect(page.locator(".lesson-badge")).toContainText("DEMO");
+  // The game performs the demo through the real rules, so hits count up
+  // with no input from the player.
+  const lessonHits = async () =>
+    Number(
+      (
+        await page.locator(".lesson-hud div:nth-child(3) b").textContent()
+      ).split("/")[0],
+    );
+  await expect.poll(lessonHits, { timeout: 15000 }).toBeGreaterThanOrEqual(2);
+  await expect(page.locator(".lesson-cue")).toContainText("Strum");
+  await page.screenshot({ path: "/tmp/backstage-desktop-lesson-demo.png" });
+  await page.getByRole("button", { name: /Skip demo/ }).click();
+  await expect(
+    page.getByRole("heading", { name: "Now you try." }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Start →/ }).click();
+  // Lesson 1: note i at 3 + i seconds on these lanes.
+  const lessonLanes = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 2, 4, 1, 3];
+  for (let i = 0; i < lessonLanes.length; i++) {
+    await page.waitForFunction(
+      (t) => window.__testAudio.currentTime >= t,
+      3 + i - 0.03,
+      { timeout: 15000, polling: 10 },
+    );
+    const key = "asdfg"[lessonLanes[i]];
+    await page.keyboard.down(key);
+    await page.keyboard.press("Space");
+    await page.keyboard.up(key);
+  }
+  await expect(page.getByRole("heading", { name: "Nailed it." })).toBeVisible({
+    timeout: 10000,
+  });
+  await page.getByRole("button", { name: /Next lesson/ }).click();
+  await expect(page.getByRole("dialog", { name: "Chords" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".lesson-card").nth(0)).toContainText("Done");
+  await expect(page.locator(".lesson-card").nth(1)).toContainText("Done");
+  await expect(page.locator(".lesson-card").nth(2)).toContainText("Next up");
+  await expect(
+    page.getByRole("button", { name: /Continue Soundcheck/ }),
+  ).toBeFocused();
+  await page.screenshot({
+    path: "/tmp/backstage-desktop-soundcheck.png",
+    fullPage: true,
+  });
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars and the song details panel.",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel and Soundcheck lessons (demo, graded turn, progress).",
   );
 } catch (error) {
   if (page && !page.isClosed()) {

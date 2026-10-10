@@ -37,6 +37,7 @@ export default function Game({
   midi,
   offset,
   mode,
+  backTo = "Library",
   onExit,
 }: {
   song: LoadedSong;
@@ -44,6 +45,8 @@ export default function Game({
   midi?: MidiPort;
   offset: number;
   mode: "tap" | "strum";
+  /** Where leaving the stage returns to. */
+  backTo?: string;
   onExit: () => void;
 }) {
   const multi = players.length > 1;
@@ -336,7 +339,7 @@ export default function Game({
     >
       <header className="game-header">
         <button className="quiet" onClick={exit}>
-          ← Library
+          ← {backTo}
         </button>
         <div>
           <strong>{song.title}</strong>
@@ -615,7 +618,7 @@ export default function Game({
                 data-menu-default={phase === "error" ? "" : undefined}
                 onClick={exit}
               >
-                Back to library
+                Back to {backTo === "Library" ? "library" : backTo}
               </button>
             </div>
             <ButtonHints

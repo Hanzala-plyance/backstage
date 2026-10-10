@@ -3,6 +3,7 @@ import { Judgment } from "../core/judgment";
 import { keyboardLanes, readPad } from "../core/input";
 import { isPad } from "../core/players";
 import { createHighway } from "./highway";
+import { applyDemo, type DemoInput } from "../core/lessons";
 export type MidiPort = { id: string; name: string; input: MIDIInput };
 export type PlayerInit = {
   device: string;
@@ -57,6 +58,7 @@ export class PlayerRuntime {
   readonly pulse = [0, 0, 0, 0, 0];
   held = [false, false, false, false, false];
   private prev = idle();
+  private demoHeld = [false, false, false, false, false];
   private seeded = false;
   constructor(
     readonly init: PlayerInit,
@@ -173,6 +175,22 @@ export class PlayerRuntime {
         this.judge.update(t, this.held, this.keys.has("KeyW"));
       else if (!isPad(this.device)) this.judge.advance(t);
     }
+    this.draw(t);
+  }
+  /** Lesson demos: the game plays through the same rules a pad uses. */
+  demo(t: number, input: DemoInput) {
+    // Separate from `held`, which a connected pad refreshes every poll.
+    this.demoHeld = applyDemo(
+      this.judge,
+      t,
+      this.demoHeld,
+      input,
+      this.strumMode,
+    );
+    this.held = this.demoHeld;
+    this.draw(t);
+  }
+  private draw(t: number) {
     const j = this.judge;
     this.visual.render(t, j.state, this.held, {
       power: j.powerActive,
@@ -199,6 +217,8 @@ export class PlayerRuntime {
     this.judge = new Judgment(this.init.chart.notes, 0.14, this.init.chart);
     this.visual.reset();
     this.release();
+    this.held = [false, false, false, false, false];
+    this.demoHeld = [false, false, false, false, false];
   }
   dispose() {
     this.visual.dispose();
