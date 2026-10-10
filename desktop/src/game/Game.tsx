@@ -622,19 +622,16 @@ export default function Game({
               pad={anyPad}
               hints={
                 [
-                  { button: "up", label: "Browse" },
+                  { button: "up", label: "Up / Down" },
                   { button: "green", label: "Select" },
-                  {
-                    button: "red",
-                    label: phase === "paused" ? "Resume" : "Library",
-                    key: "Esc",
-                  },
+                  { button: "red", label: "Back", key: "Esc" },
                   ...(phase === "ready" || phase === "paused"
                     ? [
                         {
                           button: "start",
                           label: phase === "ready" ? "Start" : "Resume",
                           key: "Enter",
+                          extra: true,
                         },
                       ]
                     : []),

@@ -1,5 +1,11 @@
 import type { MenuButton } from "./core/menu";
-export type Hint = { button: MenuButton; label: string; key?: string };
+/** `extra` marks secondary actions shown after the core Up/Down, Select, Back. */
+export type Hint = {
+  button: MenuButton;
+  label: string;
+  key?: string;
+  extra?: boolean;
+};
 const keys: Partial<Record<MenuButton, string>> = {
   green: "Enter",
   red: "Esc",
@@ -18,12 +24,14 @@ export default function ButtonHints({
 }) {
   // Keyboard players only see actions that have a key, once per key.
   const keyOf = (h: Hint) => h.key ?? keys[h.button];
-  const shown = pad
-    ? hints
-    : hints.filter(
-        (h, i) =>
-          keyOf(h) && hints.findIndex((o) => keyOf(o) === keyOf(h)) === i,
-      );
+  const shown = (
+    pad
+      ? hints
+      : hints.filter(
+          (h, i) =>
+            keyOf(h) && hints.findIndex((o) => keyOf(o) === keyOf(h)) === i,
+        )
+  ).sort((a, b) => Number(!!a.extra) - Number(!!b.extra));
   return (
     <div
       className={"button-hints " + className}
@@ -31,7 +39,10 @@ export default function ButtonHints({
       data-menu-skip
     >
       {shown.map((h) => (
-        <span key={h.button + h.label}>
+        <span
+          key={h.button + h.label}
+          className={h.extra ? "hint-extra" : undefined}
+        >
           {!pad ? (
             <kbd>{keyOf(h)}</kbd>
           ) : strum(h.button) ? (

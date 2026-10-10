@@ -271,16 +271,29 @@ try {
     );
     await frames();
   };
-  await tap(13);
+  // Strum releases as soon as focus moves: held past the auto-repeat delay
+  // (easy on slow software-rendered frames) it would browse a second row.
+  await page.evaluate(() => {
+    window.__pad.buttons[13].pressed = true;
+    window.addEventListener(
+      "focusin",
+      () => (window.__pad.buttons[13].pressed = false),
+      { once: true },
+    );
+  });
   await expect(page.locator(".song-row").first()).toBeFocused();
   await tap(7); // Green was remapped to button 7 above; menus follow it.
   await expect(page.locator(".song-dialog")).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Take the stage/ }),
   ).toBeFocused();
-  await expect(page.locator(".app-hints")).toContainText("Close");
+  await expect(page.locator(".app-hints")).toContainText("Back");
   await tap(1);
   await expect(page.locator(".song-dialog")).toHaveCount(0);
+  // Core guitar navigation leads every hint bar; extras follow.
+  await expect(page.locator(".app-hints")).toHaveText(
+    /Up \/ Down.*Select.*Back.*Remove song.*Next section/,
+  );
   await page.getByRole("button", { name: /Try the practice track/ }).click();
   await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();

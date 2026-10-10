@@ -1182,27 +1182,25 @@ export default function App() {
         hints={
           (selected
             ? [
-                { button: "up", label: "Browse" },
+                { button: "up", label: "Up / Down" },
                 { button: "green", label: "Select" },
-                {
-                  button: "red",
-                  label: confirmRemove ? "Cancel" : "Close",
-                },
+                { button: "red", label: "Back" },
               ]
             : [
-                { button: "up", label: "Browse" },
-                {
-                  button: "green",
-                  label: page === "library" ? "Choose song" : "Select",
-                },
-                {
-                  button: "red",
-                  label: page === "library" ? "Main menu" : "Library",
-                },
+                { button: "up", label: "Up / Down" },
+                { button: "green", label: "Select" },
+                { button: "red", label: "Back" },
                 ...(page === "library"
-                  ? [{ button: "blue", label: "Remove song", key: "Delete" }]
+                  ? [
+                      {
+                        button: "blue",
+                        label: "Remove song",
+                        key: "Delete",
+                        extra: true,
+                      },
+                    ]
                   : []),
-                { button: "yellow", label: "Next section" },
+                { button: "yellow", label: "Next section", extra: true },
               ]) as Hint[]
         }
       />

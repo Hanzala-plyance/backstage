@@ -1999,6 +1999,15 @@ select {
   gap: 8px;
   white-space: nowrap;
 }
+/* Secondary actions sit after the core Up/Down, Select, Back controls. */
+.button-hints > .hint-extra {
+  font-size: 11px;
+  opacity: 0.62;
+}
+.button-hints > span:not(.hint-extra) + .hint-extra {
+  padding-left: 22px;
+  border-left: 1px solid rgb(255 255 255 / 0.14);
+}
 .button-hints kbd {
   font:
     700 10px ui-monospace,

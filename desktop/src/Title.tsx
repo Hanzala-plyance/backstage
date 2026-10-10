@@ -88,9 +88,9 @@ export function MainMenu({
         className="title-hints"
         pad={pad}
         hints={[
-          { button: "up", label: "Browse" },
+          { button: "up", label: "Up / Down" },
           { button: "green", label: "Select" },
-          { button: "red", label: "Title", key: "Esc" },
+          { button: "red", label: "Back", key: "Esc" },
         ]}
       />
     </div>
