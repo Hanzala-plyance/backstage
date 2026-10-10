@@ -44,20 +44,17 @@ export function practiceWav(): Blob {
   }
   return new Blob([bytes], { type: "audio/wav" });
 }
+export type AudioFailure = "file" | "blocked" | "device";
+// Plays through the media element directly. Routing through an AudioContext only
+// added a gain node, and made start-up depend on the context resuming on the
+// current output device; a stalled or closed context then blocked every song.
 export class SongAudio {
   readonly element = new Audio();
-  readonly context = new AudioContext({ latencyHint: "interactive" });
-  private source: MediaElementAudioSourceNode;
-  private gain: GainNode;
   private blob?: string;
   constructor(url?: string) {
     this.element.preload = "auto";
+    this.element.volume = 0.65;
     this.element.src = url || (this.blob = URL.createObjectURL(practiceWav()));
-    this.source = this.context.createMediaElementSource(this.element);
-    this.gain = this.context.createGain();
-    this.gain.gain.value = 0.65;
-    this.source.connect(this.gain);
-    this.gain.connect(this.context.destination);
   }
   get time() {
     return this.element.currentTime;
@@ -66,22 +63,31 @@ export class SongAudio {
     return this.element.duration;
   }
   async play() {
-    await this.context.resume();
-    await this.element.play();
+    try {
+      await this.element.play();
+    } catch (error) {
+      // A load race can abort the first request; one retry covers it.
+      if ((error as DOMException)?.name !== "AbortError") throw error;
+      await this.element.play();
+    }
+  }
+  failure(error: unknown): AudioFailure {
+    if (this.element.error) return "file";
+    const name = (error as DOMException)?.name;
+    if (name === "NotSupportedError") return "file";
+    if (name === "NotAllowedError") return "blocked";
+    return "device";
   }
   pause() {
     this.element.pause();
   }
   volume(value: number) {
-    this.gain.gain.value = value;
+    this.element.volume = Math.max(0, Math.min(1, value));
   }
   dispose() {
     this.pause();
     this.element.removeAttribute("src");
     this.element.load();
-    this.source.disconnect();
-    this.gain.disconnect();
-    void this.context.close();
     if (this.blob) URL.revokeObjectURL(this.blob);
   }
 }

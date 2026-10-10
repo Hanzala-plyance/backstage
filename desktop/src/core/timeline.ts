@@ -63,6 +63,28 @@ export class Timeline {
       next: this.segments[i + 1]?.time ?? Infinity,
     };
   }
+  timeAtBeat(beat: number) {
+    let s = this.segments[0];
+    for (const segment of this.segments) {
+      if (segment.beat > beat) break;
+      s = segment;
+    }
+    return s.time + ((beat - s.beat) * 60) / s.bpm;
+  }
+  /** Beat times up to `until`, flagging bar lines, for the highway grid. */
+  beatGrid(until: number, limit = 20000) {
+    const grid: { time: number; downbeat: boolean }[] = [];
+    for (let beat = 0; grid.length < limit; beat++) {
+      const time = this.timeAtBeat(beat);
+      if (time > until) break;
+      const measure = this.position(time).measure;
+      grid.push({
+        time,
+        downbeat: Math.abs(measure - Math.round(measure)) < 1e-6,
+      });
+    }
+    return grid;
+  }
   timeAtMeasure(measure: number) {
     let s = this.segments[0];
     for (const segment of this.segments) {

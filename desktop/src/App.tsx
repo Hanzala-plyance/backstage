@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import type {
   LoadedSong,
   Profile,
@@ -9,10 +9,20 @@ import type {
   Part,
   Level,
 } from "./types";
-import { defaultProfile } from "./core/input";
+import { defaultProfile, loadProfile } from "./core/input";
+import {
+  MenuPad,
+  activateFocused,
+  focusFirst,
+  moveFocus,
+  type MenuButton,
+} from "./core/menu";
+import ButtonHints, { type Hint } from "./ButtonHints";
 import Controllers from "./Controllers";
 import type { MidiPort } from "./game/Game";
 const Game = lazy(() => import("./game/Game"));
+const pages = ["library", "search", "queue", "controllers", "settings"];
+const levels: Level[] = ["Easy", "Medium", "Hard", "Expert"];
 const duration = (seconds: number | null) =>
   seconds
     ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`
@@ -86,6 +96,101 @@ export default function App() {
     [mode, setMode] = useState<"tap" | "strum">(() =>
       localStorage.getItem("backstage:mode") === "tap" ? "tap" : "strum",
     );
+  const [padHints, setPadHints] = useState(() =>
+    Array.from(navigator.getGamepads?.() ?? []).some((p) => p?.connected),
+  );
+  const navigate = useRef<(b: MenuButton) => void>(() => {});
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const later = (fn: () => void) => setTimeout(fn, 40);
+  const back = () => {
+    const el = document.activeElement as HTMLElement | null;
+    if (selected) setSelected(null);
+    else if (el?.matches("input, select")) el.blur();
+    else if (page !== "library") {
+      setPage("library");
+      setError("");
+      void action("library", refresh);
+      later(() => focusFirst());
+    }
+  };
+  navigate.current = (b) => {
+    setPadHints(true);
+    if (b === "up" || b === "down") moveFocus(b === "up" ? -1 : 1);
+    else if (b === "green") activateFocused();
+    else if (b === "red") back();
+    else if (b === "yellow" && !selected) {
+      const next = pages[(pages.indexOf(page) + 1) % pages.length];
+      setPage(next);
+      setError("");
+      if (next === "library") void action("library", refresh);
+      if (next === "settings")
+        void window.backstage.settings().then(setSettings);
+      later(() => focusFirst());
+    }
+  };
+  // Guitar and gamepad menu navigation, using each pad's saved mapping.
+  useEffect(() => {
+    if (playing) return;
+    const menu = new MenuPad(),
+      profiles = new Map<string, ReturnType<typeof loadProfile>>();
+    const profileFor = (pad: Gamepad) => {
+      if (device === `pad:${pad.index}:${pad.id}`) return profile;
+      let p = profiles.get(pad.id);
+      if (!p) profiles.set(pad.id, (p = loadProfile(pad.id)));
+      return p;
+    };
+    let frame = 0;
+    const tick = (now: number) => {
+      const pressed = menu.poll(now, navigator.getGamepads(), profileFor);
+      // Controllers captures raw presses while remapping.
+      if (!document.body.hasAttribute("data-capturing"))
+        pressed.forEach((b) => navigate.current(b));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    const connected = () => setPadHints(true);
+    window.addEventListener("gamepadconnected", connected);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("gamepadconnected", connected);
+    };
+  }, [playing, device, profile]);
+  useEffect(() => {
+    if (playing) return;
+    const keydown = (e: KeyboardEvent) => {
+      const el = document.activeElement as HTMLElement | null;
+      if (e.key === "Escape") {
+        setPadHints(false);
+        e.preventDefault();
+        back();
+      } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        if (
+          document.body.hasAttribute("data-capturing") ||
+          el?.matches("select, input[type=number], input[type=range]")
+        )
+          return;
+        setPadHints(false);
+        e.preventDefault();
+        moveFocus(e.key === "ArrowUp" ? -1 : 1);
+      } else if (e.key === "Enter" && (!el || el === document.body)) {
+        setPadHints(false);
+        e.preventDefault();
+        focusFirst();
+      }
+    };
+    window.addEventListener("keydown", keydown);
+    return () => window.removeEventListener("keydown", keydown);
+  });
+  useEffect(() => {
+    if (selected) {
+      returnFocus.current ??= document.activeElement as HTMLElement;
+      later(() => focusFirst());
+    } else if (returnFocus.current) {
+      const el = returnFocus.current;
+      returnFocus.current = null;
+      if (el.isConnected) el.focus({ preventScroll: true });
+    }
+  }, [selected]);
   async function action<T>(
     name: string,
     fn: () => Promise<T>,
@@ -117,13 +222,24 @@ export default function App() {
       setSettings(await window.backstage.settings());
     });
   }, []);
+  const installed = useRef(new Set<string>()),
+    seeded = useRef(false);
   useEffect(() => {
     if (playing) return;
     let alive = true;
     const poll = async () => {
       try {
         const list = await window.backstage.queue();
-        if (alive) setJobs(list);
+        if (!alive) return;
+        setJobs(list);
+        // Show newly installed songs without a manual refresh.
+        const fresh = list.filter(
+          (j) =>
+            j.library?.status === "installed" && !installed.current.has(j.id),
+        );
+        fresh.forEach((j) => installed.current.add(j.id));
+        if (fresh.length && seeded.current) void refresh();
+        seeded.current = true;
       } catch {}
     };
     void poll();
@@ -201,9 +317,11 @@ export default function App() {
           offset={offset}
           mode={mode}
           onExit={() => {
+            returnFocus.current = null;
             setPlaying(null);
             setSelected(null);
             void refresh();
+            later(() => focusFirst());
           }}
         />
       </Suspense>
@@ -267,7 +385,7 @@ export default function App() {
           <span className="build-label">BACKSTAGE / 0.2 · DEVELOPMENT</span>
         </div>
       </aside>
-      <main className="main-content">
+      <main className="main-content" data-menu-scope>
         <div className="window-drag" />
         {notice && (
           <div className="toast" role="status">
@@ -364,6 +482,7 @@ export default function App() {
                   <button
                     className="song-row"
                     key={song.id}
+                    data-menu-default={i === 0 ? "" : undefined}
                     onClick={() => choose(song)}
                   >
                     <div className="track-cell">
@@ -780,6 +899,29 @@ export default function App() {
           </>
         )}
       </main>
+      <ButtonHints
+        className="app-hints"
+        pad={padHints}
+        hints={
+          (selected
+            ? [
+                { button: "up", label: "Browse" },
+                { button: "green", label: "Select" },
+                { button: "red", label: "Close" },
+              ]
+            : [
+                { button: "up", label: "Browse" },
+                {
+                  button: "green",
+                  label: page === "library" ? "Choose song" : "Select",
+                },
+                ...(page === "library"
+                  ? []
+                  : [{ button: "red", label: "Library" }]),
+                { button: "yellow", label: "Next section" },
+              ]) as Hint[]
+        }
+      />
       {selected && (
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
           <section
@@ -800,30 +942,49 @@ export default function App() {
             <span className="eyebrow">UP NEXT</span>
             <h2>{selected.title}</h2>
             <p>{selected.artist}</p>
-            <label>
-              Instrument
-              <select
-                value={part}
-                onChange={(e) => changePart(e.target.value as Part)}
-              >
+            <div className="choice-group" role="group" aria-label="Instrument">
+              <span>Instrument</span>
+              <div>
                 {[...new Set(selected.charts.map((c) => c.part))].map((p) => (
-                  <option key={p}>{p}</option>
+                  <button
+                    key={p}
+                    aria-pressed={p === part}
+                    onClick={() => changePart(p)}
+                  >
+                    {p}
+                  </button>
                 ))}
-              </select>
-            </label>
-            <label>
-              Difficulty
-              <select
-                value={level}
-                onChange={(e) => setLevel(e.target.value as Level)}
-              >
-                {selected.charts
-                  .filter((c) => c.part === part)
-                  .map((c) => (
-                    <option key={c.level}>{c.level}</option>
+              </div>
+            </div>
+            <div className="choice-group" role="group" aria-label="Difficulty">
+              <span>Difficulty</span>
+              <div>
+                {levels
+                  .filter((l) =>
+                    selected.charts.some(
+                      (c) => c.part === part && c.level === l,
+                    ),
+                  )
+                  .map((l) => (
+                    <button
+                      key={l}
+                      aria-pressed={l === level}
+                      className={"level-" + l.toLowerCase()}
+                      onClick={() => setLevel(l)}
+                    >
+                      <i aria-hidden="true">
+                        {Array.from(
+                          { length: levels.indexOf(l) + 1 },
+                          (_, k) => (
+                            <b key={k} />
+                          ),
+                        )}
+                      </i>
+                      {l}
+                    </button>
                   ))}
-              </select>
-            </label>
+              </div>
+            </div>
             <div className="song-facts">
               <span>{duration(selected.duration)}</span>
               <span>
@@ -842,7 +1003,12 @@ export default function App() {
                     : "Gamepad"}
               </span>
             </div>
-            <button className="primary wide" disabled={!!busy} onClick={play}>
+            <button
+              className="primary wide"
+              data-menu-default
+              disabled={!!busy}
+              onClick={play}
+            >
               {busy === "play" ? "Getting ready…" : "Take the stage"} →
             </button>
           </section>

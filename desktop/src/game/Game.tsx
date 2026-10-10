@@ -4,6 +4,8 @@ import { SongAudio } from "../core/audio";
 import { Judgment } from "../core/judgment";
 import { keyboardLanes, readPad } from "../core/input";
 import { createHighway } from "./highway";
+import { activateFocused, focusFirst, moveFocus } from "../core/menu";
+import ButtonHints, { type Hint } from "../ButtonHints";
 export type MidiPort = { id: string; name: string; input: MIDIInput };
 const drumNotes: Record<number, number> = {
   35: 0,
@@ -24,6 +26,11 @@ const drumNotes: Record<number, number> = {
   57: 4,
   59: 4,
 };
+const audioMessages = {
+  file: "This song’s audio could not be played. Check the file or choose another song.",
+  blocked: "Audio was blocked. Press Start playing again.",
+  device: "Audio could not start. Check your output device and try again.",
+};
 export default function Game({
   song,
   device,
@@ -43,6 +50,7 @@ export default function Game({
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const audio = useRef<SongAudio | null>(null);
+  const highway = useRef<ReturnType<typeof createHighway> | null>(null);
   const judge = useRef(new Judgment(song.chart.notes, 0.14, song.chart));
   const status = useRef("ready");
   const [phase, setPhase] = useState("ready"),
@@ -74,27 +82,64 @@ export default function Game({
       setMessage(reason);
     }
   };
+  const starting = useRef(false);
   const start = async () => {
+    if (!["ready", "paused"].includes(status.current) || starting.current)
+      return;
     if (!connected.current) {
       setMessage(
         "Reconnect your selected input, or return to Controllers to choose another.",
       );
       return;
     }
+    const music = audio.current;
+    if (!music) return;
+    starting.current = true;
     try {
-      await audio.current?.play();
+      await music.play();
       setMessage("");
       setState("playing");
-    } catch {
-      setMessage(
-        "Audio could not start. Check your output device and try again.",
-      );
+    } catch (error) {
+      console.error("Backstage audio start failed", error, music.element.error);
+      setMessage(audioMessages[music.failure(error)]);
+    } finally {
+      starting.current = false;
     }
   };
+  const exit = () => {
+    pause();
+    onExit();
+  };
+  const restart = () => {
+    const music = audio.current;
+    if (!music) return;
+    music.pause();
+    music.element.currentTime = 0;
+    judge.current = new Judgment(song.chart.notes, 0.14, song.chart);
+    highway.current?.reset();
+    keyboard.current.clear();
+    setState("ready");
+    void start();
+  };
+  // Red backs out of a menu: resume from pause, otherwise leave the stage.
+  const back = () => {
+    if (status.current === "paused") void start();
+    else if (status.current !== "playing") exit();
+  };
+  useEffect(() => {
+    if (phase !== "playing") setTimeout(() => focusFirst(), 40);
+  }, [phase]);
   useEffect(() => {
     let visual: ReturnType<typeof createHighway>;
     try {
-      visual = createHighway(canvas.current!, song.chart.notes);
+      const last = song.chart.notes[song.chart.notes.length - 1];
+      visual = createHighway(
+        canvas.current!,
+        song.chart.notes,
+        judge.current.timeline.beatGrid(
+          (last ? last.time + last.duration : song.duration) + 5,
+        ),
+      );
     } catch {
       setMessage(
         "Graphics could not start. Enable hardware acceleration or try another computer.",
@@ -102,8 +147,10 @@ export default function Game({
       setState("error");
       return;
     }
+    highway.current = visual;
     const music = new SongAudio(song.audioUrl);
     audio.current = music;
+    let seeded = false;
     let frame = 0,
       lastUI = 0,
       prev = {
@@ -135,8 +182,25 @@ export default function Game({
       )
         event.preventDefault();
       if (event.repeat) return;
+      if (
+        event.code === "Enter" &&
+        status.current !== "playing" &&
+        !(event.target as HTMLElement)?.closest?.("button")
+      ) {
+        event.preventDefault();
+        void start();
+        return;
+      }
       if (event.code === "Escape") {
-        pause();
+        if (status.current === "playing") pause();
+        else back();
+        return;
+      }
+      if (
+        status.current !== "playing" &&
+        (event.code === "ArrowUp" || event.code === "ArrowDown")
+      ) {
+        moveFocus(event.code === "ArrowUp" ? -1 : 1);
         return;
       }
       keyboard.current.add(event.code);
@@ -204,9 +268,7 @@ export default function Game({
     music.element.addEventListener("ended", ended);
     const failed = () => {
       pause();
-      setMessage(
-        "This song’s audio could not be played. Check the file or choose another song.",
-      );
+      setMessage(audioMessages.file);
     };
     music.element.addEventListener("error", failed);
     const tick = (now: number) => {
@@ -221,6 +283,7 @@ export default function Game({
         connected.current = state.connected;
         if (!state.connected) {
           pause("Controller disconnected. Reconnect it to continue.");
+          seeded = false;
           prev = {
             lanes: [false, false, false, false, false],
             strum: false,
@@ -231,7 +294,20 @@ export default function Game({
           };
         } else {
           held = state.lanes;
-          if (state.pause && !prev.pause) pause();
+          // Ignore buttons already held when the stage opened.
+          if (!seeded) {
+            prev = state;
+            seeded = true;
+          }
+          if (state.pause && !prev.pause) {
+            if (status.current === "playing") pause();
+            else void start();
+          } else if (status.current !== "playing") {
+            if (state.strumUp && !prev.strumUp) moveFocus(-1);
+            else if (state.strumDown && !prev.strumDown) moveFocus(1);
+            else if (state.lanes[0] && !prev.lanes[0]) activateFocused();
+            else if (state.lanes[1] && !prev.lanes[1]) back();
+          }
           if (status.current === "playing") {
             if (mode === "strum" && song.chart.part !== "Drums") {
               if (
@@ -270,6 +346,7 @@ export default function Game({
         lastHit: j.lastHit,
         lanes: j.lastLanes,
         tailActive: (index, lane) => j.sustainActive(index, lane),
+        streak: j.combo,
       });
       if (now - lastUI > 80) {
         const j = judge.current;
@@ -296,6 +373,7 @@ export default function Game({
       cancelAnimationFrame(frame);
       music.dispose();
       visual.dispose();
+      highway.current = null;
       window.removeEventListener("keydown", keydown);
       window.removeEventListener("keyup", keyup);
       window.removeEventListener("blur", blur);
@@ -345,7 +423,11 @@ export default function Game({
           </b>
         </div>
       </div>
-      <aside className="amplifier" aria-label="Guitar scoring">
+      <aside
+        className="amplifier"
+        aria-label="Guitar scoring"
+        data-tier={Math.min(3, Math.floor(stats.combo / 10))}
+      >
         <span className="eyebrow">MULTIPLIER</span>
         <strong>
           {stats.multiplier}
@@ -399,7 +481,12 @@ export default function Game({
       </div>
       {phase !== "playing" && (
         <div className="game-overlay">
-          <div className="game-dialog">
+          <div
+            className="game-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Song menu"
+          >
             <span className="eyebrow">
               {phase === "finished"
                 ? "SET COMPLETE"
@@ -436,34 +523,67 @@ export default function Game({
                 )}
               </div>
             )}
-            {phase === "finished" ? (
-              <>
-                <div className="results">
-                  <b>
-                    {stats.score.toLocaleString()}
-                    <small>points</small>
-                  </b>
-                  <b>
-                    {stats.accuracy}%<small>accuracy</small>
-                  </b>
-                  <b>
-                    {judge.current.maxCombo}
-                    <small>best streak</small>
-                  </b>
-                </div>
-                <button className="primary" onClick={onExit}>
-                  Back to library →
+            {phase === "finished" && (
+              <div className="results">
+                <b>
+                  {stats.score.toLocaleString()}
+                  <small>points</small>
+                </b>
+                <b>
+                  {stats.accuracy}%<small>accuracy</small>
+                </b>
+                <b>
+                  {judge.current.maxCombo}
+                  <small>best streak</small>
+                </b>
+              </div>
+            )}
+            <div className="menu-list">
+              {phase === "finished" ? (
+                <button className="primary" data-menu-default onClick={restart}>
+                  Play again
                 </button>
-              </>
-            ) : phase === "error" ? (
-              <button className="primary" onClick={onExit}>
+              ) : phase !== "error" ? (
+                <button className="primary" data-menu-default onClick={start}>
+                  {phase === "ready" ? "Start playing" : "Resume song"} →
+                </button>
+              ) : null}
+              {phase === "paused" && (
+                <button className="secondary" onClick={restart}>
+                  Restart song
+                </button>
+              )}
+              <button
+                className="secondary"
+                data-menu-default={phase === "error" ? "" : undefined}
+                onClick={exit}
+              >
                 Back to library
               </button>
-            ) : (
-              <button className="primary" onClick={start}>
-                {phase === "ready" ? "Start playing" : "Resume song"} →
-              </button>
-            )}
+            </div>
+            <ButtonHints
+              pad={device.startsWith("pad:")}
+              hints={
+                [
+                  { button: "up", label: "Browse" },
+                  { button: "green", label: "Select" },
+                  {
+                    button: "red",
+                    label: phase === "paused" ? "Resume" : "Library",
+                    key: "Esc",
+                  },
+                  ...(phase === "ready" || phase === "paused"
+                    ? [
+                        {
+                          button: "start",
+                          label: phase === "ready" ? "Start" : "Resume",
+                          key: "Enter",
+                        },
+                      ]
+                    : []),
+                ] as Hint[]
+              }
+            />
           </div>
         </div>
       )}
@@ -471,6 +591,10 @@ export default function Game({
         <span>
           {song.chart.part} · {song.chart.level}
         </span>
+        <ButtonHints
+          pad={device.startsWith("pad:")}
+          hints={[{ button: "start", label: "Pause", key: "Esc" }]}
+        />
         <span>
           {Math.floor(stats.time / 60)}:
           {String(Math.floor(stats.time % 60)).padStart(2, "0")} /{" "}

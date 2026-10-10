@@ -15,7 +15,11 @@ try {
   const track = midi.addTrack();
   track.name = "PART GUITAR";
   for (let i = 0; i < 5; i++)
-    track.addNote({ midi: 60 + i, time: i === 4 ? 4 : 0.6 + i * 0.5, duration: 0.05 });
+    track.addNote({
+      midi: 60 + i,
+      time: i === 4 ? 4 : 0.6 + i * 0.5,
+      duration: 0.05,
+    });
   track.addNote({ midi: 116, time: 0.5, duration: 0.75 });
   track.addNote({ midi: 116, time: 1.5, duration: 0.75 });
   await writeFile(path.join(fixtureFolder, "notes.mid"), midi.toArray());
@@ -46,7 +50,13 @@ try {
     args: [
       ...(process.env.BACKSTAGE_APP_BINARY ? [] : ["."]),
       ...(process.platform === "linux" && process.env.CI
-        ? ["--no-sandbox", "--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--force-device-scale-factor=1"]
+        ? [
+            "--no-sandbox",
+            "--use-gl=angle",
+            "--use-angle=swiftshader",
+            "--enable-unsafe-swiftshader",
+            "--force-device-scale-factor=1",
+          ]
         : []),
     ],
     ...(process.env.BACKSTAGE_APP_BINARY
@@ -159,7 +169,6 @@ try {
       expect(await page.evaluate(() => window.__testAudio.playbackRate)).toBe(
         1,
       );
-
     }
   }
   await expect
@@ -200,6 +209,29 @@ try {
     fullPage: true,
   });
   await page.getByRole("button", { name: "Song library", exact: true }).click();
+  // Guitar menu navigation: strum to a song, green opens it, red closes it.
+  const tap = async (button) => {
+    await page.evaluate(
+      (b) => (window.__pad.buttons[b].pressed = true),
+      button,
+    );
+    await page.waitForTimeout(100);
+    await page.evaluate(
+      (b) => (window.__pad.buttons[b].pressed = false),
+      button,
+    );
+    await page.waitForTimeout(100);
+  };
+  await tap(13);
+  await expect(page.locator(".song-row").first()).toBeFocused();
+  await tap(7); // Green was remapped to button 7 above; menus follow it.
+  await expect(page.locator(".song-dialog")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Take the stage/ }),
+  ).toBeFocused();
+  await expect(page.locator(".app-hints")).toContainText("Close");
+  await tap(1);
+  await expect(page.locator(".song-dialog")).toHaveCount(0);
   await page.getByRole("button", { name: /Try the practice track/ }).click();
   await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
@@ -247,7 +279,9 @@ try {
   if (page && !page.isClosed()) {
     console.error("Smoke screen:", await page.locator("body").innerText());
     await mkdir("test-results", { recursive: true });
-    await page.screenshot({ path: "test-results/smoke-failure.png" }).catch(() => {});
+    await page
+      .screenshot({ path: "test-results/smoke-failure.png" })
+      .catch(() => {});
   }
   throw error;
 } finally {

@@ -8,6 +8,14 @@ import {
   newlyPressed,
 } from "./core/input";
 import type { MidiPort } from "./game/Game";
+const snapshot = (pad: Gamepad): Pick<Gamepad, "buttons" | "axes"> => ({
+  buttons: pad.buttons.map((b) => ({
+    pressed: b.pressed,
+    touched: b.touched,
+    value: b.value,
+  })),
+  axes: [...pad.axes],
+});
 export default function Controllers({
   device,
   onDevice,
@@ -68,14 +76,7 @@ export default function Controllers({
               setCapture(null);
             }
           }
-          previous.current = {
-            buttons: pad.buttons.map((b) => ({
-              pressed: b.pressed,
-              touched: b.touched,
-              value: b.value,
-            })),
-            axes: [...pad.axes],
-          };
+          previous.current = snapshot(pad);
         } else previous.current = null;
         last = now;
       }
@@ -84,6 +85,20 @@ export default function Controllers({
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
   }, [device, profile]);
+  useEffect(() => {
+    if (!capture) return;
+    document.body.setAttribute("data-capturing", "");
+    const cancel = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setCapture(null);
+    };
+    window.addEventListener("keydown", cancel, true);
+    return () => {
+      document.body.removeAttribute("data-capturing");
+      window.removeEventListener("keydown", cancel, true);
+    };
+  }, [capture]);
   useEffect(() => {
     if (!midi) return;
     const handler = (event: MIDIMessageEvent) => {
@@ -252,7 +267,15 @@ export default function Controllers({
                       </span>
                       <button
                         className={capture === a ? "capture" : ""}
-                        onClick={() => setCapture(capture === a ? null : a)}
+                        onClick={() => {
+                          // Baseline the pad now so a held button that
+                          // started listening is not captured.
+                          const pad = Array.from(navigator.getGamepads()).find(
+                            (p) => p && device === `pad:${p.index}:${p.id}`,
+                          );
+                          if (pad) previous.current = snapshot(pad);
+                          setCapture(capture === a ? null : a);
+                        }}
                       >
                         {capture === a
                           ? "Listening…"
