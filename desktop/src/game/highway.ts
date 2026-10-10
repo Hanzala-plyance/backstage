@@ -42,6 +42,7 @@ export function createHighway(
   canvas: HTMLCanvasElement,
   notes: Note[],
   beats: Beat[] = [],
+  pixelRatio = 1.5,
 ) {
   const renderer = new THREE.WebGLRenderer({
     canvas,
@@ -49,7 +50,7 @@ export function createHighway(
     alpha: true,
     powerPreference: "low-power",
   });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, pixelRatio));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x07060c, 16, 40);
@@ -383,12 +384,32 @@ export function createHighway(
       spark.color[i] = hexColor;
     }
   };
+  // Narrow multiplayer columns pull the camera back along its sightline, so the
+  // whole board fits while the strikeline keeps its place near the bottom.
+  const baseFov = 47,
+    eye = camera.position.clone(),
+    target = new THREE.Vector3(0, 0, -10),
+    fog = scene.fog as THREE.Fog;
   const resize = () => {
     const w = canvas.clientWidth,
       h = canvas.clientHeight;
     renderer.setSize(w, h, false);
     camera.aspect = w / Math.max(1, h);
+    const half = Math.tan((baseFov * Math.PI) / 360) * camera.aspect;
+    const pull = Math.max(1, Math.tan((21 * Math.PI) / 180) / half);
+    camera.position.copy(eye).sub(target).multiplyScalar(pull).add(target);
+    camera.lookAt(target);
+    camera.far = 90 * pull;
+    fog.near = 16 * pull;
+    fog.far = 40 * pull;
+    camera.clearViewOffset();
     camera.updateProjectionMatrix();
+    if (pull > 1) {
+      // Slide the frame so the strikeline sits near the bottom, as in solo play.
+      camera.updateMatrixWorld();
+      const strike = new THREE.Vector3(0, 0, 0.6).project(camera);
+      camera.setViewOffset(w, h, 0, -((strike.y + 0.8) * h) / 2, w, h);
+    }
   };
   const observer = new ResizeObserver(resize);
   observer.observe(canvas);
@@ -633,7 +654,7 @@ export function createHighway(
         p.instanceMatrix.needsUpdate = true;
         if (p.instanceColor) p.instanceColor.needsUpdate = true;
       }
-      const fov = fx.power ? 50 : 47;
+      const fov = baseFov + (fx.power ? 3 : 0);
       if (Math.abs(camera.fov - fov) > 0.01) {
         camera.fov += (fov - camera.fov) * Math.min(1, dt * 4);
         camera.updateProjectionMatrix();

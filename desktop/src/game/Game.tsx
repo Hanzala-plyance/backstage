@@ -1,83 +1,70 @@
 import { useEffect, useRef, useState } from "react";
-import type { LoadedSong, Profile } from "../types";
+import type { LoadedSong } from "../types";
 import { SongAudio } from "../core/audio";
-import { Judgment } from "../core/judgment";
-import { keyboardLanes, readPad } from "../core/input";
-import { createHighway } from "./highway";
+import { keyboardLanes } from "../core/input";
 import { activateFocused, focusFirst, moveFocus } from "../core/menu";
+import { isPad } from "../core/players";
 import ButtonHints, { type Hint } from "../ButtonHints";
-export type MidiPort = { id: string; name: string; input: MIDIInput };
-const drumNotes: Record<number, number> = {
-  35: 0,
-  36: 0,
-  38: 1,
-  40: 1,
-  42: 2,
-  44: 2,
-  46: 2,
-  45: 3,
-  47: 3,
-  48: 3,
-  50: 3,
-  49: 4,
-  51: 4,
-  52: 4,
-  55: 4,
-  57: 4,
-  59: 4,
-};
+import {
+  PlayerRuntime,
+  drumNotes,
+  type MidiPort,
+  type PlayerInit,
+  type PlayerStats,
+} from "./player";
+export type { MidiPort } from "./player";
 const audioMessages = {
   file: "This song’s audio could not be played. Check the file or choose another song.",
   blocked: "Audio was blocked. Press Start playing again.",
   device: "Audio could not start. Check your output device and try again.",
 };
+const emptyStats = (): PlayerStats => ({
+  score: 0,
+  combo: 0,
+  maxCombo: 0,
+  accuracy: 100,
+  last: "Ready",
+  multiplier: 1,
+  power: 0,
+  powerActive: false,
+});
+const tier = (combo: number) => Math.min(3, Math.floor(combo / 10));
 export default function Game({
   song,
-  device,
-  profile,
+  players,
   midi,
   offset,
   mode,
   onExit,
 }: {
   song: LoadedSong;
-  device: string;
-  profile: Profile;
+  players: PlayerInit[];
   midi?: MidiPort;
   offset: number;
   mode: "tap" | "strum";
   onExit: () => void;
 }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
+  const multi = players.length > 1;
+  const anyPad = players.some((p) => isPad(p.device));
+  const keyboardPlayer = players.findIndex((p) => p.device === "keyboard");
+  const canvases = useRef<(HTMLCanvasElement | null)[]>([]);
+  const runtimes = useRef<PlayerRuntime[]>([]);
   const audio = useRef<SongAudio | null>(null);
-  const highway = useRef<ReturnType<typeof createHighway> | null>(null);
-  const judge = useRef(new Judgment(song.chart.notes, 0.14, song.chart));
   const status = useRef("ready");
+  const missing = useRef<string | null>(null);
   const [phase, setPhase] = useState("ready"),
     [message, setMessage] = useState(""),
-    [stats, setStats] = useState({
-      score: 0,
-      combo: 0,
-      accuracy: 100,
-      last: "Ready",
-      time: 0,
-      multiplier: 1,
-      power: 0,
-      powerActive: false,
-    }),
+    [stats, setStats] = useState<PlayerStats[]>(() => players.map(emptyStats)),
+    [time, setTime] = useState(0),
     [volume, setVolume] = useState(0.65);
   const setState = (value: string) => {
     status.current = value;
     setPhase(value);
   };
-  const keyboard = useRef(new Set<string>()),
-    pulse = useRef([0, 0, 0, 0, 0]);
-  const connected = useRef(true);
   const pause = (reason = "") => {
     if (status.current === "playing") {
       audio.current?.pause();
-      keyboard.current.clear();
-      pulse.current.fill(0);
+      runtimes.current.forEach((r) => r.release());
       setState("paused");
       setMessage(reason);
     }
@@ -86,9 +73,11 @@ export default function Game({
   const start = async () => {
     if (!["ready", "paused"].includes(status.current) || starting.current)
       return;
-    if (!connected.current) {
+    if (missing.current) {
       setMessage(
-        "Reconnect your selected input, or return to Controllers to choose another.",
+        multi
+          ? `Reconnect ${missing.current}’s controller to continue.`
+          : "Reconnect your selected input, or return to Controllers to choose another.",
       );
       return;
     }
@@ -115,9 +104,8 @@ export default function Game({
     if (!music) return;
     music.pause();
     music.element.currentTime = 0;
-    judge.current = new Judgment(song.chart.notes, 0.14, song.chart);
-    highway.current?.reset();
-    keyboard.current.clear();
+    runtimes.current.forEach((r) => r.reset());
+    setStats(players.map(emptyStats));
     setState("ready");
     void start();
   };
@@ -130,43 +118,35 @@ export default function Game({
     if (phase !== "playing") setTimeout(() => focusFirst(), 40);
   }, [phase]);
   useEffect(() => {
-    let visual: ReturnType<typeof createHighway>;
+    const ratio = [1.5, 1.5, 1.25, 1, 1][players.length];
     try {
-      const last = song.chart.notes[song.chart.notes.length - 1];
-      visual = createHighway(
-        canvas.current!,
-        song.chart.notes,
-        judge.current.timeline.beatGrid(
-          (last ? last.time + last.duration : song.duration) + 5,
-        ),
+      runtimes.current = players.map(
+        (p, i) =>
+          new PlayerRuntime(
+            p,
+            canvases.current[i]!,
+            mode,
+            song.duration,
+            ratio,
+          ),
       );
     } catch {
+      runtimes.current.forEach((r) => r.dispose());
+      runtimes.current = [];
       setMessage(
         "Graphics could not start. Enable hardware acceleration or try another computer.",
       );
       setState("error");
       return;
     }
-    highway.current = visual;
+    const all = runtimes.current;
     const music = new SongAudio(song.audioUrl);
     audio.current = music;
-    let seeded = false;
+    const clock = () => music.time - offset / 1000;
+    const keys = all[keyboardPlayer];
+    const drums = all.find((r) => r.device === "midi");
     let frame = 0,
-      lastUI = 0,
-      prev = {
-        lanes: [false, false, false, false, false],
-        strum: false,
-        pause: false,
-        strumUp: false,
-        strumDown: false,
-        starPower: false,
-      };
-    const strike = (held: boolean[]) =>
-      judge.current.strike(
-        music.time - offset / 1000,
-        held,
-        mode === "strum" && song.chart.part !== "Drums",
-      );
+      lastUI = 0;
     const keydown = (event: KeyboardEvent) => {
       if (
         [
@@ -203,31 +183,11 @@ export default function Game({
         moveFocus(event.code === "ArrowUp" ? -1 : 1);
         return;
       }
-      keyboard.current.add(event.code);
-      if (status.current !== "playing" || device !== "keyboard") return;
-      const lanes = keyboardLanes.map((k) => keyboard.current.has(k));
-      const time = music.time - offset / 1000;
-      if (event.code.startsWith("Shift")) judge.current.activate(time);
-      if (event.code === "KeyW") judge.current.update(time, lanes, true);
-      if (mode === "strum" && song.chart.part !== "Drums") {
-        if (["Space", "ArrowUp", "ArrowDown"].includes(event.code))
-          strike(lanes);
-        else if (keyboardLanes.includes(event.code))
-          judge.current.fret(time, lanes);
-      } else if (keyboardLanes.includes(event.code)) strike(lanes);
+      if (status.current === "playing") keys?.keyDown(event.code, clock());
     };
     const keyup = (event: KeyboardEvent) => {
-      keyboard.current.delete(event.code);
-      if (status.current !== "playing" || device !== "keyboard") return;
-      const held = keyboardLanes.map((k) => keyboard.current.has(k));
-      const time = music.time - offset / 1000;
-      if (
-        mode === "strum" &&
-        song.chart.part !== "Drums" &&
-        keyboardLanes.includes(event.code)
-      )
-        judge.current.fret(time, held);
-      else judge.current.update(time, held, keyboard.current.has("KeyW"));
+      if (status.current === "playing") keys?.keyUp(event.code, clock());
+      else keys?.keys.delete(event.code);
     };
     const blur = () => pause("Paused while Backstage was in the background.");
     const hidden = () => {
@@ -235,9 +195,8 @@ export default function Game({
     };
     const midiMessage = (event: MIDIMessageEvent) => {
       const data = event.data;
-      if (!data || status.current !== "playing") return;
-      const command = data[0] & 0xf0;
-      if (command !== 0x90 || data[2] === 0) return;
+      if (!data || !drums || status.current !== "playing") return;
+      if ((data[0] & 0xf0) !== 0x90 || data[2] === 0) return;
       let map = drumNotes;
       try {
         map = {
@@ -248,22 +207,15 @@ export default function Game({
         };
       } catch {}
       const lane = map[data[1]];
-      if (lane === undefined) return;
-      pulse.current[lane] = performance.now() + 80;
-      const lanes = pulse.current.map((t) => t > performance.now());
-      strike(lanes);
+      if (lane !== undefined) drums.midiHit(lane, clock());
     };
-    if (device === "midi" && midi)
-      midi.input.addEventListener("midimessage", midiMessage);
+    if (drums && midi) midi.input.addEventListener("midimessage", midiMessage);
+    const snapshot = () =>
+      all.map((r) => r.stats(status.current === "finished"));
     const ended = () => {
-      judge.current.finish(music.time - offset / 1000);
+      all.forEach((r) => r.judge.finish(clock()));
       setState("finished");
-      setStats((s) => ({
-        ...s,
-        score: judge.current.score,
-        combo: judge.current.maxCombo,
-        accuracy: judge.current.accuracy,
-      }));
+      setStats(snapshot());
     };
     music.element.addEventListener("ended", ended);
     const failed = () => {
@@ -272,94 +224,40 @@ export default function Game({
     };
     music.element.addEventListener("error", failed);
     const tick = (now: number) => {
-      let held = keyboardLanes.map((k) => keyboard.current.has(k));
-      connected.current = true;
-      if (device.startsWith("pad:")) {
-        const index = Number(device.split(":")[1]);
-        const pad = navigator.getGamepads()[index];
-        const valid =
-          pad && device === `pad:${pad.index}:${pad.id}` ? pad : null;
-        const state = readPad(valid, profile);
-        connected.current = state.connected;
-        if (!state.connected) {
-          pause("Controller disconnected. Reconnect it to continue.");
-          seeded = false;
-          prev = {
-            lanes: [false, false, false, false, false],
-            strum: false,
-            pause: false,
-            strumUp: false,
-            strumDown: false,
-            starPower: false,
-          };
-        } else {
-          held = state.lanes;
-          // Ignore buttons already held when the stage opened.
-          if (!seeded) {
-            prev = state;
-            seeded = true;
-          }
-          if (state.pause && !prev.pause) {
-            if (status.current === "playing") pause();
-            else void start();
-          } else if (status.current !== "playing") {
-            if (state.strumUp && !prev.strumUp) moveFocus(-1);
-            else if (state.strumDown && !prev.strumDown) moveFocus(1);
-            else if (state.lanes[0] && !prev.lanes[0]) activateFocused();
-            else if (state.lanes[1] && !prev.lanes[1]) back();
-          }
-          if (status.current === "playing") {
-            if (mode === "strum" && song.chart.part !== "Drums") {
-              if (
-                (state.strumUp && !prev.strumUp) ||
-                (state.strumDown && !prev.strumDown)
-              )
-                strike(held);
-              else if (held.some((v, i) => v !== prev.lanes[i]))
-                judge.current.fret(music.time - offset / 1000, held);
-            } else if (held.some((v, i) => v && !prev.lanes[i])) strike(held);
-            if (state.starPower && !prev.starPower)
-              judge.current.activate(music.time - offset / 1000);
-            judge.current.update(
-              music.time - offset / 1000,
-              held,
-              state.whammy,
-            );
-          }
-          prev = state;
+      const t = clock();
+      let lost: string | null = null,
+        lostMidi = false;
+      for (const r of all) {
+        const edges = r.poll(t, status.current === "playing");
+        if (!edges.connected) lost ??= r.init.label;
+        if (edges.start) {
+          if (status.current === "playing") pause();
+          else void start();
+        } else if (status.current !== "playing") {
+          // Any player's controller can drive the pause and results menus.
+          if (edges.up) moveFocus(-1);
+          else if (edges.down) moveFocus(1);
+          else if (edges.green) activateFocused();
+          else if (edges.red) back();
         }
-      } else if (device === "midi") {
-        connected.current = !!midi && midi.input.state === "connected";
-        held = pulse.current.map((t) => t > now);
-        if (!connected.current)
-          pause("MIDI device disconnected. Reconnect it to continue.");
       }
-      const time = music.time - offset / 1000;
-      if (status.current === "playing") {
-        if (device === "keyboard")
-          judge.current.update(time, held, keyboard.current.has("KeyW"));
-        else judge.current.advance(time);
+      if (drums && !(midi && midi.input.state === "connected")) {
+        lost ??= drums.init.label;
+        lostMidi = true;
       }
-      const j = judge.current;
-      visual.render(time, j.state, held, {
-        power: j.powerActive,
-        lastHit: j.lastHit,
-        lanes: j.lastLanes,
-        tailActive: (index, lane) => j.sustainActive(index, lane),
-        streak: j.combo,
-      });
+      missing.current = lost;
+      if (lost)
+        pause(
+          multi
+            ? `${lost}’s controller disconnected. Reconnect it to continue.`
+            : lostMidi
+              ? "MIDI device disconnected. Reconnect it to continue."
+              : "Controller disconnected. Reconnect it to continue.",
+        );
+      for (const r of all) r.frame(t, status.current === "playing", now);
       if (now - lastUI > 80) {
-        const j = judge.current;
-        setStats({
-          score: j.score,
-          combo: status.current === "finished" ? j.maxCombo : j.combo,
-          accuracy: j.accuracy,
-          last: j.last,
-          time: music.time,
-          multiplier: j.multiplier,
-          power: j.power,
-          powerActive: j.powerActive,
-        });
+        setStats(snapshot());
+        setTime(music.time);
         lastUI = now;
       }
       frame = requestAnimationFrame(tick);
@@ -372,8 +270,8 @@ export default function Game({
     return () => {
       cancelAnimationFrame(frame);
       music.dispose();
-      visual.dispose();
-      highway.current = null;
+      all.forEach((r) => r.dispose());
+      runtimes.current = [];
       window.removeEventListener("keydown", keydown);
       window.removeEventListener("keyup", keyup);
       window.removeEventListener("blur", blur);
@@ -381,104 +279,180 @@ export default function Game({
       midi?.input.removeEventListener("midimessage", midiMessage);
     };
   }, []);
+  const solo = stats[0];
+  const chart = players[0].chart;
+  const duration = audio.current?.duration || song.duration;
+  const clock = (s: number) =>
+    `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+  const meter = (s: PlayerStats) => (
+    <div
+      role="meter"
+      aria-label="Star Power"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(s.power * 100)}
+    >
+      <span style={{ width: `${s.power * 100}%` }} />
+    </div>
+  );
   return (
-    <div className={"game-screen" + (stats.powerActive ? " power-active" : "")}>
+    <div
+      className={
+        "game-screen" +
+        (multi ? " multi players-" + players.length : "") +
+        (!multi && solo.powerActive ? " power-active" : "")
+      }
+    >
       <header className="game-header">
-        <button
-          className="quiet"
-          onClick={() => {
-            pause();
-            onExit();
-          }}
-        >
+        <button className="quiet" onClick={exit}>
           ← Library
         </button>
         <div>
           <strong>{song.title}</strong>
           <small>
-            {song.artist} · {song.chart.part} / {song.chart.level}
+            {song.artist} ·{" "}
+            {multi
+              ? `${players.length} players`
+              : `${chart.part} / ${chart.level}`}
           </small>
         </div>
         <button className="quiet" onClick={() => pause()}>
           Pause ⏸
         </button>
       </header>
-      <div className="game-metrics">
-        <div>
-          <small>SCORE</small>
-          <b>{stats.score.toLocaleString()}</b>
+      {multi ? (
+        <div className="player-grid">
+          {players.map((p, i) => {
+            const s = stats[i];
+            return (
+              <section
+                key={i}
+                className={
+                  "player-lane" + (s.powerActive ? " power-active" : "")
+                }
+                aria-label={p.label}
+              >
+                <canvas
+                  ref={(el) => {
+                    canvases.current[i] = el;
+                  }}
+                  className="highway-mp"
+                />
+                <header className="player-tag">
+                  <b>P{i + 1}</b>
+                  <span>
+                    {p.chart.part} · {p.chart.level}
+                  </span>
+                </header>
+                <div className="player-hud" data-tier={tier(s.combo)}>
+                  <div className="player-score">
+                    <b>{s.score.toLocaleString()}</b>
+                    <small>
+                      {s.combo}× streak · {s.accuracy}%
+                    </small>
+                  </div>
+                  <strong className="player-mult">
+                    {s.multiplier}
+                    <i>×</i>
+                  </strong>
+                  <div
+                    className={
+                      "power-meter mini" + (s.power >= 0.5 ? " charged" : "")
+                    }
+                  >
+                    {meter(s)}
+                  </div>
+                </div>
+                <div className={"hit-label " + s.last.toLowerCase()}>
+                  {phase === "playing" ? s.last : ""}
+                </div>
+              </section>
+            );
+          })}
         </div>
-        <div>
-          <small>STREAK</small>
-          <b>
-            {stats.combo}
-            <em>×</em>
-          </b>
-        </div>
-        <div>
-          <small>ACCURACY</small>
-          <b>
-            {stats.accuracy}
-            <em>%</em>
-          </b>
-        </div>
-      </div>
-      <aside
-        className="amplifier"
-        aria-label="Guitar scoring"
-        data-tier={Math.min(3, Math.floor(stats.combo / 10))}
-      >
-        <span className="eyebrow">MULTIPLIER</span>
-        <strong>
-          {stats.multiplier}
-          <i>×</i>
-        </strong>
-        <div className="streak-pips">
-          {Array.from({ length: 10 }, (_, i) => (
-            <span
-              key={i}
-              className={stats.combo >= 30 || i < stats.combo % 10 ? "lit" : ""}
-            />
-          ))}
-        </div>
-        <span>
-          {stats.combo >= 30
-            ? "MAXIMUM GAIN"
-            : `${10 - (stats.combo % 10)} TO NEXT MULTIPLIER`}
-        </span>
-        <div className={"power-meter" + (stats.power >= 0.5 ? " charged" : "")}>
-          <label>
-            ϟ STAR POWER <b>{Math.round(stats.power * 100)}%</b>
-          </label>
-          <div
-            role="meter"
-            aria-label="Star Power"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.round(stats.power * 100)}
-          >
-            <span style={{ width: `${stats.power * 100}%` }} />
+      ) : (
+        <>
+          <div className="game-metrics">
+            <div>
+              <small>SCORE</small>
+              <b>{solo.score.toLocaleString()}</b>
+            </div>
+            <div>
+              <small>STREAK</small>
+              <b>
+                {solo.combo}
+                <em>×</em>
+              </b>
+            </div>
+            <div>
+              <small>ACCURACY</small>
+              <b>
+                {solo.accuracy}
+                <em>%</em>
+              </b>
+            </div>
           </div>
-          <button
-            disabled={
-              phase !== "playing" || stats.power < 0.5 || stats.powerActive
-            }
-            onClick={() =>
-              judge.current.activate((audio.current?.time ?? 0) - offset / 1000)
-            }
+          <aside
+            className="amplifier"
+            aria-label="Guitar scoring"
+            data-tier={tier(solo.combo)}
           >
-            {stats.powerActive
-              ? "LIVE · DOUBLE SCORE"
-              : stats.power >= 0.5
-                ? "IGNITE · SHIFT"
-                : "HIT GLOWING PHRASES"}
-          </button>
-        </div>
-      </aside>
-      <canvas ref={canvas} className="highway" />
-      <div className={"hit-label " + stats.last.toLowerCase()}>
-        {phase === "playing" ? stats.last : ""}
-      </div>
+            <span className="eyebrow">MULTIPLIER</span>
+            <strong>
+              {solo.multiplier}
+              <i>×</i>
+            </strong>
+            <div className="streak-pips">
+              {Array.from({ length: 10 }, (_, i) => (
+                <span
+                  key={i}
+                  className={
+                    solo.combo >= 30 || i < solo.combo % 10 ? "lit" : ""
+                  }
+                />
+              ))}
+            </div>
+            <span>
+              {solo.combo >= 30
+                ? "MAXIMUM GAIN"
+                : `${10 - (solo.combo % 10)} TO NEXT MULTIPLIER`}
+            </span>
+            <div
+              className={"power-meter" + (solo.power >= 0.5 ? " charged" : "")}
+            >
+              <label>
+                ϟ STAR POWER <b>{Math.round(solo.power * 100)}%</b>
+              </label>
+              {meter(solo)}
+              <button
+                disabled={
+                  phase !== "playing" || solo.power < 0.5 || solo.powerActive
+                }
+                onClick={() =>
+                  runtimes.current[0]?.judge.activate(
+                    (audio.current?.time ?? 0) - offset / 1000,
+                  )
+                }
+              >
+                {solo.powerActive
+                  ? "LIVE · DOUBLE SCORE"
+                  : solo.power >= 0.5
+                    ? "IGNITE · SHIFT"
+                    : "HIT GLOWING PHRASES"}
+              </button>
+            </div>
+          </aside>
+          <canvas
+            ref={(el) => {
+              canvases.current[0] = el;
+            }}
+            className="highway"
+          />
+          <div className={"hit-label " + solo.last.toLowerCase()}>
+            {phase === "playing" ? solo.last : ""}
+          </div>
+        </>
+      )}
       {phase !== "playing" && (
         <div className="game-overlay">
           <div
@@ -491,7 +465,9 @@ export default function Game({
               {phase === "finished"
                 ? "SET COMPLETE"
                 : phase === "ready"
-                  ? "YOUR STAGE IS READY"
+                  ? multi
+                    ? `${players.length} PLAYERS READY`
+                    : "YOUR STAGE IS READY"
                   : phase === "error"
                     ? "STAGE UNAVAILABLE"
                     : "TAKE A BREATH"}
@@ -508,40 +484,68 @@ export default function Game({
             <p>
               {message ||
                 (phase === "ready"
-                  ? mode === "strum" && song.chart.part !== "Drums"
-                    ? "Strum solid gems. White caps are HOPOs; hollow caps are taps. Hold long notes and complete glowing phrases to earn Star Power."
-                    : "Tap the matching controls as notes cross the line."
+                  ? multi
+                    ? "Each player scores on their own highway. Any player’s Start pauses the band."
+                    : mode === "strum" && chart.part !== "Drums"
+                      ? "Strum solid gems. White caps are HOPOs; hollow caps are taps. Hold long notes and complete glowing phrases to earn Star Power."
+                      : "Tap the matching controls as notes cross the line."
                   : "Your song and score are right where you left them.")}
             </p>
-            {device === "keyboard" && (
+            {keyboardPlayer >= 0 && phase !== "finished" && (
               <div className="key-row">
+                {multi && <kbd>P{keyboardPlayer + 1} KEYBOARD</kbd>}
                 {["A", "S", "D", "F", "G"].map((k) => (
                   <kbd key={k}>{k}</kbd>
                 ))}
-                {mode === "strum" && song.chart.part !== "Drums" && (
-                  <>
-                    <kbd>SPACE · STRUM</kbd>
-                    <kbd>SHIFT · STAR POWER</kbd>
-                    <kbd>W · WHAMMY</kbd>
-                  </>
-                )}
+                {mode === "strum" &&
+                  players[keyboardPlayer].chart.part !== "Drums" && (
+                    <>
+                      <kbd>SPACE · STRUM</kbd>
+                      <kbd>SHIFT · STAR POWER</kbd>
+                      <kbd>W · WHAMMY</kbd>
+                    </>
+                  )}
               </div>
             )}
-            {phase === "finished" && (
-              <div className="results">
-                <b>
-                  {stats.score.toLocaleString()}
-                  <small>points</small>
-                </b>
-                <b>
-                  {stats.accuracy}%<small>accuracy</small>
-                </b>
-                <b>
-                  {judge.current.maxCombo}
-                  <small>best streak</small>
-                </b>
-              </div>
-            )}
+            {phase === "finished" &&
+              (multi ? (
+                <div className="band-results">
+                  {players.map((p, i) => (
+                    <div key={i}>
+                      <span>P{i + 1}</span>
+                      <small>
+                        {p.chart.part} · {p.chart.level}
+                      </small>
+                      <b>{stats[i].score.toLocaleString()}</b>
+                      <small>
+                        {stats[i].accuracy}% · best streak {stats[i].maxCombo}
+                      </small>
+                    </div>
+                  ))}
+                  <div className="band-total">
+                    <span>BAND</span>
+                    <b>
+                      {stats
+                        .reduce((sum, s) => sum + s.score, 0)
+                        .toLocaleString()}
+                    </b>
+                  </div>
+                </div>
+              ) : (
+                <div className="results">
+                  <b>
+                    {solo.score.toLocaleString()}
+                    <small>points</small>
+                  </b>
+                  <b>
+                    {solo.accuracy}%<small>accuracy</small>
+                  </b>
+                  <b>
+                    {solo.maxCombo}
+                    <small>best streak</small>
+                  </b>
+                </div>
+              ))}
             <div className="menu-list">
               {phase === "finished" ? (
                 <button className="primary" data-menu-default onClick={restart}>
@@ -566,7 +570,7 @@ export default function Game({
               </button>
             </div>
             <ButtonHints
-              pad={device.startsWith("pad:")}
+              pad={anyPad}
               hints={
                 [
                   { button: "up", label: "Browse" },
@@ -593,19 +597,16 @@ export default function Game({
       )}
       <footer className="game-footer">
         <span>
-          {song.chart.part} · {song.chart.level}
+          {multi
+            ? `${players.length} players`
+            : `${chart.part} · ${chart.level}`}
         </span>
         <ButtonHints
-          pad={device.startsWith("pad:")}
+          pad={anyPad}
           hints={[{ button: "start", label: "Pause", key: "Esc" }]}
         />
         <span>
-          {Math.floor(stats.time / 60)}:
-          {String(Math.floor(stats.time % 60)).padStart(2, "0")} /{" "}
-          {Math.floor((audio.current?.duration || song.duration) / 60)}:
-          {String(
-            Math.floor((audio.current?.duration || song.duration) % 60),
-          ).padStart(2, "0")}
+          {clock(time)} / {clock(duration)}
         </span>
         <label>
           Volume

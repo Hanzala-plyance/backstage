@@ -26,7 +26,11 @@ with this checkout's preparation environment. No Unity editor is required.
 
 ## Play
 
-Start with **Try the practice track → Take the stage → Start playing**. The included
+The app opens on a title screen: press **Start** (or green / Enter), then pick
+**Quickplay** or **Practice** from the main menu. Menus work with a guitar or gamepad:
+strum to move, green to select, red to go back, yellow to switch section, Start to
+pause; the hint bar shows the buttons. Start with **Practice → Take the stage →
+Start playing**. The included
 Soundcheck backing is synthesized locally, works offline, and needs no downloaded
 music. Hold **A S D F G** for green/red/yellow/blue/orange and strum with
 **Space / ↑ / ↓**. **Shift** activates Star Power; **W** whammies held Star Power
@@ -38,8 +42,18 @@ The app reads `~/Music/Backstage/Songs`, overridden by `BACKSTAGE_SONGS_DIR` or
 Settings → Choose folder. It loads `song.ini`, five-lane `notes.mid`, and `song.ogg`,
 `song.opus`, `song.mp3` or `song.wav`. Guitar, bass, rhythm and drums use MIDI note
 ranges 60–64 / 72–76 / 84–88 / 96–100. Tempo changes are preserved. Unsupported or
-invalid folders show a warning. `.chart`, split stems, six-fret, vocals and
-multiplayer are not implemented yet.
+invalid folders show a warning. `.chart`, split stems, six-fret and vocals are not
+implemented yet.
+
+### Local multiplayer
+
+Up to four players can play one song together. In the track dialog choose
+**＋ Add player**; each player gets their own controller (keyboard, a connected
+gamepad/guitar, or MIDI drums), instrument and difficulty, and no controller can be
+used by two players. Each player has their own highway, streak, multiplier, Star Power
+and score; results show every player and the band total. Any player's Start pauses
+the song, and a disconnected controller pauses it and names that player. Player 1 is
+the device selected in Controllers.
 
 ### Five-fret guitar
 

@@ -75,6 +75,11 @@ try {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.waitForLoadState("domcontentloaded");
+  // Opening flow: title screen, then main menu, then the library.
+  await expect(page.locator(".title-screen .press-start")).toBeVisible();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: /Quickplay/ })).toBeFocused();
+  await page.getByRole("button", { name: /Quickplay/ }).click();
   await expect(
     page.getByRole("heading", { name: "Good music. Great company." }),
   ).toBeVisible();
@@ -252,6 +257,73 @@ try {
   await expect(page.locator(".game-dialog")).toContainText(
     "Controller disconnected",
   );
+  // Two-player round: P1 is the selected pad, P2 joins on the keyboard.
+  // Each player's input must score only on their own highway.
+  await page.evaluate(() => {
+    window.__pad = {
+      index: 0,
+      id: "Test generic gamepad",
+      connected: true,
+      mapping: "",
+      buttons: Array.from({ length: 16 }, () => ({
+        pressed: false,
+        value: 0,
+        touched: false,
+      })),
+      axes: [0, 0],
+    };
+  });
+  await page.getByRole("button", { name: "← Library" }).click();
+  await page.getByRole("button", { name: /Try the practice track/ }).click();
+  await page.getByRole("button", { name: /Add player/ }).click();
+  await expect(
+    page.getByRole("button", { name: "Player 2 controller" }),
+  ).toHaveText("Keyboard");
+  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await expect(page.locator(".player-lane")).toHaveCount(2);
+  await page.getByRole("button", { name: /Start playing/ }).click();
+  const scores = () =>
+    page
+      .locator(".player-score b")
+      .evaluateAll((els) =>
+        els.map((e) => Number(e.textContent.replace(/,/g, ""))),
+      );
+  // Soundcheck Easy: note i at 2 + i * 28/48 s on lane i % 5.
+  await page.waitForFunction(
+    () => window.__testAudio.currentTime >= 1.97,
+    {},
+    {
+      timeout: 10000,
+      polling: 10,
+    },
+  );
+  await page.keyboard.down("a");
+  await page.keyboard.press("Space");
+  await page.keyboard.up("a");
+  await expect.poll(scores).toEqual([0, 50]);
+  // P1 strums note 1 (red) on the pad; the remapped green (button 7) is not used.
+  // Pads are polled once per frame, and software-rendered CI frames are slow, so
+  // run the song clock at quarter speed: the hit window widens in real time
+  // while judgment, which follows the song clock, is unchanged.
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.25));
+  await page.waitForFunction(
+    () => window.__testAudio.currentTime >= 2 + 28 / 48 - 0.04,
+    {},
+    { timeout: 10000, polling: 10 },
+  );
+  await page.evaluate(() => (window.__pad.buttons[1].pressed = true));
+  await frames();
+  await page.evaluate(() => (window.__pad.buttons[13].pressed = true));
+  await frames();
+  await page.evaluate(() => {
+    window.__pad.buttons[1].pressed = false;
+    window.__pad.buttons[13].pressed = false;
+  });
+  await expect.poll(scores).toEqual([50, 50]);
+  await page.evaluate(() => (window.__testAudio.playbackRate = 1));
+  await page.screenshot({ path: "/tmp/backstage-desktop-multiplayer.png" });
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "Paused." })).toBeVisible();
   if (process.env.BACKSTAGE_TEST_SERVICE) {
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({
@@ -283,7 +355,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, offline library, real practice audio, keyboard score, pause timing, custom mapping and device disconnect pause.",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause and two-player input routing.",
   );
 } catch (error) {
   if (page && !page.isClosed()) {
