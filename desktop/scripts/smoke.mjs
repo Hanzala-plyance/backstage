@@ -371,7 +371,13 @@ try {
     };
   });
   await page.getByRole("button", { name: "← Library" }).click();
+  // Leaving a game focuses the first song for controller players; let that
+  // settle before pointing at another song.
+  await expect(page.locator(".song-row").first()).toBeFocused();
   const fixtureRow = page.getByRole("button", { name: /Stream fixture/ });
+  // Previews follow real pointer movement, not rows sliding under a resting
+  // cursor, so move the mouse onto the row from elsewhere.
+  await page.mouse.move(1, 1);
   await fixtureRow.hover();
   const fixtureId = await fixtureRow.getAttribute("data-song-id");
   await expect
@@ -389,6 +395,27 @@ try {
   await expect(page.locator(".toast")).toContainText("Removed");
   await stat(path.join(temp, "data", "test-trash", "fixture"));
   await expect(stat(fixtureFolder)).rejects.toThrow();
+  // Finishing a song saves the best result; results show stars and the song
+  // details panel shows the saved best.
+  const renamed = page.getByRole("button", { name: /Renamed Song/ });
+  await renamed.click();
+  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await page.getByRole("button", { name: /Start playing/ }).click();
+  await expect(page.getByRole("heading", { name: "Nice set." })).toBeVisible({
+    timeout: 20000,
+  });
+  await expect(page.locator(".game-dialog .stars").first()).toBeVisible();
+  await expect(page.locator(".game-dialog .new-best").first()).toBeVisible();
+  await page.getByRole("button", { name: "Back to library" }).click();
+  await expect(page.locator(".song-row").first()).toBeFocused();
+  // Previews follow real pointer movement, not rows sliding under a resting
+  // cursor, so move the mouse onto the row from elsewhere.
+  await page.mouse.move(1, 1);
+  await renamed.hover();
+  await expect(page.locator(".song-info h2")).toHaveText("Renamed Song");
+  await expect(page.locator(".song-info .part-best").first()).toContainText(
+    "Easy",
+  );
   if (process.env.BACKSTAGE_TEST_SERVICE) {
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({
@@ -420,7 +447,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming and album covers.",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars and the song details panel.",
   );
 } catch (error) {
   if (page && !page.isClosed()) {

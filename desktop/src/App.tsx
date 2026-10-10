@@ -33,6 +33,8 @@ import {
 } from "./core/players";
 import { MainMenu, TitleScreen, type MenuChoice } from "./Title";
 import { Preview } from "./core/preview";
+import SongInfo, { artUrl, bestStars, type Scores } from "./SongInfo";
+import Stars from "./Stars";
 import type { PlayerInit } from "./game/player";
 import Controllers from "./Controllers";
 import type { MidiPort } from "./game/Game";
@@ -43,8 +45,6 @@ const duration = (seconds: number | null) =>
   seconds
     ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`
     : "—";
-const artUrl = (song: Song) =>
-  song.art ? `backstage://app/art/${song.id}?v=${song.art}` : "";
 function Icon({ name }: { name: string }) {
   return (
     <svg
@@ -104,6 +104,13 @@ export default function App() {
     [pads, setPads] = useState<Gamepad[]>([]),
     [confirmRemove, setConfirmRemove] = useState(false);
   const preview = useRef(new Preview());
+  const [scores, setScores] = useState<Scores>({}),
+    [focusId, setFocusId] = useState<string | null>(null);
+  const loadScores = () =>
+    void window.backstage
+      .scores()
+      .then(setScores)
+      .catch(() => {});
   const selectedRef = useRef<Song | null>(null);
   selectedRef.current = selected;
   const [query, setQuery] = useState(""),
@@ -352,6 +359,7 @@ export default function App() {
       await refresh();
       setSettings(await window.backstage.settings());
     }).then(tidy);
+    loadScores();
   }, []);
   const installed = useRef(new Set<string>()),
     seeded = useRef(false);
@@ -392,6 +400,10 @@ export default function App() {
     const timer = setTimeout(() => setNotice(""), 5000);
     return () => clearTimeout(timer);
   }, [notice]);
+  const focusSong =
+    songs.find((s) => s.id === focusId) ??
+    songs.find((s) => !s.practice) ??
+    songs[0];
   // Installed songs (and installed songs since removed) leave the queue.
   const queued = jobs.filter(
     (j) => !["installed", "missing"].includes(j.library?.status ?? ""),
@@ -431,6 +443,7 @@ export default function App() {
     setSelected(song);
     setConfirmRemove(false);
     preview.current.hover(song);
+    setFocusId(song.id);
     setLineup((l) => fitToSong(l, song));
     const chart =
       song.charts.find((c) => c.part === "Guitar" && c.level === "Easy") ||
@@ -531,6 +544,7 @@ export default function App() {
           onExit={() => {
             returnFocus.current = null;
             setPlaying(null);
+            loadScores();
             setSelected(null);
             void refresh();
             later(() => focusFirst());
@@ -681,69 +695,96 @@ export default function App() {
                 </button>
               </div>
             </div>
-            <div className="song-table">
-              <div className="song-table-head">
-                <span>TRACK / ARTIST</span>
-                <span>INSTRUMENTS</span>
-                <span>TIME</span>
-                <span />
-              </div>
-              {songs
-                .filter((s) =>
-                  (s.title + " " + s.artist)
-                    .toLowerCase()
-                    .includes(filter.toLowerCase()),
-                )
-                .map((song, i) => (
-                  <button
-                    className="song-row"
-                    key={song.id}
-                    data-menu-default={i === 0 ? "" : undefined}
-                    data-song-id={song.id}
-                    onClick={() => choose(song)}
-                    onMouseEnter={() => preview.current.hover(song)}
-                    onFocus={() => preview.current.hover(song)}
-                    onMouseLeave={() => {
-                      if (selectedRef.current?.id !== song.id)
-                        preview.current.leave(song);
-                    }}
-                    onBlur={() =>
-                      setTimeout(() => {
-                        if (
-                          selectedRef.current?.id !== song.id &&
-                          !document.activeElement?.closest(".song-row")
-                        )
+            <div className="library-browse">
+              <div className="song-table">
+                <div className="song-table-head">
+                  <span>TRACK / ARTIST</span>
+                  <span>INSTRUMENTS</span>
+                  <span>TIME</span>
+                  <span />
+                </div>
+                {songs
+                  .filter((s) =>
+                    (s.title + " " + s.artist)
+                      .toLowerCase()
+                      .includes(filter.toLowerCase()),
+                  )
+                  .map((song, i) => (
+                    <button
+                      className="song-row"
+                      key={song.id}
+                      data-menu-default={i === 0 ? "" : undefined}
+                      data-song-id={song.id}
+                      onClick={() => choose(song)}
+                      onMouseMove={(e) => {
+                        // Rows scrolling under a resting cursor (controller
+                        // or key navigation) fire moves with no movement;
+                        // they must not steal the highlight.
+                        if (!e.movementX && !e.movementY) return;
+                        if (preview.current.playing === song.id) return;
+                        preview.current.hover(song);
+                        setFocusId(song.id);
+                      }}
+                      onFocus={() => {
+                        preview.current.hover(song);
+                        setFocusId(song.id);
+                      }}
+                      onMouseLeave={() => {
+                        if (selectedRef.current?.id !== song.id)
                           preview.current.leave(song);
-                      })
-                    }
-                  >
-                    <div className="track-cell">
-                      <span className={"cover cover-" + (i % 4)}>
-                        {song.art ? (
-                          <img src={artUrl(song)} alt="" loading="lazy" />
-                        ) : song.practice ? (
-                          "✦"
-                        ) : (
-                          song.title.charAt(0).toUpperCase()
+                      }}
+                      onBlur={() =>
+                        setTimeout(() => {
+                          if (
+                            selectedRef.current?.id !== song.id &&
+                            !document.activeElement?.closest(".song-row")
+                          )
+                            preview.current.leave(song);
+                        })
+                      }
+                    >
+                      <div className="track-cell">
+                        <span className={"cover cover-" + (i % 4)}>
+                          {song.art ? (
+                            <img src={artUrl(song)} alt="" loading="lazy" />
+                          ) : song.practice ? (
+                            "✦"
+                          ) : (
+                            song.title.charAt(0).toUpperCase()
+                          )}
+                        </span>
+                        <div>
+                          <strong>
+                            {song.title}
+                            {song.practice && <em>Practice</em>}
+                          </strong>
+                          <small>{song.artist}</small>
+                          {bestStars(song, scores) >= 0 && (
+                            <Stars count={bestStars(song, scores)} small />
+                          )}
+                        </div>
+                      </div>
+                      <span className="instrument-tags">
+                        {[...new Set(song.charts.map((c) => c.part))].map(
+                          (p) => (
+                            <small key={p}>{p}</small>
+                          ),
                         )}
                       </span>
-                      <div>
-                        <strong>
-                          {song.title}
-                          {song.practice && <em>Practice</em>}
-                        </strong>
-                        <small>{song.artist}</small>
-                      </div>
-                    </div>
-                    <span className="instrument-tags">
-                      {[...new Set(song.charts.map((c) => c.part))].map((p) => (
-                        <small key={p}>{p}</small>
-                      ))}
-                    </span>
-                    <span className="duration">{duration(song.duration)}</span>
-                    <span className="row-play">▶</span>
-                  </button>
-                ))}
+                      <span className="duration">
+                        {duration(song.duration)}
+                      </span>
+                      <span className="row-play">▶</span>
+                    </button>
+                  ))}
+              </div>
+              {focusSong && (
+                <SongInfo
+                  song={focusSong}
+                  scores={scores}
+                  length={duration(focusSong.duration)}
+                />
+              )}
             </div>
             {songs.length === 1 && (
               <div className="empty-library">

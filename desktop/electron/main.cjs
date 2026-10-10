@@ -19,6 +19,7 @@ const { pathToFileURL } = require("node:url");
 const { Library } = require("./library.cjs");
 const { PreparationService, validVideo } = require("./service.cjs");
 const covers = require("./covers.cjs");
+const { Scores } = require("./scores.cjs");
 app.setName("Backstage");
 if (process.env.BACKSTAGE_TEST_DATA)
   app.setPath("userData", process.env.BACKSTAGE_TEST_DATA);
@@ -426,6 +427,9 @@ app.whenReady().then(async () => {
     await library.scan();
     return true;
   });
+  const scores = new Scores(path.join(app.getPath("userData"), "scores.json"));
+  handle("scores", () => scores.all());
+  handle("saveScore", (result) => scores.record(result));
   handle("removeSong", (id) =>
     library.remove(text(id, 32), async (dir) => {
       // Test runs keep removed songs out of the real Trash.

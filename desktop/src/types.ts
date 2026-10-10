@@ -33,8 +33,17 @@ export type Song = {
   duration: number;
   preview?: number;
   art?: number;
+  details?: { album: string; year: string; genre: string; charter: string };
+  intensity?: Partial<Record<Part, number>>;
   charts: { part: Part; level: Level; count: number }[];
   practice?: boolean;
+};
+export type BestScore = {
+  score: number;
+  stars: number;
+  accuracy: number;
+  maxCombo: number;
+  date: string;
 };
 export type LoadedSong = Song & { chart: Chart; audioUrl?: string };
 export type SearchResult = {
@@ -107,6 +116,16 @@ export interface Bridge {
   removeSong(id: string): Promise<{ title: string }>;
   tidyLibrary(): Promise<{ renamed: number; covers: number }>;
   findCover(id: string): Promise<boolean>;
+  scores(): Promise<Record<string, BestScore>>;
+  saveScore(result: {
+    id: string;
+    part: Part;
+    level: Level;
+    score: number;
+    stars: number;
+    accuracy: number;
+    maxCombo: number;
+  }): Promise<{ best: boolean; previous: BestScore | null }>;
 }
 declare global {
   interface Window {
