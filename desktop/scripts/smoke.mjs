@@ -15,7 +15,7 @@ try {
   const track = midi.addTrack();
   track.name = "PART GUITAR";
   for (let i = 0; i < 5; i++)
-    track.addNote({ midi: 60 + i, time: 0.6 + i * 0.5, duration: 0.05 });
+    track.addNote({ midi: 60 + i, time: i === 4 ? 4 : 0.6 + i * 0.5, duration: 0.05 });
   track.addNote({ midi: 116, time: 0.5, duration: 0.75 });
   track.addNote({ midi: 116, time: 1.5, duration: 0.75 });
   await writeFile(path.join(fixtureFolder, "notes.mid"), midi.toArray());
@@ -23,7 +23,7 @@ try {
     path.join(fixtureFolder, "song.ini"),
     "[song]\nname=Stream fixture\nartist=Automated test",
   );
-  const wav = Buffer.alloc(44 + 22050 * 4 * 2);
+  const wav = Buffer.alloc(44 + 22050 * 6 * 2);
   wav.write("RIFF");
   wav.writeUInt32LE(wav.length - 8, 4);
   wav.write("WAVEfmt ", 8);
@@ -36,7 +36,7 @@ try {
   wav.writeUInt16LE(16, 34);
   wav.write("data", 36);
   wav.writeUInt32LE(wav.length - 44, 40);
-  for (let i = 0; i < 22050 * 4; i++)
+  for (let i = 0; i < 22050 * 6; i++)
     wav.writeInt16LE(
       Math.round(Math.sin((i / 22050) * 440 * Math.PI * 2) * 4000),
       44 + i * 2,
@@ -105,7 +105,7 @@ try {
   await page.waitForFunction(
     () => window.__testAudio?.currentTime >= 1.97,
     {},
-    { timeout: 10000 },
+    { timeout: 10000, polling: 10 },
   );
   await page.keyboard.down("a");
   await page.keyboard.press("Space");
@@ -138,8 +138,8 @@ try {
   for (let i = 0; i < 5; i++) {
     await page.waitForFunction(
       (target) => window.__testAudio.currentTime >= target,
-      0.58 + i * 0.5,
-      { timeout: 10000 },
+      i === 4 ? 3.92 : 0.52 + i * 0.5,
+      { timeout: 10000, polling: 10 },
     );
     await page.keyboard.down(["a", "s", "d", "f", "g"][i]);
     await page.keyboard.press("Space");
