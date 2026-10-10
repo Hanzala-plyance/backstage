@@ -2872,3 +2872,62 @@ kbd {
     animation: none;
   }
 }
+
+/* ── Song removal ── */
+.remove-link {
+  display: block;
+  margin: 14px auto 0;
+  background: none;
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: #8f89a2;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.remove-link:hover {
+  color: #ff8a9a;
+}
+.remove-confirm {
+  margin-top: 22px;
+  padding: 20px;
+  background: #2a0f1a;
+  box-shadow: inset 0 0 0 1px #ff2e4d66;
+  clip-path: var(--cut-sm);
+}
+.remove-confirm strong {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 18px;
+  text-transform: uppercase;
+}
+.remove-confirm p {
+  font-size: 12px;
+  color: #d6c3cb;
+  margin-top: 8px;
+}
+.remove-confirm .menu-list button {
+  width: 100%;
+}
+.danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 22px;
+  background: #ff2e4d;
+  color: #fff;
+  clip-path: var(--cut-sm);
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+}
+.danger:hover {
+  background: #ff5068;
+}
+[data-nav] .danger:focus,
+.danger:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -5px;
+}

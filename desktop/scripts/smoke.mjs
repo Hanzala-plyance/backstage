@@ -1,6 +1,6 @@
 delete process.env.ELECTRON_RUN_AS_NODE;
 import { _electron as electron, expect } from "@playwright/test";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, writeFile, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import midiPackage from "@tonejs/midi";
@@ -300,20 +300,22 @@ try {
   await page.keyboard.down("a");
   await page.keyboard.press("Space");
   await page.keyboard.up("a");
+  // Pads are polled once per frame and software-rendered CI frames can take
+  // longer than a hit window. Slow the song clock now (judgment follows it, so
+  // rules are unchanged) so that waiting for scores and frames can't carry the
+  // song past P1's note.
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.1));
   await expect.poll(scores).toEqual([0, 50]);
-  // P1 strums note 1 (red) on the pad; the remapped green (button 7) is not used.
-  // Pads are polled once per frame, and software-rendered CI frames are slow, so
-  // run the song clock at quarter speed: the hit window widens in real time
-  // while judgment, which follows the song clock, is unchanged.
-  await page.evaluate(() => (window.__testAudio.playbackRate = 0.25));
+  // P1 frets red and strums at once, like a player, just before note 1.
   await page.waitForFunction(
-    () => window.__testAudio.currentTime >= 2 + 28 / 48 - 0.04,
+    () => window.__testAudio.currentTime >= 2 + 28 / 48 - 0.05,
     {},
-    { timeout: 10000, polling: 10 },
+    { timeout: 20000, polling: 10 },
   );
-  await page.evaluate(() => (window.__pad.buttons[1].pressed = true));
-  await frames();
-  await page.evaluate(() => (window.__pad.buttons[13].pressed = true));
+  await page.evaluate(() => {
+    window.__pad.buttons[1].pressed = true;
+    window.__pad.buttons[13].pressed = true;
+  });
   await frames();
   await page.evaluate(() => {
     window.__pad.buttons[1].pressed = false;
@@ -324,6 +326,35 @@ try {
   await page.screenshot({ path: "/tmp/backstage-desktop-multiplayer.png" });
   await page.keyboard.press("Escape");
   await expect(page.getByRole("heading", { name: "Paused." })).toBeVisible();
+  // Library: hovering a song previews its own audio; removal needs confirming
+  // and moves the folder out of the library (test trash, not the OS Trash).
+  await page.evaluate(() => {
+    window.__previews = [];
+    const play = HTMLMediaElement.prototype.play;
+    HTMLMediaElement.prototype.play = function () {
+      window.__previews.push(this.src);
+      return play.call(this);
+    };
+  });
+  await page.getByRole("button", { name: "← Library" }).click();
+  const fixtureRow = page.getByRole("button", { name: /Stream fixture/ });
+  await fixtureRow.hover();
+  const fixtureId = await fixtureRow.getAttribute("data-song-id");
+  await expect
+    .poll(() => page.evaluate(() => window.__previews))
+    .toContain(`backstage://app/audio/${fixtureId}`);
+  await fixtureRow.focus();
+  await page.keyboard.press("Delete");
+  await expect(page.locator(".remove-confirm")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Keep it" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".remove-confirm")).toHaveCount(0);
+  await page.getByRole("button", { name: "Remove from library" }).click();
+  await page.getByRole("button", { name: "Remove song" }).click();
+  await expect(fixtureRow).toHaveCount(0);
+  await expect(page.locator(".toast")).toContainText("Removed");
+  await stat(path.join(temp, "data", "test-trash", "fixture"));
+  await expect(stat(fixtureFolder)).rejects.toThrow();
   if (process.env.BACKSTAGE_TEST_SERVICE) {
     await app.evaluate(({ dialog }) => {
       dialog.showMessageBox = async () => ({
@@ -355,7 +386,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause and two-player input routing.",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview and confirmed song removal.",
   );
 } catch (error) {
   if (page && !page.isClosed()) {

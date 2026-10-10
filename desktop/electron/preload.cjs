@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld(
       "openPreparation",
       "openChart",
       "showSongs",
+      "removeSong",
     ].map((name) => [name, invoke(name)]),
   ),
 );

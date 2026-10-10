@@ -45,6 +45,15 @@ ranges 60–64 / 72–76 / 84–88 / 96–100. Tempo changes are preserved. Unsu
 invalid folders show a warning. `.chart`, split stems, six-fret and vocals are not
 implemented yet.
 
+### Library
+
+Hover or move onto a song (mouse, arrow keys or strum) to hear a short looping
+preview, starting at the song's `preview_start_time` when it has one. To remove a
+song, open it and choose **Remove from library**, or press **blue** / **Delete** on a
+song in the list, then confirm. The song folder moves to the Trash, so it can be
+restored; the practice track can't be removed. Songs leave the Preparation queue once
+they are installed in the library.
+
 ### Local multiplayer
 
 Up to four players can play one song together. In the track dialog choose

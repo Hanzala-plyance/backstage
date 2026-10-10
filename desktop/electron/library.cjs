@@ -23,6 +23,7 @@ const practice = {
   title: "Soundcheck",
   artist: "Backstage Sessions",
   duration: 32,
+  preview: 2,
   practice: true,
   charts: [
     { part: "Guitar", level: "Easy", count: 48 },
@@ -112,18 +113,25 @@ class Library {
                 c.notes[c.notes.length - 1].duration,
             ),
           );
+          // Preview from song.ini preview_start_time (ms), else a third in.
+          const authored = Number(info.preview_start_time) / 1000;
+          const preview =
+            Number.isFinite(authored) && authored > 0 && authored < duration
+              ? authored
+              : Math.max(0, duration / 3);
           const song = {
             id,
             title: info.name || path.basename(dir),
             artist: info.artist || "Unknown artist",
             duration,
+            preview,
             charts: charts.map((c) => ({
               part: c.part,
               level: c.level,
               count: c.notes.length,
             })),
           };
-          entries.set(id, { song, charts, audio: audio.file });
+          entries.set(id, { song, charts, audio: audio.file, dir });
           songs.push(song);
         } catch (error) {
           warnings.push(path.basename(dir) + ": " + error.message);
@@ -152,6 +160,23 @@ class Library {
     );
     if (!chart) throw Error("Choose an available track.");
     return { ...entry.song, chart, audioUrl: `backstage://app/audio/${id}` };
+  }
+  /** Moves a scanned song's folder out of the library via `trash`. Only a real
+   * directory strictly inside the real Songs root can be removed. */
+  async remove(id, trash) {
+    if (id === "practice") throw Error("The practice track can’t be removed.");
+    const entry = this.entries.get(id);
+    if (!entry) throw Error("Song unavailable. Refresh your library.");
+    const root = await fs.realpath(this.root);
+    const stat = await fs.lstat(entry.dir);
+    if (!stat.isDirectory() || stat.isSymbolicLink())
+      throw Error("Song folder changed. Refresh your library.");
+    const dir = await fs.realpath(entry.dir);
+    if (dir === root || !dir.startsWith(root + path.sep))
+      throw Error("Song is outside the library.");
+    await trash(dir);
+    this.entries.delete(id);
+    return { title: entry.song.title };
   }
   async audio(id) {
     const entry = this.entries.get(id);

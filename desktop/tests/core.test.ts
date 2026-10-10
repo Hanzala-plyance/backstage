@@ -1,7 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
-import { mkdtemp, mkdir, writeFile, symlink, rm } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  writeFile,
+  symlink,
+  rm,
+  realpath,
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Judgment } from "../src/core/judgment";
@@ -114,6 +121,64 @@ test("library loads valid MIDI, rejects linked files and does not expose paths i
     assert.equal(second.songs.length, 1);
     assert.equal(second.warnings.length, 1);
     assert.throws(() => library.load(id, "Guitar", "Expert"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test("removing a song trashes only its scanned folder inside the library", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "backstage-remove-"));
+  try {
+    const make = async (name: string, extra = "") => {
+      const dir = path.join(root, name);
+      await mkdir(dir);
+      await writeFile(
+        path.join(dir, "song.ini"),
+        `[song]\nname = ${name}\nartist = Test${extra}`,
+      );
+      await writeFile(path.join(dir, "notes.mid"), fixture());
+      await writeFile(path.join(dir, "song.ogg"), "fixture");
+      return dir;
+    };
+    const keep = await make("Keep", "\npreview_start_time = 300");
+    const gone = await make("Gone");
+    const goneReal = await realpath(gone);
+    const library = new Library(root);
+    const { songs } = await library.scan();
+    const byTitle = (t: string) => songs.find((x: any) => x.title === t);
+    assert.equal(
+      byTitle("Keep").preview,
+      0.3,
+      "authored preview start is used",
+    );
+    assert.ok(
+      Math.abs(byTitle("Gone").preview - byTitle("Gone").duration / 3) < 1e-9,
+      "songs without one preview a third of the way in",
+    );
+    const trashed: string[] = [];
+    const trash = async (dir: string) => {
+      trashed.push(dir);
+      await rm(dir, { recursive: true });
+    };
+    await assert.rejects(library.remove("practice", trash), /practice/);
+    // A trash failure leaves the song in the library.
+    await assert.rejects(
+      library.remove(byTitle("Gone").id, async () => {
+        throw Error("no trash");
+      }),
+      /no trash/,
+    );
+    assert.equal(
+      (await library.remove(byTitle("Gone").id, trash)).title,
+      "Gone",
+    );
+    assert.deepEqual(trashed, [goneReal]);
+    assert.throws(() => library.load(byTitle("Gone").id, "Guitar", "Expert"));
+    // A folder swapped for a link after scanning is refused.
+    await rm(keep, { recursive: true });
+    await mkdir(path.join(root, "elsewhere"));
+    await symlink(path.join(root, "elsewhere"), keep);
+    await assert.rejects(library.remove(byTitle("Keep").id, trash), /changed/);
+    assert.equal(trashed.length, 1);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
