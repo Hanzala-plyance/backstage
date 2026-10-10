@@ -71,10 +71,29 @@ class LibraryTests(unittest.TestCase):
         (self.folder / 'video.mp4').symlink_to(self.root / 'outside')
         with self.assertRaises(ValueError): library.publish(self.job)
         (self.folder / 'video.mp4').unlink()
-        (self.songs / self.job.name).mkdir(parents=True)
-        (self.songs / self.job.name / 'keep.txt').write_text('existing')
-        with self.assertRaises(ValueError): library.publish(self.job)
-        self.assertEqual((self.songs / self.job.name / 'keep.txt').read_text(), 'existing')
+        # An unrelated folder with the same readable name is never touched.
+        (self.songs / 'Artist - Song').mkdir(parents=True)
+        (self.songs / 'Artist - Song' / 'keep.txt').write_text('existing')
+        receipt = library.publish(self.job)
+        self.assertEqual(Path(receipt['path']).name, 'Artist - Song (2)')
+        self.assertEqual(sorted(p.name for p in (self.songs / 'Artist - Song').iterdir()), ['keep.txt'])
+
+    def test_installs_under_a_readable_name_and_survives_renaming(self):
+        result = json.loads((self.job / 'result.json').read_text())
+        result['metadata'] = {'title': 'Artist - Song (Official Video)', 'artist': 'Some Channel'}
+        (self.job / 'result.json').write_text(json.dumps(result))
+        installed = Path(library.publish(self.job)['path'])
+        self.assertEqual(installed.name, 'Artist - Song')
+        # Renamed (or legacy job-ID) folders stay installed, never duplicated.
+        renamed = installed.with_name('My copy')
+        installed.rename(renamed)
+        self.assertEqual(library.install_status(self.job)['path'], str(renamed))
+        self.assertEqual(library.install_status(self.job)['status'], 'installed')
+        self.assertEqual(library.publish(self.job)['path'], str(renamed))
+        self.assertEqual([p.name for p in self.songs.iterdir()], ['My copy'])
+        legacy = library.songs_root() / self.job.name
+        renamed.rename(legacy)
+        self.assertEqual(library.publish(self.job)['path'], str(legacy))
 
     def test_conversion_success_with_install_failure_keeps_export_retryable(self):
         with patch.object(server, 'OUTPUT', self.output), patch.object(server, 'jobs', {}), \

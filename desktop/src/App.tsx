@@ -43,6 +43,8 @@ const duration = (seconds: number | null) =>
   seconds
     ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, "0")}`
     : "—";
+const artUrl = (song: Song) =>
+  song.art ? `backstage://app/art/${song.id}?v=${song.art}` : "";
 function Icon({ name }: { name: string }) {
   return (
     <svg
@@ -312,6 +314,33 @@ export default function App() {
       setBusy("");
     }
   }
+  // Readable folder names and online covers, in the background. Starting a
+  // song waits for it so a folder is never renamed under a loading song.
+  const tidying = useRef<Promise<unknown>>(Promise.resolve());
+  function tidy() {
+    tidying.current = tidying.current
+      .then(() => window.backstage.tidyLibrary())
+      .then(async (result) => {
+        if (!result.renamed && !result.covers) return;
+        await refresh();
+        if (result.covers)
+          setNotice(
+            `Found ${result.covers} album cover${result.covers === 1 ? "" : "s"}`,
+          );
+      })
+      .catch(() => {});
+  }
+  async function findCover() {
+    if (!selected) return;
+    const ok = await action("cover", () =>
+      window.backstage.findCover(selected.id),
+    );
+    if (!ok) return;
+    const data = await window.backstage.library();
+    setSongs(data.songs);
+    setSelected(data.songs.find((s) => s.id === selected.id) ?? null);
+    setNotice("Album cover updated");
+  }
   async function refresh() {
     const data = await window.backstage.library();
     setSongs(data.songs);
@@ -322,7 +351,7 @@ export default function App() {
     void action("library", async () => {
       await refresh();
       setSettings(await window.backstage.settings());
-    });
+    }).then(tidy);
   }, []);
   const installed = useRef(new Set<string>()),
     seeded = useRef(false);
@@ -341,7 +370,7 @@ export default function App() {
         );
         fresh.forEach((j) => installed.current.add(j.id));
         if (fresh.length && seeded.current) {
-          void refresh();
+          void refresh().then(tidy);
           setNotice(
             fresh.length === 1
               ? `“${fresh[0].title}” is ready in your library`
@@ -444,6 +473,7 @@ export default function App() {
     const all = lineupAll();
     const problem = lineup.length ? lineupProblem(all, available) : null;
     if (problem) return setError(problem);
+    await tidying.current;
     const loaded = await action("play", () =>
       Promise.all(
         all.map((p) => window.backstage.loadSong(selected.id, p.part, p.level)),
@@ -689,9 +719,13 @@ export default function App() {
                   >
                     <div className="track-cell">
                       <span className={"cover cover-" + (i % 4)}>
-                        {song.practice
-                          ? "✦"
-                          : song.title.charAt(0).toUpperCase()}
+                        {song.art ? (
+                          <img src={artUrl(song)} alt="" loading="lazy" />
+                        ) : song.practice ? (
+                          "✦"
+                        ) : (
+                          song.title.charAt(0).toUpperCase()
+                        )}
                       </span>
                       <div>
                         <strong>
@@ -1147,7 +1181,11 @@ export default function App() {
             >
               ×
             </button>
-            <div className="dialog-record">♫</div>
+            {selected.art ? (
+              <img className="dialog-cover" src={artUrl(selected)} alt="" />
+            ) : (
+              <div className="dialog-record">♫</div>
+            )}
             <span className="eyebrow">UP NEXT</span>
             <h2>{selected.title}</h2>
             <p>{selected.artist}</p>
@@ -1320,12 +1358,21 @@ export default function App() {
                   {busy === "play" ? "Getting ready…" : "Take the stage"} →
                 </button>
                 {!selected.practice && (
-                  <button
-                    className="remove-link"
-                    onClick={() => setConfirmRemove(true)}
-                  >
-                    Remove from library
-                  </button>
+                  <div className="dialog-links">
+                    <button
+                      className="remove-link"
+                      disabled={!!busy}
+                      onClick={() => void findCover()}
+                    >
+                      {busy === "cover" ? "Searching…" : "Find cover online"}
+                    </button>
+                    <button
+                      className="remove-link"
+                      onClick={() => setConfirmRemove(true)}
+                    >
+                      Remove from library
+                    </button>
+                  </div>
                 )}
               </>
             )}

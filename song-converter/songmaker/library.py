@@ -8,6 +8,8 @@ import re
 import shutil
 import tempfile
 
+from .names import clean_song, folder_name
+
 _publish_lock = Lock()
 _FILES = {'song.ini', 'notes.mid', 'notes.chart', 'song.ogg', 'song.opus',
           'song.mp3', 'song.wav', 'album.png', 'album.jpg', 'video.mp4', 'lyrics.lrc'}
@@ -46,6 +48,31 @@ def validate_song(folder: Path) -> None:
         raise ValueError('The export needs notes.mid or notes.chart.')
 
 
+def installed_folder(root: Path, job_id: str) -> Path | None:
+    """Find a job's installed song by the ID recorded inside it, so folders
+    renamed to readable names (or legacy job-ID names) stay recognised."""
+    if not root.is_dir():
+        return None
+    for folder in root.iterdir():
+        marker = folder / '.backstage.json'
+        if folder.is_symlink() or not folder.is_dir() or not marker.is_file():
+            continue
+        try:
+            if json.loads(marker.read_text(encoding='utf-8')).get('job_id') == job_id:
+                return folder
+        except (OSError, ValueError):
+            continue
+    return None
+
+
+def _free_folder(root: Path, title: str, artist: str) -> Path:
+    base = folder_name(*clean_song(title, artist))
+    destination, n = root / base, 2
+    while destination.exists() or destination.is_symlink():
+        destination, n = root / f'{base} ({n})', n + 1
+    return destination
+
+
 def publish(job_dir: Path) -> dict:
     """Install once per job; retries return the same complete snapshot.
 
@@ -64,18 +91,15 @@ def publish(job_dir: Path) -> dict:
     if any(path.is_symlink() for path in source.iterdir()):
         raise ValueError('Song exports cannot contain symbolic links.')
     root = songs_root()
-    destination = root / job_dir.name
-    receipt = {'status': 'installed', 'path': str(destination),
-               'message': 'Installed in Backstage. Use Scan Songs in the game to refresh.',
-               'snapshot': 'Immutable conversion snapshot; later editor changes affect the export only.'}
     with _publish_lock:
         root.mkdir(parents=True, exist_ok=True)
-        marker = destination / '.backstage.json'
-        if destination.exists():
-            if destination.is_symlink() or not marker.is_file() or json.loads(marker.read_text()).get('job_id') != job_dir.name:
-                raise ValueError('The destination is occupied by an unrelated song. Nothing was overwritten.')
+        destination = installed_folder(root, job_dir.name)
+        if destination:
             validate_song(destination)
         else:
+            # Readable "Artist - Title"; an existing folder is never reused.
+            destination = _free_folder(root, result['metadata'].get('title', ''),
+                                       result['metadata'].get('artist', ''))
             staging_root = root.parent / '.backstage-imports'
             staging_root.mkdir(parents=True, exist_ok=True)
             staging = Path(tempfile.mkdtemp(prefix=job_dir.name + '-', dir=staging_root))
@@ -93,6 +117,9 @@ def publish(job_dir: Path) -> dict:
             finally:
                 if staging.exists():
                     shutil.rmtree(staging)
+        receipt = {'status': 'installed', 'path': str(destination),
+                   'message': 'Installed in Backstage. Use Scan Songs in the game to refresh.',
+                   'snapshot': 'Immutable conversion snapshot; later editor changes affect the export only.'}
         temporary = job_dir / 'library.tmp.json'
         temporary.write_text(json.dumps(receipt), encoding='utf-8')
         temporary.replace(job_dir / 'library.json')
@@ -105,5 +132,8 @@ def install_status(job_dir: Path) -> dict:
         return {'status': 'not-installed', 'message': 'Conversion export has not been installed in Backstage.'}
     result = json.loads(path.read_text(encoding='utf-8'))
     if result.get('status') == 'installed' and not Path(result['path']).is_dir():
+        moved = installed_folder(songs_root(), job_dir.name)
+        if moved:
+            return {**result, 'path': str(moved)}
         return {'status': 'missing', 'message': 'The installed song folder is missing. Retry installation.'}
     return result
