@@ -300,20 +300,22 @@ try {
   await page.keyboard.down("a");
   await page.keyboard.press("Space");
   await page.keyboard.up("a");
+  // Pads are polled once per frame and software-rendered CI frames can take
+  // longer than a hit window. Slow the song clock now (judgment follows it, so
+  // rules are unchanged) so that waiting for scores and frames can't carry the
+  // song past P1's note.
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.1));
   await expect.poll(scores).toEqual([0, 50]);
-  // P1 strums note 1 (red) on the pad; the remapped green (button 7) is not used.
-  // Pads are polled once per frame, and software-rendered CI frames are slow, so
-  // run the song clock at quarter speed: the hit window widens in real time
-  // while judgment, which follows the song clock, is unchanged.
-  await page.evaluate(() => (window.__testAudio.playbackRate = 0.25));
+  // P1 frets red and strums at once, like a player, just before note 1.
   await page.waitForFunction(
-    () => window.__testAudio.currentTime >= 2 + 28 / 48 - 0.04,
+    () => window.__testAudio.currentTime >= 2 + 28 / 48 - 0.05,
     {},
-    { timeout: 10000, polling: 10 },
+    { timeout: 20000, polling: 10 },
   );
-  await page.evaluate(() => (window.__pad.buttons[1].pressed = true));
-  await frames();
-  await page.evaluate(() => (window.__pad.buttons[13].pressed = true));
+  await page.evaluate(() => {
+    window.__pad.buttons[1].pressed = true;
+    window.__pad.buttons[13].pressed = true;
+  });
   await frames();
   await page.evaluate(() => {
     window.__pad.buttons[1].pressed = false;
