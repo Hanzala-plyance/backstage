@@ -210,17 +210,27 @@ try {
   });
   await page.getByRole("button", { name: "Song library", exact: true }).click();
   // Guitar menu navigation: strum to a song, green opens it, red closes it.
+  // Hold each press across rendered frames, as a real button would be held;
+  // menus poll pads once per frame and slow software rendering stretches frames.
+  const frames = () =>
+    page.evaluate(
+      () =>
+        new Promise((done) =>
+          requestAnimationFrame(() => requestAnimationFrame(done)),
+        ),
+    );
   const tap = async (button) => {
     await page.evaluate(
       (b) => (window.__pad.buttons[b].pressed = true),
       button,
     );
-    await page.waitForTimeout(100);
+    await frames();
+    await page.waitForTimeout(50);
     await page.evaluate(
       (b) => (window.__pad.buttons[b].pressed = false),
       button,
     );
-    await page.waitForTimeout(100);
+    await frames();
   };
   await tap(13);
   await expect(page.locator(".song-row").first()).toBeFocused();

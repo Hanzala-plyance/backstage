@@ -492,14 +492,18 @@ export default function Game({
                 ? "SET COMPLETE"
                 : phase === "ready"
                   ? "YOUR STAGE IS READY"
-                  : "TAKE A BREATH"}
+                  : phase === "error"
+                    ? "STAGE UNAVAILABLE"
+                    : "TAKE A BREATH"}
             </span>
             <h1>
               {phase === "finished"
                 ? "Nice set."
                 : phase === "ready"
                   ? song.title
-                  : "Paused."}
+                  : phase === "error"
+                    ? "Can’t start."
+                    : "Paused."}
             </h1>
             <p>
               {message ||

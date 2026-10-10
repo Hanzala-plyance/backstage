@@ -1907,12 +1907,6 @@ select {
     conic-gradient(var(--hot), var(--amp), var(--gold), var(--volt), var(--hot));
   color: transparent;
   box-shadow: 0 0 30px #ff2e8866;
-  animation: spin 6s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(1turn);
-  }
 }
 .song-dialog h2 {
   font-size: 30px;
@@ -2283,8 +2277,7 @@ select {
   accent-color: var(--hot);
 }
 @media (prefers-reduced-motion: reduce) {
-  .game-screen::after,
-  .dialog-record {
+  .game-screen::after {
     animation: none;
   }
 }
