@@ -1,8 +1,8 @@
 {
   "version": "0.2.0-dev",
   "status": "blocked",
-  "tested_commit": "01396e866c456b65cc08e3817c9e22dc7350ec35",
-  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 3c185da86855aa8e0ea3ffa77bf23f4cf92bbea263acebd59d79bea5d53f3a70",
+  "tested_commit": "f2b629b87a07908050ef293dd352424e1ac0f49d",
+  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 ec367e450281ff0c37165d3eb8b3e8a72e573661e58c42649547eb9a6610163b",
   "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md",
   "reviewer": "",
   "rollback": "Keep the current main release; do not deploy this candidate before acceptance.",
@@ -25,7 +25,7 @@
     },
     "runtime_build": {
       "status": "passed",
-      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified title screen and main menu, audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation, disconnect pause, two-player input routing (keyboard and pad score only for their owners) and strict bundle signature. 35 desktop unit, 47 converter, 11 controller-routing and promotion tests pass. Physical controllers (including two or more at once), audible timing, clean install and recovery remain unverified."
+      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified title screen and main menu, audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation, disconnect pause, two-player input routing (keyboard and pad score only for their owners), hover song preview, confirmed song removal to a trash and strict bundle signature. 36 desktop unit, 47 converter, 11 controller-routing and promotion tests pass. Physical controllers (including two or more at once), audible timing, clean install and recovery remain unverified."
     }
   },
   "runtime": "electron"
