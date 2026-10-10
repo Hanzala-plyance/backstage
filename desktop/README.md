@@ -31,12 +31,15 @@ The app opens on a title screen: press **Start** (or green / Enter), then pick
 gamepad: strum to move, green to select, red to go back, yellow to switch section,
 Start to pause; the hint bar shows the buttons.
 
-New players start in **Soundcheck**: six short lessons (frets & strum, chords,
-sustains, HOPOs & taps, Star Power, streaks & multiplier). Each lesson explains the
-skill with your own controls, plays a demo in which the game performs the chart on
-the real highway with cues for every note, then gives you a turn graded against a
-goal. Passed lessons are remembered on this computer. The last step plays the full
-Soundcheck track, which is not listed among library songs. Lessons use the
+New players start in **Soundcheck**. **Start Soundcheck** runs every step in order:
+a **controller check** (press every fret, strum, Star Power, whammy and, on a pad,
+Start; each tile lights when Backstage hears it), then six short, forgiving
+lessons (frets & strum, chords, sustains, HOPOs & taps, Star Power, streaks &
+multiplier). Each lesson explains the skill with your own controls, plays a demo in
+which the game performs the chart on the real highway with cues for every note,
+then gives you a turn graded against a goal. Progress is remembered on this
+computer. The last step starts the full Soundcheck track on Easy; it is not listed
+among library songs. Lessons use the
 Controllers selection (a MIDI kit falls back to the keyboard). The Soundcheck
 backing is synthesized locally, works offline, and needs no downloaded music. Hold **A S D F G** for green/red/yellow/blue/orange and strum with
 **Space / ↑ / ↓**. **Shift** activates Star Power; **W** whammies held Star Power

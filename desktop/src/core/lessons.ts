@@ -42,7 +42,7 @@ export const lessons: Lesson[] = [
       "Each lane matches a fret: green, red, yellow, blue, orange ({frets}).",
       "Hold the matching fret, then {strum} as the gem reaches the line.",
     ],
-    goal: { kind: "hits", target: 12 },
+    goal: { kind: "hits", target: 9 },
     notes: [0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 0, 2, 4, 1, 3].map((lane, i) =>
       note(i * 2, [lane]),
     ),
@@ -55,7 +55,7 @@ export const lessons: Lesson[] = [
       "Gems side by side form a chord.",
       "Hold every fret in the chord, then {strum} once.",
     ],
-    goal: { kind: "hits", target: 6 },
+    goal: { kind: "hits", target: 5 },
     notes: [
       [0, 1],
       [0, 1],
@@ -76,7 +76,7 @@ export const lessons: Lesson[] = [
       "Hit it, then keep the fret held until the tail ends.",
       "Letting go early drops the bonus points.",
     ],
-    goal: { kind: "sustain", target: 0.75 },
+    goal: { kind: "sustain", target: 0.6 },
     notes: [0, 1, 2, 0].map((lane, i) =>
       note(i * 6, [lane], { duration: 3 * BEAT }),
     ),
@@ -90,7 +90,7 @@ export const lessons: Lesson[] = [
       "Strum the first note, then just press the next frets in time; no strum needed.",
       "Keep a streak going: a miss means strumming again.",
     ],
-    goal: { kind: "hits", target: 9 },
+    goal: { kind: "hits", target: 7 },
     notes: [
       [0, 1, 2],
       [2, 1, 0],
@@ -98,7 +98,7 @@ export const lessons: Lesson[] = [
       [3, 2, 1],
     ].flatMap((group, g) =>
       group.map((lane, i) =>
-        note(g * 4 + i * 0.5, [lane], { type: i ? "hopo" : "strum" }),
+        note(g * 5 + i, [lane], { type: i ? "hopo" : "strum" }),
       ),
     ),
   },
@@ -127,9 +127,9 @@ export const lessons: Lesson[] = [
     steps: [
       "Every 10 notes in a row raises your multiplier, up to 4×.",
       "A miss resets the streak, so stay steady.",
-      "Reach a 20-note streak to pass.",
+      "Reach a 15-note streak to pass.",
     ],
-    goal: { kind: "streak", target: 20 },
+    goal: { kind: "streak", target: 15 },
     notes: Array.from({ length: 32 }, (_, i) =>
       note(i, [[0, 1, 2, 1, 0, 2, 3, 2][i % 8] + (i >= 16 ? 1 : 0)]),
     ),
@@ -264,4 +264,57 @@ export function applyDemo(
   if (input.power && judge.canActivate) judge.activate(t);
   judge.update(t, held);
   return held;
+}
+/** Controller check: every input a player needs, named for their device. */
+export type CheckItem = { id: string; label: string; hint: string };
+export function checkItems(pad: boolean): CheckItem[] {
+  const frets = laneNames.map((name, i) => ({
+    id: `lane${i}`,
+    label: name,
+    hint: pad ? "Fret" : "ASDFG"[i],
+  }));
+  return pad
+    ? [
+        ...frets,
+        { id: "strumUp", label: "Strum up", hint: "Strum bar" },
+        { id: "strumDown", label: "Strum down", hint: "Strum bar" },
+        { id: "starPower", label: "Star Power", hint: "Button or tilt" },
+        { id: "whammy", label: "Whammy", hint: "Bar" },
+        { id: "pause", label: "Start", hint: "Pause" },
+      ]
+    : [
+        ...frets,
+        { id: "strum", label: "Strum", hint: "Space" },
+        { id: "starPower", label: "Star Power", hint: "Shift" },
+        { id: "whammy", label: "Whammy", hint: "W" },
+      ];
+}
+/** Check items active in a pad's state. */
+export function padActive(state: {
+  lanes: boolean[];
+  strumUp: boolean;
+  strumDown: boolean;
+  starPower: boolean;
+  whammy: boolean;
+  pause: boolean;
+}) {
+  const ids = state.lanes.flatMap((on, i) => (on ? [`lane${i}`] : []));
+  for (const id of [
+    "strumUp",
+    "strumDown",
+    "starPower",
+    "whammy",
+    "pause",
+  ] as const)
+    if (state[id]) ids.push(id);
+  return ids;
+}
+/** Check item for a keyboard key, if any. */
+export function keyItem(code: string) {
+  const lane = ["KeyA", "KeyS", "KeyD", "KeyF", "KeyG"].indexOf(code);
+  if (lane >= 0) return `lane${lane}`;
+  if (["Space", "ArrowUp", "ArrowDown"].includes(code)) return "strum";
+  if (code.startsWith("Shift")) return "starPower";
+  if (code === "KeyW") return "whammy";
+  return null;
 }

@@ -15,17 +15,52 @@ export function saveProgress(ids: string[]) {
     localStorage.setItem(KEY, JSON.stringify(ids));
   } catch {}
 }
-/** Soundcheck: lessons in order, then the full practice track. */
+export const CHECK_ID = "controller-check";
+/** Soundcheck: a controller check, the lessons in order, then the full
+ * practice track. Start runs the first step not yet done and each step leads to
+ * the next, so one button takes a new player through everything. */
 export default function Soundcheck({
   done,
+  onStart,
+  onCheck,
   onLesson,
   onFullTrack,
 }: {
   done: string[];
+  onStart: () => void;
+  onCheck: () => void;
   onLesson: (index: number) => void;
   onFullTrack: () => void;
 }) {
-  const next = lessons.findIndex((l) => !done.includes(l.id));
+  const checked = done.includes(CHECK_ID);
+  const passed = lessons.filter((l) => done.includes(l.id)).length;
+  const next = !checked ? -1 : lessons.findIndex((l) => !done.includes(l.id));
+  const finished = checked && next < 0;
+  const steps = lessons.length + 1;
+  const card = (
+    key: string,
+    n: string,
+    title: string,
+    summary: string,
+    detail: string,
+    state: "passed" | "next" | "",
+    onClick: () => void,
+    extra = "",
+  ) => (
+    <li key={key}>
+      <button className={"lesson-card " + state + extra} onClick={onClick}>
+        <span className="lesson-number">{n}</span>
+        <span className="lesson-text">
+          <strong>{title}</strong>
+          <small>{summary}</small>
+          <em>{detail}</em>
+        </span>
+        <span className="lesson-state">
+          {state === "passed" ? "✓ Done" : state === "next" ? "Next up" : ""}
+        </span>
+      </button>
+    </li>
+  );
   return (
     <div className="soundcheck-page">
       <div className="page-heading">
@@ -33,57 +68,58 @@ export default function Soundcheck({
           <span className="eyebrow">SOUNDCHECK</span>
           <h1>Learn the stage.</h1>
           <p>
-            Short lessons, one skill at a time. Watch the demo, then take your
-            turn.
+            Test your controller, then learn one skill at a time: watch the
+            demo, then take your turn.
           </p>
+          <button
+            className="primary soundcheck-start"
+            data-menu-default
+            onClick={onStart}
+          >
+            {finished
+              ? "Play the full track"
+              : checked || passed
+                ? "Continue Soundcheck"
+                : "Start Soundcheck"}{" "}
+            →
+          </button>
         </div>
-        <div className="soundcheck-progress" aria-label="Lessons passed">
-          <b>{done.filter((id) => lessons.some((l) => l.id === id)).length}</b>
-          <span>/ {lessons.length} passed</span>
+        <div className="soundcheck-progress" aria-label="Steps done">
+          <b>{passed + (checked ? 1 : 0)}</b>
+          <span>/ {steps} done</span>
         </div>
       </div>
       <ol className="lesson-list">
-        {lessons.map((lesson, i) => {
-          const passed = done.includes(lesson.id);
-          return (
-            <li key={lesson.id}>
-              <button
-                className={
-                  "lesson-card" +
-                  (passed ? " passed" : "") +
-                  (i === next ? " next" : "")
-                }
-                data-menu-default={i === Math.max(0, next) ? "" : undefined}
-                onClick={() => onLesson(i)}
-              >
-                <span className="lesson-number">{i + 1}</span>
-                <span className="lesson-text">
-                  <strong>{lesson.title}</strong>
-                  <small>{lesson.summary}</small>
-                  <em>{goalText(lesson.goal, lesson.notes.length)}</em>
-                </span>
-                <span className="lesson-state">
-                  {passed ? "✓ Passed" : i === next ? "Next up" : "Lesson"}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-        <li>
-          <button
-            className={"lesson-card finale" + (next < 0 ? " next" : "")}
-            data-menu-default={next < 0 ? "" : undefined}
-            onClick={onFullTrack}
-          >
-            <span className="lesson-number">✦</span>
-            <span className="lesson-text">
-              <strong>Full Soundcheck track</strong>
-              <small>Put it all together on the 32-second practice song.</small>
-              <em>Scores and stars are saved</em>
-            </span>
-            <span className="lesson-state">Play the full track</span>
-          </button>
-        </li>
+        {card(
+          CHECK_ID,
+          "1",
+          "Controller check",
+          "Press every fret, strum and button once.",
+          "Make sure everything works",
+          checked ? "passed" : "next",
+          onCheck,
+        )}
+        {lessons.map((lesson, i) =>
+          card(
+            lesson.id,
+            String(i + 2),
+            lesson.title,
+            lesson.summary,
+            goalText(lesson.goal, lesson.notes.length),
+            done.includes(lesson.id) ? "passed" : i === next ? "next" : "",
+            () => onLesson(i),
+          ),
+        )}
+        {card(
+          "full",
+          "✦",
+          "Full Soundcheck track",
+          "Put it all together on the 32-second practice song.",
+          "Easy · scores and stars are saved",
+          finished ? "next" : "",
+          onFullTrack,
+          " finale",
+        )}
       </ol>
     </div>
   );

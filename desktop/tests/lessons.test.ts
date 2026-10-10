@@ -3,6 +3,9 @@ import assert from "node:assert/strict";
 import { Judgment } from "../src/core/judgment";
 import {
   DemoPlayer,
+  checkItems,
+  keyItem,
+  padActive,
   applyDemo,
   cueFor,
   lessonChart,
@@ -86,5 +89,47 @@ test("cues name frets and the action", () => {
   assert.equal(
     cueFor({ time: 0, duration: 1, lanes: [4], type: "hopo" }, true),
     "Orange · Hammer on and hold",
+  );
+});
+test("controller check covers every input a player needs", () => {
+  const pad = checkItems(true).map((i) => i.id);
+  assert.deepEqual(pad, [
+    "lane0",
+    "lane1",
+    "lane2",
+    "lane3",
+    "lane4",
+    "strumUp",
+    "strumDown",
+    "starPower",
+    "whammy",
+    "pause",
+  ]);
+  // Every keyboard item has a key that marks it.
+  const codes = [
+    "KeyA",
+    "KeyS",
+    "KeyD",
+    "KeyF",
+    "KeyG",
+    "Space",
+    "ShiftLeft",
+    "KeyW",
+  ];
+  assert.deepEqual(
+    checkItems(false).map((i) => i.id),
+    codes.map(keyItem),
+  );
+  assert.equal(keyItem("KeyQ"), null);
+  assert.deepEqual(
+    padActive({
+      lanes: [true, false, false, false, true],
+      strumUp: false,
+      strumDown: true,
+      starPower: false,
+      whammy: true,
+      pause: false,
+    }),
+    ["lane0", "lane4", "strumDown", "whammy"],
   );
 });

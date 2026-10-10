@@ -3438,3 +3438,123 @@ kbd {
     font-size: 20px;
   }
 }
+.soundcheck-start {
+  margin-top: 22px;
+}
+.check-body {
+  position: relative;
+  z-index: 2;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 150px 24px 40px;
+  text-align: center;
+}
+.check-body h1 {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 54px;
+  text-transform: uppercase;
+  margin: 10px 0;
+}
+.check-body > p {
+  color: #d6cde6;
+}
+.check-grid {
+  list-style: none;
+  padding: 0;
+  margin: 28px 0 0;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+}
+.check-tile {
+  --tile: #4a4460;
+  position: relative;
+  padding: 18px 10px 14px;
+  background: #14121c;
+  box-shadow: inset 0 0 0 2px #2a2538;
+  clip-path: var(--cut);
+  transition:
+    box-shadow 0.1s,
+    transform 0.1s;
+}
+.check-tile.lane0 {
+  --tile: #3dff6e;
+}
+.check-tile.lane1 {
+  --tile: #ff2e4d;
+}
+.check-tile.lane2 {
+  --tile: #ffe03a;
+}
+.check-tile.lane3 {
+  --tile: #2f8cff;
+}
+.check-tile.lane4 {
+  --tile: #ff8a1f;
+}
+.check-tile i {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 10px;
+  border-radius: 50%;
+  border: 3px solid var(--tile);
+  font-style: normal;
+  font-weight: 800;
+  color: #07060b;
+}
+.check-tile strong {
+  display: block;
+  font-family: var(--display);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.check-tile small {
+  display: block;
+  margin-top: 4px;
+  color: #7d7794;
+  font-size: 12px;
+}
+.check-tile.seen {
+  box-shadow: inset 0 0 0 2px var(--volt);
+}
+.check-tile.seen i {
+  background: var(--tile);
+}
+.check-tile:not([class*="lane"]).seen i {
+  background: var(--volt);
+  border-color: var(--volt);
+}
+.check-tile.held {
+  transform: translateY(-4px);
+  box-shadow:
+    inset 0 0 0 2px #fff,
+    0 0 22px var(--volt);
+}
+.check-count {
+  margin-top: 20px;
+  font-family: var(--display);
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.check-body .menu-list {
+  justify-content: center;
+}
+.check-body .button-hints {
+  justify-content: center;
+  margin-top: 22px;
+}
+@media (max-width: 760px) {
+  .check-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .check-body h1 {
+    font-size: 34px;
+  }
+}

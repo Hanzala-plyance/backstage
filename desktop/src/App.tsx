@@ -37,7 +37,8 @@ import SongInfo, { artUrl, bestStars, type Scores } from "./SongInfo";
 import Stars from "./Stars";
 import type { PlayerInit } from "./game/player";
 import Controllers from "./Controllers";
-import Soundcheck, { loadProgress, saveProgress } from "./Soundcheck";
+import Soundcheck, { CHECK_ID, loadProgress, saveProgress } from "./Soundcheck";
+import ControllerCheck from "./game/ControllerCheck";
 import { lessons } from "./core/lessons";
 import type { MidiPort } from "./game/Game";
 const Game = lazy(() => import("./game/Game"));
@@ -104,6 +105,7 @@ function Icon({ name }: { name: string }) {
 export default function App() {
   const [page, setPage] = useState("library"),
     [lesson, setLesson] = useState<number | null>(null),
+    [checking, setChecking] = useState(false),
     [lessonsDone, setLessonsDone] = useState(loadProgress),
     [songs, setSongs] = useState<Song[]>([]),
     [warnings, setWarnings] = useState<string[]>([]),
@@ -216,7 +218,7 @@ export default function App() {
   };
   // Guitar and gamepad menu navigation, using each pad's saved mapping. Off
   // while a song or lesson owns the controllers.
-  const onStage = !!playing || lesson !== null;
+  const onStage = !!playing || lesson !== null || checking;
   useEffect(() => {
     if (onStage) return;
     const menu = new MenuPad(),
@@ -419,7 +421,6 @@ export default function App() {
   }, [notice]);
   // The Soundcheck track lives in Soundcheck, not among library songs.
   const librarySongs = songs.filter((s) => !s.practice);
-  const practiceSong = songs.find((s) => s.practice);
   const focusSong =
     librarySongs.find((s) => s.id === focusId) ?? librarySongs[0];
   // Installed songs (and installed songs since removed) leave the queue.
@@ -498,6 +499,33 @@ export default function App() {
     );
     later(() => focusFirst());
   }
+  const markDone = (id: string) =>
+    setLessonsDone((done) => {
+      const next = done.includes(id) ? done : [...done, id];
+      saveProgress(next);
+      return next;
+    });
+  // The full Soundcheck track starts straight away on Easy for player 1.
+  async function playPractice() {
+    preview.current.stop();
+    const drums = device === "midi";
+    const loaded = await action("play", () =>
+      window.backstage.loadSong("practice", drums ? "Drums" : "Guitar", "Easy"),
+    );
+    if (!loaded) return;
+    setPlaying({
+      song: loaded,
+      players: [{ device, chart: loaded.chart, profile, label: "Player 1" }],
+    });
+  }
+  // Start Soundcheck: the first step not yet done, in order.
+  const startSoundcheck = () => {
+    preview.current.stop();
+    if (!lessonsDone.includes(CHECK_ID)) return setChecking(true);
+    const next = lessons.findIndex((l) => !lessonsDone.includes(l.id));
+    if (next >= 0) setLesson(next);
+    else void playPractice();
+  };
   async function play() {
     if (!selected) return;
     preview.current.stop();
@@ -548,6 +576,22 @@ export default function App() {
       setJobs(await window.backstage.queue());
     }
   }
+  if (checking)
+    return (
+      <ControllerCheck
+        device={device === "midi" ? "keyboard" : device}
+        profile={profile}
+        onPassed={() => markDone(CHECK_ID)}
+        onNext={() => {
+          setChecking(false);
+          setLesson(0);
+        }}
+        onExit={() => {
+          setChecking(false);
+          later(() => focusFirst());
+        }}
+      />
+    );
   if (lesson !== null)
     return (
       <Suspense
@@ -561,15 +605,17 @@ export default function App() {
           profile={profile}
           mode={mode}
           offset={offset}
-          hasNext={lesson + 1 < lessons.length}
-          onPassed={(id) =>
-            setLessonsDone((done) => {
-              const next = done.includes(id) ? done : [...done, id];
-              saveProgress(next);
-              return next;
-            })
+          nextLabel={
+            lesson + 1 < lessons.length ? "Next lesson" : "Play the full track"
           }
-          onNext={() => setLesson(lesson + 1)}
+          onPassed={markDone}
+          onNext={() => {
+            if (lesson + 1 < lessons.length) setLesson(lesson + 1);
+            else {
+              setLesson(null);
+              void playPractice();
+            }
+          }}
           onExit={() => {
             setLesson(null);
             later(() => focusFirst());
@@ -868,11 +914,16 @@ export default function App() {
         {page === "soundcheck" && (
           <Soundcheck
             done={lessonsDone}
+            onStart={startSoundcheck}
+            onCheck={() => {
+              preview.current.stop();
+              setChecking(true);
+            }}
             onLesson={(i) => {
               preview.current.stop();
               setLesson(i);
             }}
-            onFullTrack={() => practiceSong && choose(practiceSong)}
+            onFullTrack={() => void playPractice()}
           />
         )}
         {page === "search" && (

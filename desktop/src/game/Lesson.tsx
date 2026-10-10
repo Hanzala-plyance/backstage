@@ -40,7 +40,7 @@ export default function LessonRun({
   profile,
   mode,
   offset,
-  hasNext,
+  nextLabel,
   onPassed,
   onNext,
   onExit,
@@ -50,7 +50,8 @@ export default function LessonRun({
   profile: Profile;
   mode: "tap" | "strum";
   offset: number;
-  hasNext: boolean;
+  /** What comes after a pass: the next lesson or the full track. */
+  nextLabel: string;
   onPassed: (id: string) => void;
   onNext: () => void;
   onExit: () => void;
@@ -419,13 +420,13 @@ export default function LessonRun({
                 </p>
                 <p className="lesson-goal">Goal: {goal}</p>
                 <div className="menu-list">
-                  {result.passed && hasNext && (
+                  {result.passed && (
                     <button
                       className="primary"
                       data-menu-default
                       onClick={onNext}
                     >
-                      Next lesson →
+                      {nextLabel} →
                     </button>
                   )}
                   <button
@@ -441,13 +442,7 @@ export default function LessonRun({
                   >
                     Watch the demo
                   </button>
-                  <button
-                    className="secondary"
-                    data-menu-default={
-                      result.passed && !hasNext ? "" : undefined
-                    }
-                    onClick={onExit}
-                  >
+                  <button className="secondary" onClick={onExit}>
                     Back to Soundcheck
                   </button>
                 </div>

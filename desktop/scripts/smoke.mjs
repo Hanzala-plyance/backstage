@@ -157,7 +157,6 @@ try {
     };
   });
   await openFullTrack();
-  await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
   await page.waitForFunction(
     () => window.__testAudio?.currentTime >= 1.97,
@@ -225,6 +224,8 @@ try {
         await page.locator(".game-metrics > div:first-child b").textContent(),
     )
     .toBe("300");
+  // The fixture is 6 s long; keep it from ending before the pause below.
+  await page.evaluate(() => (window.__testAudio.playbackRate = 0.1));
   await page.screenshot({ path: "/tmp/backstage-desktop-star-power.png" });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "← Library" }).click();
@@ -304,7 +305,6 @@ try {
     /Up \/ Down.*Select.*Back.*Remove song.*Next section/,
   );
   await openFullTrack();
-  await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
   await page.evaluate(() => {
     window.__pad = null;
@@ -330,7 +330,8 @@ try {
     };
   });
   await page.getByRole("button", { name: "← Soundcheck" }).click();
-  await openFullTrack();
+  await page.getByRole("button", { name: "Song library", exact: true }).click();
+  await page.getByRole("button", { name: /Renamed Song/ }).click();
   await page.getByRole("button", { name: /Add player/ }).click();
   await expect(
     page.getByRole("button", { name: "Player 2 controller" }),
@@ -344,9 +345,9 @@ try {
       .evaluateAll((els) =>
         els.map((e) => Number(e.textContent.replace(/,/g, ""))),
       );
-  // Soundcheck Easy: note i at 2 + i * 28/48 s on lane i % 5.
+  // Fixture Easy guitar: green at 0.6 s, red at 1.1 s.
   await page.waitForFunction(
-    () => window.__testAudio.currentTime >= 1.97,
+    () => window.__testAudio.currentTime >= 0.57,
     {},
     {
       timeout: 10000,
@@ -364,7 +365,7 @@ try {
   await expect.poll(scores).toEqual([0, 50]);
   // P1 frets red and strums at once, like a player, just before note 1.
   await page.waitForFunction(
-    () => window.__testAudio.currentTime >= 2 + 28 / 48 - 0.05,
+    () => window.__testAudio.currentTime >= 1.1 - 0.05,
     {},
     { timeout: 20000, polling: 10 },
   );
@@ -392,11 +393,10 @@ try {
       return play.call(this);
     };
   });
-  await page.getByRole("button", { name: "← Soundcheck" }).click();
-  // Leaving a game focuses the first item for controller players; let that
-  // settle before pointing at a song.
-  await expect(page.locator(".lesson-card").first()).toBeFocused();
-  await page.getByRole("button", { name: "Song library", exact: true }).click();
+  await page.getByRole("button", { name: "← Library" }).click();
+  // Leaving a game focuses the first song for controller players; let that
+  // settle before pointing at another song.
+  await expect(page.locator(".song-row").first()).toBeFocused();
   const fixtureRow = page.getByRole("button", { name: /Stream fixture/ });
   // Previews follow real pointer movement, not rows sliding under a resting
   // cursor, so move the mouse onto the row from elsewhere.
@@ -473,8 +473,17 @@ try {
   await page.getByRole("button", { name: "Controllers", exact: true }).click();
   await page.getByRole("button", { name: /Keyboard Always ready/ }).click();
   await page.getByRole("button", { name: "Soundcheck", exact: true }).click();
-  await expect(page.locator(".lesson-card")).toHaveCount(7);
-  await page.getByRole("button", { name: /Frets & strum/ }).click();
+  await expect(page.locator(".lesson-card")).toHaveCount(8);
+  // Start runs every step in order, beginning with the controller check.
+  await page.getByRole("button", { name: /Start Soundcheck/ }).click();
+  await expect(page.locator(".check-count")).toHaveText("0 of 8 working");
+  for (const key of ["a", "s", "d", "f", "g", "Space", "Shift", "w"])
+    await page.keyboard.press(key);
+  await expect(
+    page.getByRole("heading", { name: "You’re all set." }),
+  ).toBeVisible();
+  await page.screenshot({ path: "/tmp/backstage-desktop-check.png" });
+  await page.getByRole("button", { name: /Start the lessons/ }).click();
   await expect(
     page.getByRole("dialog", { name: "Frets & strum" }),
   ).toContainText("press Space to strum");
@@ -515,8 +524,12 @@ try {
   await page.getByRole("button", { name: /Next lesson/ }).click();
   await expect(page.getByRole("dialog", { name: "Chords" })).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(page.locator(".lesson-card").first()).toContainText("Passed");
-  await expect(page.locator(".lesson-card").nth(1)).toBeFocused();
+  await expect(page.locator(".lesson-card").nth(0)).toContainText("Done");
+  await expect(page.locator(".lesson-card").nth(1)).toContainText("Done");
+  await expect(page.locator(".lesson-card").nth(2)).toContainText("Next up");
+  await expect(
+    page.getByRole("button", { name: /Continue Soundcheck/ }),
+  ).toBeFocused();
   await page.screenshot({
     path: "/tmp/backstage-desktop-soundcheck.png",
     fullPage: true,
