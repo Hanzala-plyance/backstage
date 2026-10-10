@@ -1,8 +1,8 @@
 {
   "version": "0.2.0-dev",
   "status": "blocked",
-  "tested_commit": "89ebfa98e51e826d67dcf5b09c6d4c3d6a8d4b16",
-  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 87fe20798778eebc8f7087b650215c7865831fe85d25b1cda9ec2ad50d7d7721",
+  "tested_commit": "c84f7fee12ebed30a4ab2c019585adf0029268c4",
+  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 bb939d65bb795e711da08a81d6cca322dbcf1986e31adbb4d73fa44b6db67a7b",
   "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md",
   "reviewer": "",
   "rollback": "Keep the current main release; do not deploy this candidate before acceptance.",
@@ -25,7 +25,7 @@
     },
     "runtime_build": {
       "status": "passed",
-      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified title screen and main menu, audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation with Up/Down, Select and Back leading every hint bar, disconnect pause, two-player input routing (keyboard and pad score only for their owners), hover song preview, confirmed song removal to a trash, readable folder renaming, album cover display, saved best scores with stars, song details panel, Soundcheck lessons (main menu entry, demo played through the real rules, graded keyboard turn, saved progress, practice track out of the library), dev-mode covers and audio and strict bundle signature. 53 desktop unit, 50 converter, 11 controller-routing and promotion tests pass. Physical controllers (including two or more at once), audible timing, clean install and recovery remain unverified."
+      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified title screen and main menu, audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation with Up/Down, Select and Back leading every hint bar, disconnect pause, two-player input routing (keyboard and pad score only for their owners), hover song preview, confirmed song removal to a trash, readable folder renaming, album cover display, saved best scores with stars, song details panel, Soundcheck (main menu entry, controller check of every input, one-button flow through all steps, full track straight to Easy, demo played through the real rules, graded keyboard turn, saved progress, practice track out of the library), dev-mode covers and audio and strict bundle signature. 54 desktop unit, 50 converter, 11 controller-routing and promotion tests pass. Physical controllers (including two or more at once), audible timing, clean install and recovery remain unverified."
     }
   },
   "runtime": "electron"
