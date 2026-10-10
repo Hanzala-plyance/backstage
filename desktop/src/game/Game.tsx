@@ -6,8 +6,8 @@ import { activateFocused, focusFirst, moveFocus } from "../core/menu";
 import { isPad } from "../core/players";
 import ButtonHints, { type Hint } from "../ButtonHints";
 import Stars from "../Stars";
-import Avatar from "../Avatar";
-import { defaultLook, instrumentFor, moodFor, slotName } from "../core/avatars";
+import { defaultLook, instrumentFor, slotName } from "../core/avatars";
+import { createStage, type Stage } from "./stage3d";
 import { baseScore, starsFor } from "../core/stars";
 import {
   PlayerRuntime,
@@ -67,13 +67,38 @@ export default function Game({
     [time, setTime] = useState(0),
     [results, setResults] = useState<{ stars: number; best: boolean }[]>([]),
     [volume, setVolume] = useState(0.65);
-  // When each player last missed, for the avatar's miss expression.
-  const missedAt = useRef<number[]>(players.map(() => -Infinity));
+  // The band on stage, and comic captions that pop up over each performer.
+  const stageCanvas = useRef<HTMLCanvasElement | null>(null);
+  const stage = useRef<Stage | null>(null);
+  const [anchors, setAnchors] = useState<{ x: number; y: number }[]>([]);
+  const [captions, setCaptions] = useState<
+    { id: number; player: number; text: string; kind: string }[]
+  >([]);
+  const captionId = useRef(0);
+  const caption = (player: number, text: string, kind: string) => {
+    const id = ++captionId.current;
+    setCaptions((c) => [...c.slice(-5), { id, player, text, kind }]);
+    setTimeout(() => setCaptions((c) => c.filter((x) => x.id !== id)), 1100);
+  };
   const shown = useRef<PlayerStats[]>(players.map(emptyStats));
   const show = (next: PlayerStats[]) => {
     next.forEach((s, i) => {
-      if (s.misses > shown.current[i].misses)
-        missedAt.current[i] = performance.now();
+      const before = shown.current[i];
+      if (s.powerActive && !before.powerActive)
+        caption(i, "SUPER STAR!", "power");
+      else if (s.misses > before.misses)
+        caption(i, ["OOF!", "WHOOPS!", "YIKES!"][s.misses % 3], "miss");
+      else if (
+        s.combo >= 10 &&
+        Math.floor(s.combo / 10) > Math.floor(before.combo / 10)
+      )
+        caption(
+          i,
+          ["NICE!", "YEAH!", "ROCK ON!", "SHRED!", "UNSTOPPABLE!"][
+            Math.min(4, Math.floor(s.combo / 10) - 1)
+          ],
+          "streak",
+        );
     });
     shown.current = next;
     setStats(next);
@@ -188,6 +213,29 @@ export default function Game({
       return;
     }
     const all = runtimes.current;
+    // The 3D band is decoration: if it can't start, the game plays on.
+    let alive = true;
+    const beat = 60 / (players[0].chart.tempos?.[0]?.bpm || 120);
+    if (stageCanvas.current)
+      createStage(
+        stageCanvas.current,
+        players.map((p, i) => ({
+          look: p.look ?? defaultLook(i),
+          instrument: instrumentFor(p.chart.part),
+        })),
+        { pixelRatio: 1 },
+      )
+        .then((s) => {
+          if (!alive) return s.dispose();
+          stage.current = s;
+          setAnchors(s.anchors());
+        })
+        .catch((error) => console.warn("Backstage stage unavailable", error));
+    const resized = () => {
+      stage.current?.resize();
+      if (stage.current) setAnchors(stage.current.anchors());
+    };
+    window.addEventListener("resize", resized);
     const music = new SongAudio(song.audioUrl);
     audio.current = music;
     const clock = () => music.time - offset / 1000;
@@ -305,6 +353,18 @@ export default function Game({
               : "Controller disconnected. Reconnect it to continue.",
         );
       for (const r of all) r.frame(t, status.current === "playing", now);
+      const live = status.current === "playing";
+      stage.current?.frame(
+        live ? t : now / 1000,
+        all.map((r) => ({
+          hits: r.judge.hits,
+          misses: r.judge.misses,
+          combo: r.judge.combo,
+          powerActive: r.judge.powerActive,
+        })),
+        live,
+        beat,
+      );
       if (now - lastUI > 80) {
         show(snapshot());
         setTime(music.time);
@@ -319,6 +379,10 @@ export default function Game({
     document.addEventListener("visibilitychange", hidden);
     return () => {
       cancelAnimationFrame(frame);
+      alive = false;
+      stage.current?.dispose();
+      stage.current = null;
+      window.removeEventListener("resize", resized);
       music.dispose();
       all.forEach((r) => r.dispose());
       runtimes.current = [];
@@ -330,26 +394,43 @@ export default function Game({
     };
   }, []);
   const solo = stats[0];
-  const performer = (i: number, className: string) => {
-    const p = players[i],
-      s = stats[i];
-    const bpm = p.chart.tempos?.[0]?.bpm || 120;
-    return (
-      <Avatar
-        look={p.look ?? defaultLook(i)}
-        instrument={instrumentFor(p.chart.part)}
-        hits={s.hits}
-        beat={60 / bpm}
-        playing={phase === "playing"}
-        mood={moodFor({
-          powerActive: s.powerActive,
-          combo: s.combo,
-          missedRecently: performance.now() - missedAt.current[i] < 700,
-        })}
-        className={className}
-      />
-    );
-  };
+  const band = (
+    <>
+      <canvas ref={stageCanvas} className="band-stage" aria-hidden="true" />
+      <div className="band-tags">
+        {players.map((p, i) =>
+          anchors[i] ? (
+            <span
+              key={i}
+              className={"performer-tag p" + (i + 1)}
+              style={{
+                left: `${anchors[i].x * 100}%`,
+                top: `${anchors[i].y * 100}%`,
+              }}
+              data-hits={stats[i].hits}
+              data-mood={stage.current?.moods[i] ?? "groove"}
+            >
+              {p.name ?? slotName(i)}
+            </span>
+          ) : null,
+        )}
+        {captions.map((c) =>
+          anchors[c.player] ? (
+            <b
+              key={c.id}
+              className={"comic-caption " + c.kind}
+              style={{
+                left: `${anchors[c.player].x * 100}%`,
+                top: `${anchors[c.player].y * 100}%`,
+              }}
+            >
+              {c.text}
+            </b>
+          ) : null,
+        )}
+      </div>
+    </>
+  );
   const chart = players[0].chart;
   const duration = audio.current?.duration || song.duration;
   const clock = (s: number) =>
@@ -373,6 +454,7 @@ export default function Game({
         (!multi && solo.powerActive ? " power-active" : "")
       }
     >
+      {band}
       <header className="game-header">
         <button className="quiet" onClick={exit}>
           ← {backTo}
@@ -408,7 +490,6 @@ export default function Game({
                   }}
                   className="highway-mp"
                 />
-                {performer(i, "lane-avatar")}
                 <header className="player-tag">
                   <b>{p.name ?? slotName(i)}</b>
                   <span>
@@ -519,10 +600,6 @@ export default function Game({
             }}
             className="highway"
           />
-          <div className="stage-avatar">
-            {performer(0, "")}
-            <span className="avatar-name">{players[0].name ?? "P1"}</span>
-          </div>
           <div className={"hit-label " + solo.last.toLowerCase()}>
             {phase === "playing" ? solo.last : ""}
           </div>

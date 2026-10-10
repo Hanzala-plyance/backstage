@@ -596,8 +596,8 @@ try {
   await page.screenshot({ path: "/tmp/backstage-desktop-camera.png" });
   await page.getByRole("button", { name: "Use this photo" }).click();
   await expect(
-    page.getByRole("tab", { name: /PLAYER 2/ }).locator("svg image"),
-  ).toHaveCount(1);
+    page.getByRole("tab", { name: /PLAYER 2/ }).locator(".portrait img"),
+  ).toBeVisible();
   await page.screenshot({
     path: "/tmp/backstage-desktop-avatars.png",
     fullPage: true,
@@ -613,9 +613,7 @@ try {
   if (await removeP2.count()) await removeP2.click();
   await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
-  await expect(page.locator(".stage-avatar .avatar-name")).toHaveText(
-    "SHREDDER",
-  );
+  await expect(page.locator(".performer-tag")).toHaveText("SHREDDER");
   await page.waitForFunction(
     () => window.__testAudio.currentTime >= 0.3,
     {},
@@ -630,7 +628,7 @@ try {
   await page.keyboard.down("a");
   await page.keyboard.press("Space");
   await page.keyboard.up("a");
-  await expect(page.locator(".stage-avatar .avatar")).toHaveAttribute(
+  await expect(page.locator(".performer-tag")).toHaveAttribute(
     "data-hits",
     "1",
   );

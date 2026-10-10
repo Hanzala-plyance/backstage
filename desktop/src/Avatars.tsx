@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import Avatar from "./Avatar";
+import { Portrait, StagePreview } from "./AvatarView";
 import {
   cleanName,
   handZones,
@@ -9,35 +9,9 @@ import {
   stylize,
   type Instrument,
   type Look,
-  type Mood,
   type Slot,
 } from "./core/avatars";
 const SIZE = 256;
-/** Live preview: the avatar plays to a steady beat and runs through moods. */
-function Preview({ look, instrument }: { look: Look; instrument: Instrument }) {
-  const [hits, setHits] = useState(0);
-  const [mood, setMood] = useState<Mood>("groove");
-  useEffect(() => {
-    const strum = setInterval(() => setHits((h) => h + 1), 500);
-    const moods: Mood[] = ["groove", "hyped", "power", "miss"];
-    let i = 0;
-    const cycle = setInterval(() => setMood(moods[++i % moods.length]), 2200);
-    return () => {
-      clearInterval(strum);
-      clearInterval(cycle);
-    };
-  }, []);
-  return (
-    <Avatar
-      look={look}
-      instrument={instrument}
-      hits={hits}
-      mood={mood}
-      beat={0.5}
-      className="avatar-preview"
-    />
-  );
-}
 type CameraState =
   | { step: "idle" }
   | { step: "starting" }
@@ -282,12 +256,7 @@ export default function Avatars({
             data-menu-default={i === slot ? "" : undefined}
             onClick={() => setSlot(i)}
           >
-            <Avatar
-              look={s.look}
-              instrument="guitar"
-              playing={false}
-              className="avatar-mini"
-            />
+            <Portrait look={s.look} className="avatar-mini" />
             <span>
               <small>PLAYER {i + 1}</small>
               <strong>{slotName(i, s)}</strong>
@@ -297,11 +266,7 @@ export default function Avatars({
       </div>
       <div className="avatar-editor">
         <section className="avatar-stage">
-          <Preview
-            key={current.look.kind === "photo" ? "photo" : current.look.id}
-            look={current.look}
-            instrument={instrument}
-          />
+          <StagePreview look={current.look} instrument={instrument} />
           <div className="avatar-stage-name">{slotName(slot, current)}</div>
           <div
             className="segmented"
@@ -367,10 +332,8 @@ export default function Avatars({
                     className={"preset" + (chosen ? " chosen" : "")}
                     onClick={() => save({ look: { kind: "preset", id: p.id } })}
                   >
-                    <Avatar
+                    <Portrait
                       look={{ kind: "preset", id: p.id }}
-                      instrument="guitar"
-                      playing={false}
                       className="avatar-mini"
                     />
                     <span>{p.name}</span>

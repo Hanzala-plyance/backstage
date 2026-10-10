@@ -62,10 +62,18 @@ and on stage. Pick one of 10 premade avatars, or **Use my camera**: raise a hand
 (motion in the dashed upper corners starts a 3-2-1 countdown) or press **Take
 photo**; the photo is restyled in the stage colours. Camera avatars can't be
 customized, and photos stay on this computer (`band.json` in the app's data
-folder). Only video is requested; the microphone is never used. In game, each
-avatar plays the player's guitar, bass or drums: one strum or stick hit per note
-hit, a groove to the tempo, a flinch on a miss, a hyped face on a 10+ streak and a
-glowing aura during Star Power.
+folder). Only video is requested; the microphone is never used.
+
+In game the band performs in 3D on the stage behind the highway, in the
+spotlights: chibi performers drawn comic-book style (toon shading, halftone
+shadows, ink outlines, off-register colour) and animated on twos, 12 poses a
+second. That stepped look is also why the stage is cheap: it renders 12 times a
+second on its own small canvas, and one shared stage holds every player. Each
+performer plays the player's guitar, bass or drums with one strum or stick hit
+per note hit, grooves to the tempo, gets dizzy spiral eyes and a head wobble on a
+miss, head-bangs with a grin on a 10+ streak, and raises the guitar with star eyes
+and an aura in Star Power. Comic captions ("YEAH!", "OOF!", "SUPER STAR!") pop over
+the performer. If 3D can't start, the game plays on without the band.
 
 Hover or move onto a song (mouse, arrow keys or strum) to hear a short looping
 preview, starting at the song's `preview_start_time` when it has one. To remove a
