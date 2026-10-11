@@ -9,6 +9,7 @@ const {
   shell,
   Menu,
   nativeImage,
+  systemPreferences,
 } = require("electron");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
@@ -20,6 +21,7 @@ const { Library } = require("./library.cjs");
 const { PreparationService, validVideo } = require("./service.cjs");
 const covers = require("./covers.cjs");
 const { Scores } = require("./scores.cjs");
+const { Band } = require("./band.cjs");
 app.setName("Backstage");
 if (process.env.BACKSTAGE_TEST_DATA)
   app.setPath("userData", process.env.BACKSTAGE_TEST_DATA);
@@ -218,19 +220,26 @@ app.whenReady().then(async () => {
       return new Response("Unavailable", { status: 404 });
     }
   });
+  // Video only: the camera is for avatar photos; the microphone stays off.
+  const videoOnly = (permission, details) =>
+    permission === "media" &&
+    (details?.mediaTypes ?? []).length > 0 &&
+    details.mediaTypes.every((t) => t === "video");
   session.defaultSession.setPermissionRequestHandler(
-    (contents, permission, callback) =>
+    (contents, permission, callback, details) =>
       callback(
         trusted(contents.getURL()) &&
-          ["midi", "fullscreen"].includes(permission),
+          (["midi", "fullscreen"].includes(permission) ||
+            videoOnly(permission, details)),
       ),
   );
   session.defaultSession.setPermissionCheckHandler(
-    (contents, permission, requestingOrigin) =>
+    (contents, permission, requestingOrigin, details) =>
       !!contents &&
       trusted(contents.getURL()) &&
       trusted(requestingOrigin) &&
-      ["midi", "fullscreen"].includes(permission),
+      (["midi", "fullscreen"].includes(permission) ||
+        (permission === "media" && details?.mediaType === "video")),
   );
   handle("settings", () => data());
   handle("library", () => library.scan());
@@ -430,6 +439,16 @@ app.whenReady().then(async () => {
   const scores = new Scores(path.join(app.getPath("userData"), "scores.json"));
   handle("scores", () => scores.all());
   handle("saveScore", (result) => scores.record(result));
+  const band = new Band(path.join(app.getPath("userData"), "band.json"));
+  handle("band", () => band.all());
+  handle("saveSlot", (slot, value) => band.save(slot, value));
+  // Camera avatars: macOS asks the person once; tests use Chromium's fake
+  // camera and never touch the real one.
+  handle("cameraAccess", async () =>
+    process.platform === "darwin" && !process.env.BACKSTAGE_TEST_DATA
+      ? systemPreferences.askForMediaAccess("camera")
+      : true,
+  );
   handle("removeSong", (id) =>
     library.remove(text(id, 32), async (dir) => {
       // Test runs keep removed songs out of the real Trash.

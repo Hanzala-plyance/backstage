@@ -1,3 +1,4 @@
+import type { Slot } from "./core/avatars";
 export type Part = "Guitar" | "Bass" | "Rhythm" | "Drums";
 export type Level = "Easy" | "Medium" | "Hard" | "Expert";
 export type Note = {
@@ -126,6 +127,9 @@ export interface Bridge {
     accuracy: number;
     maxCombo: number;
   }): Promise<{ best: boolean; previous: BestScore | null }>;
+  band(): Promise<Slot[]>;
+  saveSlot(slot: number, value: Slot): Promise<Slot[]>;
+  cameraAccess(): Promise<boolean>;
 }
 declare global {
   interface Window {

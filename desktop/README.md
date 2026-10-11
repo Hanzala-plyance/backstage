@@ -56,6 +56,32 @@ implemented yet.
 
 ### Library
 
+**Avatars** (main menu or sidebar) sets a name and look for each of the four
+players. Names are up to 8 letters or numbers and replace P1–P4 in the song dialog
+and on stage. Pick one of 10 premade avatars, or **Use my camera**: raise a hand
+(motion in the dashed upper corners starts a 3-2-1 countdown) or press **Take
+photo**; the photo is restyled in the stage colours. Camera avatars can't be
+customized, and photos stay on this computer (`band.json` in the app's data
+folder). Only video is requested; the microphone is never used.
+
+In game the band performs in 3D on the stage behind the highway, in the
+spotlights: chibi performers drawn comic-book style (toon shading, halftone
+shadows, ink outlines, off-register colour), posed 30 times a second. The stage
+is cheap because it renders only at those poses, on its own small canvas, and one
+shared stage holds every player. Arms
+have elbows and reach for real targets: the fretting hand moves to the fret for the
+note just hit and the strumming hand alternates down and up strokes; drummers hit
+the piece that matches the note (snare, hi-hat, toms, cymbals, kick pedal). They
+groove to the tempo, shake their head with dizzy eyes on a miss, head-bang on a 10+
+streak, and raise the guitar with star eyes and an aura in Star Power. In single
+player the performer stands left or right of the highway.
+
+Each player also picks **gear**: a guitar shape (Classic S, Classic T, Single Cut,
+Double Cut, Arrow; generic names, as brand and model names are trademarks), a
+finish colour, a drum kit (Rock, Compact, Double Kick, Electronic) and which side
+of the highway they stand on. Comic captions ("YEAH!", "OOF!", "SUPER STAR!") pop over
+the performer. If 3D can't start, the game plays on without the band.
+
 Hover or move onto a song (mouse, arrow keys or strum) to hear a short looping
 preview, starting at the song's `preview_start_time` when it has one. To remove a
 song, open it and choose **Remove from library**, or press **blue** / **Delete** on a
