@@ -8,12 +8,18 @@ export type RiffPad = {
   input: boolean;
   buttons: number[];
   axes: number[];
+  /** Why this receiver couldn't be opened, if it couldn't. */
+  error?: string;
 };
 export type RiffStatus = {
   receivers: string[];
   connected: RiffPad[];
   busy: boolean;
   active: boolean;
+  /** "direct": read by Backstage; "admin": the administrator fallback. */
+  mode: "direct" | "admin";
+  /** A receiver couldn't be opened directly; the fallback may help. */
+  denied?: boolean;
 };
 export const riffName = (n: number) => `PDP Riffmaster ${n} (Xbox)`;
 let pads: RiffPad[] = [];
@@ -57,10 +63,16 @@ export function installRiff() {
       return list;
     },
   });
-  bridge.subscribe((next) => {
+  const set = (next: RiffPad[]) => {
     pads = next;
     listeners.forEach((l) => l(next));
-  });
+  };
+  bridge.subscribe(set);
+  // Guitars may have connected before this page loaded.
+  void window.backstage
+    ?.riffStatus?.()
+    .then((s) => set(s.connected))
+    .catch(() => {});
 }
 export function onRiff(listener: (pads: RiffPad[]) => void) {
   listeners.add(listener);

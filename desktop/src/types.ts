@@ -134,6 +134,7 @@ export interface Bridge {
   riffStatus(): Promise<RiffStatus>;
   riffConnect(): Promise<RiffStatus>;
   riffDisconnect(): Promise<RiffStatus>;
+  riffAdmin(): Promise<RiffStatus>;
 }
 declare global {
   interface Window {

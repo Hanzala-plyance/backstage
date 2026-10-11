@@ -1,30 +1,45 @@
-// PDP Riffmaster for Xbox controllers through the MacRiff reader.
-// macOS has no driver for the receiver, so a reader running with
-// administrator rights claims each receiver over USB and streams 16-byte
-// reports to a private socket that Backstage owns, one per receiver. Backstage
-// keeps a lease the supervisor checks: when Backstage disconnects or quits, the
-// readers stop and release USB.
+// PDP Riffmaster for Xbox guitars. macOS has no driver for the receiver
+// (0e6f:0248), so Backstage drives it itself: `Riffmasters` opens each receiver
+// in-process (no separate program), runs the Xbox GIP start-up and decodes
+// input, reconnecting when a receiver is replugged.
+//
+// Fallback: if macOS or another app won't let Backstage open a receiver,
+// `AdminBridge` runs the MacRiff-derived reader with administrator rights. It
+// streams the same 16-byte reports to private sockets Backstage owns and stops
+// (releasing USB) when Backstage disconnects or quits.
 const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 const { spawn, spawnSync } = require("node:child_process");
 const { decode } = require("./riff/decode.cjs");
-const { receiverKey, isReceiver, KEY } = require("./riff/receivers.cjs");
-const FAKE = ["usb:9:1", "usb:9:2"];
+const {
+  receiverKey,
+  isReceiver,
+  selectReceiver,
+  KEY,
+} = require("./riff/receivers.cjs");
+const { Receiver } = require("./riff/gip.cjs");
 const fake = () => !!process.env.BACKSTAGE_RIFF_FAKE;
 // Reader scripts and the usb module live outside the asar so plain Node (the
 // app's own binary in run-as-node mode) can load them.
 const riffDir = path
   .join(__dirname, "riff")
   .replace(/app\.asar(?!\.unpacked)/, "app.asar.unpacked");
-/** Receivers plugged in now. Read-only: nothing is opened or claimed. */
-function receivers() {
-  if (fake()) return FAKE;
+function loadUsb() {
+  if (fake()) return require("./riff/fake-usb.cjs")();
   try {
-    const usb = require("usb");
-    return usb.getDeviceList().filter(isReceiver).map(receiverKey).sort();
+    return require("usb");
   } catch (error) {
-    console.warn("Riffmaster discovery unavailable", error);
+    console.warn("Riffmaster support unavailable", error);
+    return null;
+  }
+}
+/** Receivers plugged in now. Read-only: nothing is opened or claimed. */
+function receivers(usb = loadUsb()) {
+  if (!usb) return [];
+  try {
+    return usb.getDeviceList().filter(isReceiver).map(receiverKey).sort();
+  } catch {
     return [];
   }
 }
@@ -107,7 +122,8 @@ function sweep() {
     }
   }
 }
-class RiffSession {
+/** Administrator fallback: the MacRiff-derived reader as root, over sockets. */
+class AdminBridge {
   constructor(onUpdate, launch = fake() ? unprivileged : privileged) {
     try {
       sweep();
@@ -133,7 +149,7 @@ class RiffSession {
   }
   status() {
     return {
-      receivers: receivers(),
+      receivers: receivers(this.usb),
       connected: this.snapshot(),
       busy: this.dir ? false : macriffBusy(),
       active: !!this.dir,
@@ -141,7 +157,7 @@ class RiffSession {
   }
   async connect() {
     await this.disconnect();
-    const keys = receivers().filter((k) => KEY.test(k));
+    const keys = receivers(this.usb).filter((k) => KEY.test(k));
     if (!keys.length)
       throw new Error(
         "No Riffmaster receivers found. Plug in the receiver and try again.",
@@ -277,4 +293,131 @@ class RiffSession {
     fs.rm(dir, { recursive: true, force: true }, () => {});
   }
 }
-module.exports = { RiffSession, receivers, macriffBusy };
+const blank = () => ({
+  buttons: new Array(16).fill(0),
+  axes: [0, 0, 0, 0],
+  tilted: false,
+  input: false,
+});
+/** Riffmasters driven in-process. Connects every receiver it finds, and
+ * reconnects when one is plugged back in. */
+class Riffmasters {
+  constructor(onUpdate, { usb = loadUsb(), admin } = {}) {
+    this.onUpdate = onUpdate;
+    this.usb = usb;
+    this.slots = new Map();
+    this.auto = false;
+    this.admin = admin ?? new AdminBridge(onUpdate);
+    this.admin.usb = usb;
+    const hotplug = usb?.usb;
+    hotplug?.on?.("attach", (d) => {
+      if (this.auto && isReceiver(d)) setTimeout(() => this.connectAll(), 600);
+    });
+    hotplug?.on?.("detach", (d) => {
+      if (!isReceiver(d)) return;
+      this.slots.get(receiverKey(d))?.receiver?.close();
+    });
+  }
+  slot(key) {
+    let s = this.slots.get(key);
+    if (!s) {
+      // Stable indexes, out of the way of real gamepads.
+      s = {
+        key,
+        index: 16 + this.slots.size,
+        receiver: null,
+        error: "",
+        denied: false,
+        ...blank(),
+      };
+      this.slots.set(key, s);
+    }
+    return s;
+  }
+  snapshot() {
+    return [...this.slots.values()].map((s) => ({
+      key: s.key,
+      index: s.index,
+      connected: !!s.receiver,
+      input: s.input,
+      buttons: s.buttons,
+      axes: s.axes,
+      error: s.error,
+    }));
+  }
+  push() {
+    this.onUpdate(this.admin.dir ? this.admin.snapshot() : this.snapshot());
+  }
+  status() {
+    if (this.admin.dir) return { ...this.admin.status(), mode: "admin" };
+    const connected = this.snapshot();
+    return {
+      receivers: receivers(this.usb),
+      connected,
+      active: this.auto,
+      mode: "direct",
+      denied: connected.some((s) => this.slots.get(s.key).denied),
+      busy: !connected.some((s) => s.connected) && macriffBusy(),
+    };
+  }
+  /** Opens every receiver that isn't open yet. */
+  async connectAll() {
+    if (!this.usb || this.admin.dir) return this.status();
+    this.auto = true;
+    for (const key of receivers(this.usb)) {
+      const slot = this.slot(key);
+      if (slot.receiver || slot.opening) continue;
+      slot.opening = true;
+      try {
+        const device = selectReceiver(this.usb.getDeviceList(), key);
+        const receiver = new Receiver(device, {
+          onReport: (report) => {
+            const state = decode(report, slot.tilted);
+            if (!state || state.heartbeat) return;
+            Object.assign(slot, state, { input: true });
+            this.push();
+          },
+          onClose: () => {
+            if (slot.receiver !== receiver) return;
+            slot.receiver = null;
+            Object.assign(slot, blank());
+            this.push();
+          },
+        });
+        await receiver.open();
+        slot.receiver = receiver;
+        slot.error = "";
+        slot.denied = false;
+      } catch (error) {
+        slot.denied = !!error.denied;
+        slot.error = error.denied
+          ? "macOS or another app (such as MacRiff) is holding this receiver."
+          : error.message;
+      } finally {
+        slot.opening = false;
+      }
+    }
+    this.push();
+    return this.status();
+  }
+  /** Releases every receiver; nothing reconnects until connectAll. */
+  async disconnect() {
+    this.auto = false;
+    for (const s of this.slots.values()) {
+      const r = s.receiver;
+      s.receiver = null;
+      Object.assign(s, blank());
+      r?.close();
+    }
+    await this.admin.disconnect();
+    this.push();
+    return this.status();
+  }
+  /** Fallback when receivers can't be opened directly. */
+  async useAdmin() {
+    await this.disconnect();
+    await this.admin.connect();
+    return this.status();
+  }
+}
+module.exports = { Riffmasters, AdminBridge, receivers, macriffBusy };

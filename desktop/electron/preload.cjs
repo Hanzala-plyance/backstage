@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld(
       "riffStatus",
       "riffConnect",
       "riffDisconnect",
+      "riffAdmin",
     ].map((name) => [name, invoke(name)]),
   ),
 );

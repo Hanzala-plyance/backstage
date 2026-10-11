@@ -147,19 +147,19 @@ rounding remain tracked work. Physical guitar timing still needs acceptance.
 ### PDP Riffmaster for Xbox
 
 macOS has no driver for the Riffmaster's USB receiver, so it never shows up as a
-gamepad on its own. Backstage uses the MacRiff reader from this repository
-(`mac-riff/`, adapted under `electron/riff/`): in **Controllers → PDP Riffmaster
-(Xbox)**, click **Connect Riffmasters** and approve the macOS administrator prompt
-once. Each plugged-in receiver then appears as its own controller, "PDP
+gamepad on its own. Backstage reads the receivers itself (`electron/riff/`, with
+the Xbox GIP handling adapted from MacRiff in `mac-riff/`): no separate program or
+command. Receivers connect automatically when Backstage starts or one is plugged
+in, and reconnect after a replug. Each appears as its own controller, "PDP
 Riffmaster 1 (Xbox)", "2", and so on, with a built-in guitar mapping: frets,
 strum, Start, Select or tilt for Star Power, and whammy. Choose them like any
-gamepad, for any of up to four players.
+gamepad, for any of up to four players. **Controllers → PDP Riffmaster (Xbox)**
+shows each receiver's state; **Disconnect** releases them for other apps.
 
-Only the reader runs with administrator rights; it streams input to Backstage
-over a private socket and stops (releasing USB) when you disconnect or quit
-Backstage. If MacRiff itself is using the receivers, stop its session or quit
-MacRiff Setup first. Receivers are told apart by USB port, so keep each in the
-same port.
+If MacRiff is running it holds the receivers: stop its session or quit MacRiff
+Setup, then click **Connect Riffmasters**. If macOS still won't let Backstage open
+a receiver, **Use administrator access** runs the same reader with one password
+prompt; it stops and releases USB when you disconnect or quit Backstage.
 
 ## Search and prepare songs
 
