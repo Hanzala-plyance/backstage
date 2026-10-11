@@ -528,7 +528,9 @@ app.whenReady().then(async () => {
 });
 // Receivers must be released before the process exits: node-usb closes any
 // still-open device during shutdown, after libusb is gone, and that aborts.
-// Quitting waits (at most ~2 s) for every receiver to let go.
+// Quitting waits (at most ~2 s) for every receiver to let go, then exits
+// directly: everything else has already shut down by will-quit, and asking to
+// quit a second time doesn't reliably finish on Linux.
 let receiversReleased = false;
 app.on("will-quit", (event) => {
   if (receiversReleased || !riff) return;
@@ -537,12 +539,18 @@ app.on("will-quit", (event) => {
   riff
     .disconnect()
     .catch(() => {})
-    .finally(() => app.quit());
+    .finally(() => app.exit(0));
 });
 // Ctrl+C in `npm run dev` and `kill` quit the same way instead of exiting
-// with receivers open.
+// with receivers open, but never hang: a second signal or 5 s forces exit.
+let signalled = false;
 for (const signal of ["SIGINT", "SIGTERM"])
-  process.on(signal, () => app.quit());
+  process.on(signal, () => {
+    if (signalled) return app.exit(1);
+    signalled = true;
+    setTimeout(() => app.exit(1), 5000).unref();
+    app.quit();
+  });
 app.on("before-quit", (event) => {
   if (quitting) return;
   if (service?.child) {

@@ -75,7 +75,9 @@ const listeners = new Set<(pads: RiffPad[]) => void>();
 /** A Gamepad-shaped snapshot of one Riffmaster. */
 export function asGamepad(p: RiffPad): Gamepad {
   return {
-    id: `${riffName(riffNumber(p))} [${p.key}]`,
+    // No port in the id: a guitar back on another USB port gets the same
+    // number, so it keeps its player and its mapping.
+    id: riffName(riffNumber(p)),
     index: p.index,
     connected: p.connected,
     mapping: "standard",

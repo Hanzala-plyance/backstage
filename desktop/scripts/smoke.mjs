@@ -984,9 +984,25 @@ try {
       .screenshot({ path: "test-results/smoke-failure.png" })
       .catch(() => {});
   }
+  // Printed now in case closing the app below goes wrong.
+  console.error(error);
   throw error;
 } finally {
-  if (app) await app.close();
+  // Quitting must finish; if it doesn't, kill the app so the run still ends
+  // and reports, and fail the run.
+  if (app) {
+    let timer;
+    const closed = await Promise.race([
+      app.close().then(() => true),
+      new Promise((done) => (timer = setTimeout(() => done(false), 15000))),
+    ]);
+    clearTimeout(timer);
+    if (!closed) {
+      app.process().kill("SIGKILL");
+      process.exitCode = 1;
+      console.error("FAIL: Backstage did not quit within 15 s.");
+    }
+  }
   if (process.platform === "darwin" && process.env.BACKSTAGE_APP_BINARY) {
     const bundle = path.resolve(process.env.BACKSTAGE_APP_BINARY, "../../..");
     execFileSync("codesign", ["--verify", "--deep", "--strict", bundle]);

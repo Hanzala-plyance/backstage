@@ -337,7 +337,6 @@ class Riffmasters {
     this.slots = new Map();
     // Ports a person released: skipped by automatic connection and replugs.
     this.released = new Set();
-    this.nextIndex = 16;
     this.auto = false;
     this.rescan();
     this.admin = admin ?? new AdminBridge(onUpdate);
@@ -363,11 +362,15 @@ class Riffmasters {
   slot(key) {
     let s = this.slots.get(key);
     if (!s) {
-      // Each port keeps its index for the whole run, so a player's guitar
-      // keeps its name when another receiver comes or goes.
+      // The lowest free index (from 16): two receivers are always
+      // Riffmaster 1 and 2, however often they are replugged or macOS
+      // renumbers their ports. A port keeps its index while it is plugged in.
+      const used = new Set([...this.slots.values()].map((x) => x.index));
+      let index = 16;
+      while (used.has(index)) index++;
       s = {
         key,
-        index: this.nextIndex++,
+        index,
         receiver: null,
         state: this.released.has(key) ? "released" : "closed",
         guitar: "waiting",
@@ -387,6 +390,12 @@ class Riffmasters {
    * plug, unplug, connect and status requests, never per guitar report. */
   rescan() {
     this.plugged = receivers(this.usb);
+    // Forget ports that are gone (and not open), freeing their index for the
+    // next receiver. Released ports are remembered separately.
+    const plugged = new Set(this.plugged);
+    for (const [key, s] of this.slots)
+      if (!plugged.has(key) && !s.receiver && !s.opening)
+        this.slots.delete(key);
     return this.plugged;
   }
   /** Ports with a receiver plugged in now (and ports still open). */

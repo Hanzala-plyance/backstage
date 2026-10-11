@@ -365,3 +365,36 @@ test("disconnect waits until every receiver has let go of USB", async () => {
   await riff2.disconnect(400);
   assert.ok(Date.now() - start < 1500, "bounded wait");
 });
+test("a guitar replugged on another port keeps its number", async () => {
+  const usb = fakeUsb();
+  let latest: Port[] = [];
+  const riff = new Riffmasters((pads: Port[]) => (latest = pads), { usb });
+  await riff.connectAll();
+  assert.deepEqual(
+    latest.map((p) => p.index),
+    [16, 17],
+  );
+  // Receiver 2 is unplugged and comes back on port 3 (or macOS renumbers it).
+  const moved = usb.devices[1];
+  moved.unplugged = true;
+  usb.usb.emit("detach", moved);
+  assert.ok(await wait(() => latest.length === 1));
+  moved.portNumbers = [3];
+  moved.unplugged = false;
+  usb.usb.emit("attach", moved);
+  assert.ok(await wait(() => latest.length === 2 && latest[1].connected));
+  assert.equal(latest[1].key, "usb:9:3");
+  assert.equal(latest[1].index, 17, "Riffmaster 2 again, not 3");
+  // Replugging again and again never climbs past the number of receivers.
+  for (const port of [4, 5, 6]) {
+    moved.unplugged = true;
+    usb.usb.emit("detach", moved);
+    await wait(() => latest.length === 1);
+    moved.portNumbers = [port];
+    moved.unplugged = false;
+    usb.usb.emit("attach", moved);
+    assert.ok(await wait(() => latest.length === 2 && latest[1].connected));
+    assert.equal(latest[1].index, 17);
+  }
+  await riff.disconnect();
+});

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import {
+  asGamepad,
   onRiff,
   riffName,
   riffNumber,
@@ -102,7 +103,8 @@ export default function ControllerTools({
     return `Player ${i + 1}` + (name === `P${i + 1}` ? "" : ` · ${name}`);
   };
   const riffDevice = (p: RiffPad) =>
-    players.find((l) => l.device.includes(`[${p.key}]`))?.device ?? null;
+    players.find((l) => l.device === `pad:${p.index}:${asGamepad(p).id}`)
+      ?.device ?? null;
   const copyReport = async () => {
     const text = JSON.stringify(
       {
