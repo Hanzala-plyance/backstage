@@ -1,0 +1,477 @@
+import { onRiff, riffName, riffNumber, type RiffPad } from "./core/riff";
+import { useEffect, useRef, useState } from "react";
+import type { Action, Profile } from "./types";
+import {
+  actions,
+  actionLabels,
+  defaultProfile,
+  loadProfile,
+  newlyPressed,
+} from "./core/input";
+import type { MidiPort } from "./game/Game";
+import { deviceLabel, isPad } from "./core/players";
+const snapshot = (pad: Gamepad): Pick<Gamepad, "buttons" | "axes"> => ({
+  buttons: pad.buttons.map((b) => ({
+    pressed: b.pressed,
+    touched: b.touched,
+    value: b.value,
+  })),
+  axes: [...pad.axes],
+});
+export default function Controllers({
+  device,
+  onDevice,
+  profile,
+  onProfile,
+  midi,
+  onMidi,
+  players = [],
+  onTools,
+}: {
+  device: string;
+  onDevice: (s: string) => void;
+  profile: Profile;
+  onProfile: (p: Profile) => void;
+  midi?: MidiPort;
+  onMidi: (p: MidiPort) => void;
+  /** Joined players: the mapper can edit any player's controller. */
+  players?: { device: string; name: string }[];
+  /** Opens the Controller tools drawer. */
+  onTools: () => void;
+}) {
+  const [pads, setPads] = useState<Gamepad[]>([]),
+    [capture, setCapture] = useState<Action | null>(null),
+    [ports, setPorts] = useState<MidiPort[]>([]),
+    [error, setError] = useState(""),
+    [midiLane, setMidiLane] = useState<number | null>(null),
+    [lastMidi, setLastMidi] = useState("");
+  const previous = useRef<Pick<Gamepad, "buttons" | "axes"> | null>(null);
+  const captureRef = useRef(capture);
+  captureRef.current = capture;
+  const access = useRef<MIDIAccess | null>(null);
+  // Whose controller the mapping panel edits: Player 1 uses the selection on
+  // the left; other players' pads keep their own saved mapping.
+  const [target, setTarget] = useState(0);
+  const t = Math.min(target, Math.max(0, players.length - 1));
+  const mapDevice = t === 0 ? device : players[t].device;
+  const [otherProfile, setOtherProfile] = useState<Profile>(defaultProfile);
+  useEffect(() => {
+    if (t > 0 && isPad(mapDevice))
+      setOtherProfile(loadProfile(mapDevice.split(":").slice(2).join(":")));
+  }, [t, mapDevice]);
+  const mapProfile = t === 0 ? profile : otherProfile;
+  const setMapProfile = t === 0 ? onProfile : setOtherProfile;
+  const current = pads.find((p) => mapDevice === `pad:${p.index}:${p.id}`);
+  const persist = (p: Profile) => {
+    setMapProfile(p);
+    if (current)
+      localStorage.setItem("backstage:pad:" + current.id, JSON.stringify(p));
+  };
+  useEffect(() => {
+    let frame = 0,
+      last = 0;
+    const tick = (now: number) => {
+      if (now - last > 70) {
+        const connected = Array.from(navigator.getGamepads()).filter(
+          (p): p is Gamepad => !!p?.connected,
+        );
+        setPads(connected);
+        const pad = connected.find(
+          (p) => mapDevice === `pad:${p.index}:${p.id}`,
+        );
+        if (pad) {
+          if (captureRef.current && previous.current) {
+            const binding = newlyPressed(pad, previous.current);
+            if (binding) {
+              const updated = {
+                ...mapProfile,
+                bindings: {
+                  ...mapProfile.bindings,
+                  [captureRef.current]: binding,
+                },
+              };
+              setMapProfile(updated);
+              localStorage.setItem(
+                "backstage:pad:" + pad.id,
+                JSON.stringify(updated),
+              );
+              setCapture(null);
+            }
+          }
+          previous.current = snapshot(pad);
+        } else previous.current = null;
+        last = now;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [mapDevice, mapProfile]);
+  useEffect(() => {
+    if (!capture) return;
+    document.body.setAttribute("data-capturing", "");
+    const cancel = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopImmediatePropagation();
+      setCapture(null);
+    };
+    window.addEventListener("keydown", cancel, true);
+    return () => {
+      document.body.removeAttribute("data-capturing");
+      window.removeEventListener("keydown", cancel, true);
+    };
+  }, [capture]);
+  useEffect(() => {
+    if (!midi) return;
+    const handler = (event: MIDIMessageEvent) => {
+      const data = event.data;
+      if (!data || (data[0] & 0xf0) !== 0x90 || data[2] === 0) return;
+      setLastMidi(`Note ${data[1]} · velocity ${data[2]}`);
+      if (midiLane !== null) {
+        let map = {};
+        try {
+          map = JSON.parse(
+            localStorage.getItem("backstage:midi:" + midi.id) || "{}",
+          );
+        } catch {}
+        localStorage.setItem(
+          "backstage:midi:" + midi.id,
+          JSON.stringify({ ...map, [data[1]]: midiLane }),
+        );
+        setMidiLane(null);
+      }
+    };
+    midi.input.addEventListener("midimessage", handler);
+    return () => midi.input.removeEventListener("midimessage", handler);
+  }, [midi, midiLane]);
+  useEffect(
+    () => () => {
+      if (access.current) access.current.onstatechange = null;
+    },
+    [],
+  );
+  async function connectMidi() {
+    try {
+      if (!navigator.requestMIDIAccess)
+        throw Error("MIDI is unavailable on this system.");
+      const a = await navigator.requestMIDIAccess({ sysex: false });
+      access.current = a;
+      const refresh = () =>
+        setPorts(
+          Array.from(a.inputs.values()).map((input) => ({
+            id: input.id,
+            name: input.name || "MIDI input",
+            input,
+          })),
+        );
+      a.onstatechange = refresh;
+      refresh();
+      setError("");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "MIDI access was denied.");
+    }
+  }
+  return (
+    <>
+      <div className="page-heading">
+        <div>
+          <span className="eyebrow">MAKE IT YOURS</span>
+          <h1>Find your rhythm.</h1>
+          <p>Connect a controller. Press a button. Make every input count.</p>
+        </div>
+        <span className="pill">
+          <i />
+          {pads.length} gamepad{pads.length === 1 ? "" : "s"} detected
+        </span>
+      </div>
+      <div className="controller-layout">
+        <section className="panel device-list">
+          <h3>Your inputs</h3>
+          <button
+            className={"device " + (device === "keyboard" ? "selected" : "")}
+            onClick={() => onDevice("keyboard")}
+          >
+            <span className="device-icon">⌨</span>
+            <div>
+              <strong>Keyboard</strong>
+              <small>Always ready · A S D F G</small>
+            </div>
+          </button>
+          {pads.map((p) => (
+            <button
+              className={
+                "device " +
+                (device === `pad:${p.index}:${p.id}` ? "selected" : "")
+              }
+              key={p.index}
+              onClick={() => {
+                setTarget(0);
+                onDevice(`pad:${p.index}:${p.id}`);
+                onProfile(loadProfile(p.id));
+                setCapture(null);
+                previous.current = null;
+              }}
+            >
+              <span className="device-icon">✣</span>
+              <div>
+                <strong>{p.id}</strong>
+                <small>
+                  {p.mapping === "standard"
+                    ? "Standard gamepad"
+                    : "Custom mapping"}{" "}
+                  · {p.buttons.length} buttons / {p.axes.length} axes
+                </small>
+              </div>
+            </button>
+          ))}
+          {!pads.length && (
+            <p className="muted small">
+              Plug in or pair a gamepad, then press one of its buttons. Devices
+              must be visible to the operating system and Chromium.
+            </p>
+          )}
+          <div className="divider" />
+          <button className="secondary wide" onClick={connectMidi}>
+            Connect MIDI drums
+          </button>
+          {ports.map((p) => (
+            <button
+              key={p.id}
+              className={
+                "device " +
+                (device === "midi" && midi?.id === p.id ? "selected" : "")
+              }
+              onClick={() => {
+                onDevice("midi");
+                onMidi(p);
+              }}
+            >
+              <span className="device-icon">◉</span>
+              <div>
+                <strong>{p.name}</strong>
+                <small>{p.input.state}</small>
+              </div>
+            </button>
+          ))}
+          <div className="divider" />
+          <RiffPanel onTools={onTools} />
+          {error && <p className="error-text">{error}</p>}
+        </section>
+        <section className="panel mapping-panel">
+          {players.length > 1 && (
+            <div
+              className="map-tabs"
+              role="tablist"
+              aria-label="Map a player's controller"
+            >
+              {players.map((pl, i) => (
+                <button
+                  key={i}
+                  role="tab"
+                  aria-selected={i === t}
+                  className={`map-tab p${i + 1}` + (i === t ? " active" : "")}
+                  onClick={() => {
+                    setTarget(i);
+                    setCapture(null);
+                    previous.current = null;
+                  }}
+                >
+                  <b>{pl.name}</b>
+                  <small>{deviceLabel(pl.device, pads)}</small>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="section-heading">
+            <h3>
+              {current
+                ? "Map your controller"
+                : mapDevice === "midi"
+                  ? "MIDI drum pads"
+                  : "Keyboard controls"}
+            </h3>
+            {current && (
+              <button
+                className="text-button"
+                onClick={() => persist(defaultProfile())}
+              >
+                Reset mapping
+              </button>
+            )}
+          </div>
+          {current ? (
+            <>
+              <p className="muted">
+                Choose an action, then press a button or move a stick. Settings
+                are saved for this mapDevice.
+              </p>
+              <div className="mapping-grid">
+                {actions.map((a, i) => {
+                  const binding = mapProfile.bindings[a];
+                  return (
+                    <div className="mapping-row" key={a}>
+                      <span>
+                        <i className={"lane-dot lane-" + i} />
+                        {actionLabels[a]}
+                      </span>
+                      <button
+                        className={capture === a ? "capture" : ""}
+                        onClick={() => {
+                          // Baseline the pad now so a held button that
+                          // started listening is not captured.
+                          const pad = Array.from(navigator.getGamepads()).find(
+                            (p) => p && mapDevice === `pad:${p.index}:${p.id}`,
+                          );
+                          if (pad) previous.current = snapshot(pad);
+                          setCapture(capture === a ? null : a);
+                        }}
+                      >
+                        {capture === a
+                          ? "Listening…"
+                          : binding.type === "button"
+                            ? `Button ${binding.index}`
+                            : `Axis ${binding.index} ${binding.direction === 1 ? "+" : "−"}`}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <label className="slider-label">
+                Axis threshold <b>{Math.round(mapProfile.deadzone * 100)}%</b>
+                <input
+                  type="range"
+                  min=".15"
+                  max=".9"
+                  step=".05"
+                  value={mapProfile.deadzone}
+                  onChange={(e) =>
+                    persist({ ...mapProfile, deadzone: Number(e.target.value) })
+                  }
+                />
+              </label>
+              <div className="section-heading">
+                <h3>Live input</h3>
+                <span className="tiny muted">Press and move to test</span>
+              </div>
+              <div className="button-meter">
+                {current.buttons.map((b, i) => (
+                  <span key={i} className={b.pressed ? "pressed" : ""}>
+                    {i}
+                  </span>
+                ))}
+              </div>
+              <div className="axes">
+                {current.axes.map((v, i) => (
+                  <label key={i}>
+                    Axis {i}
+                    <meter min="-1" max="1" value={v} />
+                    <code>{v.toFixed(2)}</code>
+                  </label>
+                ))}
+              </div>
+            </>
+          ) : mapDevice === "midi" ? (
+            <>
+              <p className="muted">
+                General MIDI drum notes work by default. Choose a lane and
+                strike a pad to teach a different mapping.
+              </p>
+              <div className="mapping-grid">
+                {[0, 1, 2, 3, 4].map((l) => (
+                  <div className="mapping-row" key={l}>
+                    <span>
+                      <i className={"lane-dot lane-" + l} />
+                      {actionLabels[`lane${l}` as Action]}
+                    </span>
+                    <button
+                      onClick={() => setMidiLane(midiLane === l ? null : l)}
+                    >
+                      {midiLane === l ? "Strike a pad…" : "Learn pad"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p className="live-message">
+                {lastMidi || "Waiting for a drum hit…"}
+              </p>
+              <p className="muted small">
+                Select the Drums track in your library to play.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="keyboard-visual">
+                {["A", "S", "D", "F", "G"].map((key, i) => (
+                  <div key={key}>
+                    <kbd>{key}</kbd>
+                    <i className={"lane-dot lane-" + i} />
+                  </div>
+                ))}
+              </div>
+              <p className="muted">
+                Tap mode: press the matching keys at the line. Strum mode: hold
+                the keys and press Space or ↑ / ↓. Shift activates Star Power;
+                hold W to whammy. Escape pauses.
+              </p>
+            </>
+          )}
+        </section>
+      </div>
+      <p className="footnote">
+        Xbox, PlayStation, Switch-style and generic controllers can be mapped
+        when Chromium exposes their inputs. Detection does not certify a model.
+        PDP Riffmaster guitars for Xbox are read by Backstage itself (see
+        above); tested with the receivers on this computer, not every model.
+      </p>
+    </>
+  );
+}
+
+/** PDP Riffmaster for Xbox: macOS has no driver for its receiver, so
+ * Backstage reads it itself and shows each receiver as its own controller.
+ * Releasing, reconnecting and debugging live in Controller tools. */
+function RiffPanel({ onTools }: { onTools: () => void }) {
+  const [pads, setPads] = useState<RiffPad[]>([]);
+  useEffect(() => onRiff(setPads), []);
+  return (
+    <div className="riff-panel" aria-label="Riffmaster guitars">
+      <strong>PDP Riffmaster (Xbox)</strong>
+      <small>
+        {pads.length
+          ? `${pads.length} receiver${pads.length === 1 ? "" : "s"} plugged in`
+          : "No receivers found. Plug in the guitar’s USB receiver."}
+      </small>
+      {pads.map((p) => (
+        <div key={p.key} className="riff-row">
+          <i
+            className={
+              p.connected
+                ? "on"
+                : p.state === "released"
+                  ? "off"
+                  : p.state === "held" || p.state === "error"
+                    ? "bad"
+                    : "wait"
+            }
+          />
+          <span>
+            {riffName(riffNumber(p))}
+            <small>
+              {p.connected
+                ? "Connected · choose it above to map or test"
+                : p.reason}
+            </small>
+          </span>
+        </div>
+      ))}
+      <button className="secondary wide" onClick={onTools}>
+        Controller tools
+      </button>
+      <small>
+        Backstage connects receivers by itself. Controller tools release a
+        receiver for other apps, reconnect a guitar stuck on a yellow light, and
+        copy a debug report.
+      </small>
+    </div>
+  );
+}

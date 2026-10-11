@@ -1,0 +1,20 @@
+node_modules/
+.DS_Store
+
+# Source files live in build/; ignore only generated artifacts.
+*.app/
+*.zip
+*.dylib
+/build/injector
+/build/injector.arm64
+/build/injector.x86_64
+/build/configure-clone-hero
+/build/restore-controller-settings
+/build/controller-probe
+/build/controller-multi-probe
+/build/MacRiff
+/build/MacRiff.arm64
+/build/MacRiff.x86_64
+/build/settings-backups/
+/build/latest-controller-session.txt
+/build/*.applied

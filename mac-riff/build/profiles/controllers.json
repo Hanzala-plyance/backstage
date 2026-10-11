@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "profiles": [
+    {
+      "id": "pdp-riffmaster-xbox",
+      "name": "PDP Riffmaster (Xbox)",
+      "vendorId": 3695,
+      "productIds": [584],
+      "decoder": "xbox-gip-riffmaster",
+      "games": {
+        "clonehero": "bridge",
+        "yarg": "unsupported",
+        "backstage": "unsupported"
+      },
+      "pairing": "Connect the original USB receiver, turn on the guitar, and use the guitar/receiver pairing buttons if needed. Software checks the connection; the receiver performs wireless pairing."
+    }
+  ]
+}
