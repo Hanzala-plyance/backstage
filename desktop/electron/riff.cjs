@@ -532,17 +532,26 @@ class Riffmasters {
     if (r) await new Promise((done) => r.close(undefined, done));
     return this.connect(key);
   }
-  /** Releases every receiver; nothing reconnects until connectAll. */
-  async disconnect() {
+  /** Releases every receiver; nothing reconnects until connectAll. Resolves
+   * once USB has let go (or after `limit` ms), so quitting never leaves a
+   * receiver open for node-usb to close after libusb has shut down. */
+  async disconnect(limit = 2000) {
     this.auto = false;
+    const closing = [];
     for (const s of this.slots.values()) {
       const r = s.receiver;
       s.receiver = null;
       if (s.state !== "released") s.state = "closed";
       s.guitar = "waiting";
       Object.assign(s, blank());
-      r?.close();
+      if (r) closing.push(new Promise((done) => r.close(undefined, done)));
     }
+    let timer;
+    await Promise.race([
+      Promise.all(closing),
+      new Promise((done) => (timer = setTimeout(done, limit))),
+    ]);
+    clearTimeout(timer);
     await this.admin.disconnect();
     this.push();
     return this.status();

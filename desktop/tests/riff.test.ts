@@ -336,3 +336,32 @@ test("guitar input never triggers a USB scan", async () => {
   assert.equal(scans, before, "no enumeration per report");
   await riff.disconnect();
 });
+test("disconnect waits until every receiver has let go of USB", async () => {
+  const usb = fakeUsb();
+  // Receiver 1 takes a while to release its interface.
+  const device = usb.devices[0];
+  const iface = device.interface;
+  device.interface = (n: number) => {
+    const real = iface(n);
+    return {
+      ...real,
+      release: (_: boolean, done: () => void) => setTimeout(done, 300),
+    };
+  };
+  const riff = new Riffmasters(() => {}, { usb });
+  await riff.connectAll();
+  assert.ok(device.opened);
+  await riff.disconnect();
+  assert.equal(device.opened, false, "closed before disconnect resolved");
+  // A receiver that never lets go can't hold quitting up for long.
+  const stuck = fakeUsb();
+  stuck.devices[0].interface = (n: number) => ({
+    ...iface.call(stuck.devices[0], n),
+    release: () => {},
+  });
+  const riff2 = new Riffmasters(() => {}, { usb: stuck });
+  await riff2.connectAll();
+  const start = Date.now();
+  await riff2.disconnect(400);
+  assert.ok(Date.now() - start < 1500, "bounded wait");
+});

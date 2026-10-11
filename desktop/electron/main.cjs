@@ -526,11 +526,23 @@ app.whenReady().then(async () => {
   );
   await createWindow();
 });
-app.on("will-quit", () => {
-  // Readers stop on their own once the lease lapses; ending the session
-  // releases the receivers right away.
-  void riff?.disconnect();
+// Receivers must be released before the process exits: node-usb closes any
+// still-open device during shutdown, after libusb is gone, and that aborts.
+// Quitting waits (at most ~2 s) for every receiver to let go.
+let receiversReleased = false;
+app.on("will-quit", (event) => {
+  if (receiversReleased || !riff) return;
+  event.preventDefault();
+  receiversReleased = true;
+  riff
+    .disconnect()
+    .catch(() => {})
+    .finally(() => app.quit());
 });
+// Ctrl+C in `npm run dev` and `kill` quit the same way instead of exiting
+// with receivers open.
+for (const signal of ["SIGINT", "SIGTERM"])
+  process.on(signal, () => app.quit());
 app.on("before-quit", (event) => {
   if (quitting) return;
   if (service?.child) {
