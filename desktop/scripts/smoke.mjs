@@ -676,9 +676,11 @@ try {
   ).toBeVisible();
   await page.screenshot({ path: "/tmp/backstage-desktop-check.png" });
   await page.getByRole("button", { name: /Start the lessons/ }).click();
+  // The lesson screen loads on demand, which can take a while on slow
+  // (software-rendered) CI machines.
   await expect(
     page.getByRole("dialog", { name: "Frets & strum" }),
-  ).toContainText("press Space to strum");
+  ).toContainText("press Space to strum", { timeout: 20000 });
   await page.getByRole("button", { name: /Watch the demo/ }).click();
   await expect(page.locator(".lesson-badge")).toContainText("DEMO");
   // The game performs the demo through the real rules, so hits count up
