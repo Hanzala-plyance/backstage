@@ -693,78 +693,82 @@ export default function Game({
         <>
           {/* Numbers live in the empty space beside the bottom of the
               highway; the Star Power meter is the strip under the frets. */}
-          <div className="side-stats left">
-            <div className="game-metrics">
-              <div>
-                <small>SCORE</small>
-                <b>{solo.score.toLocaleString()}</b>
-              </div>
-              <div>
-                <small>STREAK</small>
-                <b>
-                  {solo.combo}
-                  <em>×</em>
-                </b>
-              </div>
-              <div>
-                <small>ACCURACY</small>
-                <b>
-                  {solo.accuracy}
-                  <em>%</em>
-                </b>
-              </div>
-            </div>
-          </div>
-          <div className="side-stats right" data-tier={tier(solo.combo)}>
-            <aside
-              className="amplifier"
-              aria-label="Guitar scoring"
-              data-tier={tier(solo.combo)}
-            >
-              <span className="eyebrow">MULTIPLIER</span>
-              <strong>
-                {solo.multiplier}
-                <i>×</i>
-              </strong>
-              <div className="streak-pips">
-                {Array.from({ length: 10 }, (_, i) => (
-                  <span
-                    key={i}
-                    className={
-                      solo.combo >= 30 || i < solo.combo % 10 ? "lit" : ""
-                    }
-                  />
-                ))}
-              </div>
-              <span>
-                {solo.combo >= 30
-                  ? "MAXIMUM GAIN"
-                  : `${10 - (solo.combo % 10)} TO NEXT MULTIPLIER`}
-              </span>
-            </aside>
-            <div
-              className={"power-meter" + (solo.power >= 0.5 ? " charged" : "")}
-            >
-              <label>
-                ϟ STAR POWER <b>{Math.round(solo.power * 100)}%</b>
-              </label>
-              {meter(solo)}
-              <button
-                disabled={
-                  phase !== "playing" || solo.power < 0.5 || solo.powerActive
-                }
-                onClick={() =>
-                  runtimes.current[0]?.judge.activate(
-                    (audio.current?.time ?? 0) - offset / 1000,
-                  )
+          <div className="side-panel">
+            <div className="side-stats right" data-tier={tier(solo.combo)}>
+              <aside
+                className="amplifier"
+                aria-label="Guitar scoring"
+                data-tier={tier(solo.combo)}
+              >
+                <span className="eyebrow">MULTIPLIER</span>
+                <strong>
+                  {solo.multiplier}
+                  <i>×</i>
+                </strong>
+                <div className="streak-pips">
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <span
+                      key={i}
+                      className={
+                        solo.combo >= 30 || i < solo.combo % 10 ? "lit" : ""
+                      }
+                    />
+                  ))}
+                </div>
+                <span>
+                  {solo.combo >= 30
+                    ? "MAXIMUM GAIN"
+                    : `${10 - (solo.combo % 10)} TO NEXT MULTIPLIER`}
+                </span>
+              </aside>
+              <div
+                className={
+                  "power-meter" + (solo.power >= 0.5 ? " charged" : "")
                 }
               >
-                {solo.powerActive
-                  ? "LIVE · DOUBLE SCORE"
-                  : solo.power >= 0.5
-                    ? "IGNITE · SHIFT"
-                    : "HIT GLOWING PHRASES"}
-              </button>
+                <label>
+                  ϟ STAR POWER <b>{Math.round(solo.power * 100)}%</b>
+                </label>
+                {meter(solo)}
+                <button
+                  disabled={
+                    phase !== "playing" || solo.power < 0.5 || solo.powerActive
+                  }
+                  onClick={() =>
+                    runtimes.current[0]?.judge.activate(
+                      (audio.current?.time ?? 0) - offset / 1000,
+                    )
+                  }
+                >
+                  {solo.powerActive
+                    ? "LIVE · DOUBLE SCORE"
+                    : solo.power >= 0.5
+                      ? "IGNITE · SHIFT"
+                      : "HIT GLOWING PHRASES"}
+                </button>
+              </div>
+            </div>
+            <div className="side-stats left">
+              <div className="game-metrics">
+                <div>
+                  <small>SCORE</small>
+                  <b>{solo.score.toLocaleString()}</b>
+                </div>
+                <div>
+                  <small>STREAK</small>
+                  <b>
+                    {solo.combo}
+                    <em>×</em>
+                  </b>
+                </div>
+                <div>
+                  <small>ACCURACY</small>
+                  <b>
+                    {solo.accuracy}
+                    <em>%</em>
+                  </b>
+                </div>
+              </div>
             </div>
           </div>
           <canvas

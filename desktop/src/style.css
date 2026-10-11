@@ -5018,67 +5018,28 @@ body,
 .player-hud .power-meter.mini label {
   gap: 6px;
 }
-/* Comic pop-ups: a big Spider-Verse style burst over the performer, with
-   a halftone starburst panel behind thick, outlined lettering. */
+/* Comic pop-ups: the original misprint lettering (yellow with a pink plate,
+   white with a blue plate for misses, cyan for Star Power), much bigger. */
 .comic-caption {
   z-index: 4;
-  isolation: isolate;
-  padding: 28px 42px;
+  padding: 12px 22px;
   font-size: 76px;
   line-height: 1;
   letter-spacing: 2px;
-  -webkit-text-stroke: 4px #07060b;
+  -webkit-text-stroke: 3px #07060b;
   paint-order: stroke fill;
-  text-shadow:
-    6px 6px 0 #ff2e88,
-    10px 10px 0 #07060b;
-  background: none;
-  filter: drop-shadow(0 0 0 #07060b) drop-shadow(5px 6px 0 #07060b);
+  text-shadow: 7px 7px 0 #ff2e88;
+  background: radial-gradient(circle, #ffffff2e 2.5px, transparent 3px) 0 0 /
+    12px 12px;
   animation: comic-burst 1.3s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
 }
-.comic-caption::before {
-  content: "";
-  position: absolute;
-  inset: -18% -14%;
-  z-index: -1;
-  background:
-    radial-gradient(circle, #ff2e8855 2.5px, transparent 3px) 0 0 / 11px 11px,
-    #ffe03a;
-  clip-path: polygon(
-    50% 0%,
-    58% 22%,
-    80% 6%,
-    74% 30%,
-    100% 26%,
-    82% 46%,
-    100% 64%,
-    76% 64%,
-    86% 92%,
-    62% 76%,
-    52% 100%,
-    42% 78%,
-    18% 96%,
-    24% 70%,
-    0% 72%,
-    16% 52%,
-    0% 32%,
-    24% 34%,
-    16% 8%,
-    38% 24%
-  );
-}
-.comic-caption.miss::before {
-  background:
-    radial-gradient(circle, #2f8cff66 2.5px, transparent 3px) 0 0 / 11px 11px,
-    #ffffff;
+.comic-caption.miss {
+  color: #fff;
+  text-shadow: 7px 7px 0 #2f8cff;
 }
 .comic-caption.power {
+  color: #38e8ff;
   font-size: 88px;
-}
-.comic-caption.power::before {
-  background:
-    radial-gradient(circle, #c04bff66 2.5px, transparent 3px) 0 0 / 11px 11px,
-    #9beaff;
 }
 .multi .comic-caption {
   font-size: 60px;
@@ -5086,7 +5047,7 @@ body,
 .players-3 .comic-caption,
 .players-4 .comic-caption {
   font-size: 44px;
-  padding: 18px 26px;
+  padding: 8px 14px;
 }
 @keyframes comic-burst {
   0% {
@@ -5134,4 +5095,71 @@ body,
 .comic-caption.flip,
 .comic-caption.miss.flip {
   transform: translate(-88%, -55%) rotate(6deg);
+}
+/* With a band, pop-ups sit higher so they mostly clear the highways. */
+.multi .comic-caption,
+.multi .comic-caption.miss {
+  transform: translate(-12%, -125%) rotate(-7deg);
+}
+.multi .comic-caption.flip,
+.multi .comic-caption.miss.flip {
+  transform: translate(-88%, -125%) rotate(6deg);
+}
+/* Solo: one column on the side away from the performer, so nothing runs
+   into the highway; sizes follow the window height. */
+.side-panel {
+  position: absolute;
+  bottom: 74px;
+  left: 40px;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(10px, 2.2vh, 26px);
+  max-width: min(320px, 26vw);
+  pointer-events: none;
+}
+.perf-left .side-panel {
+  left: auto;
+  right: 40px;
+}
+.side-panel .side-stats,
+.perf-right .side-panel .side-stats.right,
+.perf-left .side-panel .side-stats.left {
+  position: static;
+  width: auto;
+  text-align: left;
+}
+.perf-left .side-panel .side-stats,
+.perf-left .side-panel .side-stats .game-metrics {
+  text-align: right;
+}
+.side-panel .amplifier {
+  justify-items: start;
+}
+.perf-left .side-panel .amplifier {
+  justify-items: end;
+}
+.side-panel .power-meter label {
+  justify-content: flex-start;
+}
+.perf-left .side-panel .power-meter label {
+  justify-content: flex-end;
+}
+.side-panel .power-meter button {
+  text-align: inherit;
+}
+.side-panel .game-metrics {
+  gap: clamp(6px, 1.4vh, 14px);
+}
+.side-panel .game-metrics div:first-child b {
+  font-size: clamp(48px, 7.5vh, 84px);
+}
+.side-panel .game-metrics b {
+  font-size: clamp(30px, 4.6vh, 50px);
+}
+.side-panel .amplifier > strong {
+  font-size: clamp(56px, 8.5vh, 96px);
+}
+.side-panel .amplifier > strong i {
+  font-size: clamp(26px, 3.8vh, 42px);
 }
