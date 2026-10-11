@@ -5,6 +5,7 @@ import {
   cycleSetting,
   joinPlayer,
   leavePlayer,
+  toggleStrum,
   cycleDevice,
   cycleLevel,
   cyclePart,
@@ -106,4 +107,14 @@ test("setup cycles any instrument or difficulty; Player 1 can't leave", () => {
   assert.equal(cycleSetting(lineup, 1, "level", -1)[1].level, "Expert");
   assert.equal(leavePlayer(lineup, 0).length, 2);
   assert.deepEqual(leavePlayer(lineup, 1), [lineup[0]]);
+});
+test("each player can turn strumming on or off", () => {
+  const lineup = [
+    { device: "keyboard", part: "Guitar", level: "Easy" },
+    { device: "pad:16:Riff", part: "Guitar", level: "Easy" },
+  ] as PlayerSetup[];
+  const off = toggleStrum(lineup, 1, true);
+  assert.equal(off[1].strum, false);
+  assert.equal(off[0].strum, undefined, "others keep following Settings");
+  assert.equal(toggleStrum(off, 1, false)[1].strum, true);
 });

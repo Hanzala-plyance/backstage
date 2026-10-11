@@ -152,7 +152,9 @@ Player 1. Any other controller joins as the next player by pressing **Start**.
 Its setup pop-up opens above the bar and only that controller drives it: strum to
 move, green to change (yellow goes back), red or Start to close. It has a live
 fret and strum test, the player's **avatar** (the 10 premade looks, or their camera
-photo), **instrument**, **difficulty** and **Leave**. Start on a player's own
+photo), **instrument**, **difficulty**, **strumming** (on: strum to hit notes;
+off: frets alone, for that player only; it starts from the Settings choice) and
+**Leave**. Start on a player's own
 controller reopens it; the mouse works too. The Avatars section edits the same
 players (names, camera photos, gear). Choosing a song keeps each player's choices
 where the song has those charts. During a song, a controller nobody is playing

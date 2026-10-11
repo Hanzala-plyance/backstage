@@ -552,6 +552,10 @@ try {
       (await setup.locator(".setup-row.current strong").textContent()) ===
       "Medium",
   );
+  // Strumming is per player: on by default here, green turns it off.
+  await hold(13, async () => (await row()).includes("Strumming"));
+  await expect(setup.locator(".setup-row.current")).toContainText("On");
+  await hold(7, async () => (await row()).includes("Off · frets only"));
   await page.screenshot({ path: "/tmp/backstage-desktop-join.png" });
   await hold(1, async () => (await setup.count()) === 0);
   await expect(

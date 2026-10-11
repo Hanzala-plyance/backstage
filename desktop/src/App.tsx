@@ -151,6 +151,10 @@ export default function App() {
     gear: gearOf(i, band[i]),
     label: band[i]?.name || `Player ${i + 1}`,
   });
+  const modeOf = (p: PlayerSetup) =>
+    p.strum === undefined
+      ? {}
+      : { mode: (p.strum ? "strum" : "tap") as "strum" | "tap" };
   const loadScores = () =>
     void window.backstage
       .scores()
@@ -182,6 +186,8 @@ export default function App() {
   const navigate = useRef<(b: MenuButton, source?: string) => void>(() => {});
   // Clone Hero-style join: a player's setup pop-up, driven by their own pad.
   const [setupSlot, setSetupSlot] = useState<number | null>(null);
+  // Player 1's own strum choice (other players keep theirs in the lineup).
+  const [strum1, setStrum1] = useState<boolean | undefined>(undefined);
   const setupInput = useRef<(b: MenuButton) => void>(() => {});
   const returnFocus = useRef<HTMLElement | null>(null);
   const later = (fn: () => void) => setTimeout(fn, 40);
@@ -510,7 +516,10 @@ export default function App() {
       : isPad(d)
         ? loadProfile(padId(d))
         : defaultProfile();
-  const lineupAll = (): PlayerSetup[] => [{ device, part, level }, ...lineup];
+  const lineupAll = (): PlayerSetup[] => [
+    { device, part, level, ...(strum1 === undefined ? {} : { strum: strum1 }) },
+    ...lineup,
+  ];
   // Player 1 is the Controllers selection; changing it here changes that too.
   const applyLineup = (next: PlayerSetup[]) => {
     const [first, ...rest] = next;
@@ -524,6 +533,7 @@ export default function App() {
     }
     setPart(first.part);
     setLevel(first.level);
+    setStrum1(first.strum);
     setLineup(rest);
   };
   const choose = (song: Song) => {
@@ -583,7 +593,15 @@ export default function App() {
     if (!loaded) return;
     setPlaying({
       song: loaded,
-      players: [{ device, chart: loaded.chart, profile, ...performer(0) }],
+      players: [
+        {
+          device,
+          chart: loaded.chart,
+          profile,
+          ...performer(0),
+          ...modeOf(lineupAll()[0]),
+        },
+      ],
     });
   }
   // Start Soundcheck: the first step not yet done, in order.
@@ -614,6 +632,7 @@ export default function App() {
         chart: loaded[i].chart,
         profile: profileOf(p.device),
         ...performer(i),
+        ...modeOf(all[i]),
       })),
     });
   }
@@ -733,6 +752,7 @@ export default function App() {
       joinable={joinable}
       slots={band}
       onSlot={saveSlot}
+      defaultStrum={mode === "strum"}
     />
   );
   if (screen === "menu")

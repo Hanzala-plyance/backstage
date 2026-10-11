@@ -2,7 +2,14 @@ import type { Level, Part, Song } from "../types";
 export const MAX_PLAYERS = 4;
 /** A lobby slot: who plays what, on which input. Devices are "keyboard",
  * "midi" or "pad:<index>:<id>", matching the Controllers selection. */
-export type PlayerSetup = { device: string; part: Part; level: Level };
+export type PlayerSetup = {
+  device: string;
+  part: Part;
+  level: Level;
+  /** Strum to hit notes (true) or frets alone (false); unset follows the
+   * Settings choice. */
+  strum?: boolean;
+};
 export const isPad = (device: string) => device.startsWith("pad:");
 export function deviceLabel(device: string, pads: readonly Gamepad[] = []) {
   if (device === "keyboard") return "Keyboard";
@@ -143,3 +150,11 @@ export function cycleSetting(
 /** Removes a joined player; Player 1 always stays. */
 export const leavePlayer = (players: readonly PlayerSetup[], index: number) =>
   index > 0 ? players.filter((_, i) => i !== index) : [...players];
+/** Turns strumming on or off for one player (from `current`, the effective
+ * value when the player hasn't chosen yet). */
+export const toggleStrum = (
+  players: readonly PlayerSetup[],
+  index: number,
+  current: boolean,
+): PlayerSetup[] =>
+  players.map((p, i) => (i === index ? { ...p, strum: !current } : p));

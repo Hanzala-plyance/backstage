@@ -16,9 +16,10 @@ import {
   deviceLabel,
   isPad,
   leavePlayer,
+  toggleStrum,
   type PlayerSetup,
 } from "./core/players";
-type Row = "avatar" | "part" | "level" | "leave" | "done";
+type Row = "avatar" | "part" | "level" | "strum" | "leave" | "done";
 /** Live fret/strum test for one controller. */
 function InputTest({ device, profile }: { device: string; profile: Profile }) {
   const [state, setState] = useState(() => readPad(null, profile));
@@ -75,6 +76,7 @@ export default function PlayerBar({
   joinable,
   slots,
   onSlot,
+  defaultStrum,
 }: {
   players: PlayerSetup[];
   names: string[];
@@ -89,6 +91,8 @@ export default function PlayerBar({
   /** Player names and avatars (the Avatars section edits the same slots). */
   slots: Slot[];
   onSlot: (index: number, slot: Slot) => void;
+  /** The Settings choice, for players who haven't picked their own. */
+  defaultStrum: boolean;
 }) {
   const [row, setRow] = useState(0);
   const player = open === null ? null : players[open];
@@ -96,6 +100,8 @@ export default function PlayerBar({
     "avatar",
     "part",
     "level",
+    // Drums don't strum.
+    ...(player && player.part !== "Drums" ? (["strum"] as Row[]) : []),
     ...(open ? (["leave"] as Row[]) : []),
     "done",
   ];
@@ -128,7 +134,9 @@ export default function PlayerBar({
       const at = list.findIndex((l) => same(l, lookOf(open)));
       const look = list[(at + step + list.length) % list.length];
       onSlot(open, { ...(slots[open] ?? { name: "" }), look });
-    } else if (r === "part" || r === "level")
+    } else if (r === "strum")
+      onChange(toggleStrum(players, open, players[open].strum ?? defaultStrum));
+    else if (r === "part" || r === "level")
       onChange(cycleSetting(players, open, r, step));
     else if (r === "leave") {
       onChange(leavePlayer(players, open));
@@ -194,6 +202,15 @@ export default function PlayerBar({
                 <>
                   <span>Difficulty</span>
                   <strong>{player.level}</strong>
+                </>
+              ) : r === "strum" ? (
+                <>
+                  <span>Strumming</span>
+                  <strong>
+                    {(player.strum ?? defaultStrum)
+                      ? "On · strum to hit"
+                      : "Off · frets only"}
+                  </strong>
                 </>
               ) : r === "leave" ? (
                 <span>Leave</span>

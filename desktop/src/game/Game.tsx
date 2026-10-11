@@ -199,7 +199,7 @@ export default function Game({
           new PlayerRuntime(
             p,
             canvases.current[i]!,
-            mode,
+            p.mode ?? mode,
             song.duration,
             ratio,
           ),
@@ -674,7 +674,8 @@ export default function Game({
                 (phase === "ready"
                   ? multi
                     ? "Each player scores on their own highway. Any player’s Start pauses the band."
-                    : mode === "strum" && chart.part !== "Drums"
+                    : (players[0].mode ?? mode) === "strum" &&
+                        chart.part !== "Drums"
                       ? "Strum solid gems. White caps are HOPOs; hollow caps are taps. Hold long notes and complete glowing phrases to earn Star Power."
                       : "Tap the matching controls as notes cross the line."
                   : "Your song and score are right where you left them.")}
@@ -685,7 +686,7 @@ export default function Game({
                 {["A", "S", "D", "F", "G"].map((k) => (
                   <kbd key={k}>{k}</kbd>
                 ))}
-                {mode === "strum" &&
+                {(players[keyboardPlayer].mode ?? mode) === "strum" &&
                   players[keyboardPlayer].chart.part !== "Drums" && (
                     <>
                       <kbd>SPACE · STRUM</kbd>
