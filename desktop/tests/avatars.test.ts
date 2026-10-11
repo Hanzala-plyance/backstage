@@ -6,6 +6,9 @@ import os from "node:os";
 import path from "node:path";
 import {
   cleanName,
+  drumKits,
+  gearOf,
+  guitarStyles,
   handZones,
   moodFor,
   motion,
@@ -14,7 +17,7 @@ import {
   stylize,
 } from "../src/core/avatars";
 const require = createRequire(import.meta.url);
-const { Band, PRESETS } = require("../electron/band.cjs");
+const { Band, PRESETS, GUITARS, KITS } = require("../electron/band.cjs");
 test("names keep up to 8 capital letters and digits", () => {
   assert.equal(cleanName("shredder99"), "SHREDDER");
   assert.equal(cleanName("  dj-k!d 7 "), "DJKD7");
@@ -120,6 +123,48 @@ test("band store validates names, avatars and slots", async () => {
     // A corrupt file falls back to defaults rather than failing.
     await writeFile(file, "{not json");
     assert.equal(band.all()[0].look.id, "volt");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+test("gear choices match the store and fill in defaults", async () => {
+  assert.deepEqual(
+    guitarStyles.map((g) => g.id),
+    GUITARS,
+  );
+  assert.deepEqual(
+    drumKits.map((k) => k.id),
+    KITS,
+  );
+  assert.equal(
+    gearOf(0, {
+      name: "",
+      look: { kind: "preset", id: "volt" },
+      gear: { guitar: "arrow" } as never,
+    }).guitar,
+    "arrow",
+  );
+  assert.equal(gearOf(1).side, "left");
+  const dir = await mkdtemp(path.join(os.tmpdir(), "backstage-gear-"));
+  try {
+    const band = new Band(path.join(dir, "band.json"));
+    band.save(0, {
+      name: "a",
+      look: { kind: "preset", id: "volt" },
+      gear: {
+        guitar: "single-cut",
+        finish: "#FF2E88",
+        kit: "nope",
+        side: "left",
+        extra: 1,
+      },
+    });
+    assert.deepEqual(band.all()[0].gear, {
+      guitar: "single-cut",
+      finish: "#ff2e88",
+      side: "left",
+    });
+    assert.equal(band.all()[1].gear, undefined);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

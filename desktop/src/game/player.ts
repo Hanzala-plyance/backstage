@@ -4,7 +4,7 @@ import { keyboardLanes, readPad } from "../core/input";
 import { isPad } from "../core/players";
 import { createHighway } from "./highway";
 import { applyDemo, type DemoInput } from "../core/lessons";
-import type { Look } from "../core/avatars";
+import type { Gear, Look } from "../core/avatars";
 export type MidiPort = { id: string; name: string; input: MIDIInput };
 export type PlayerInit = {
   device: string;
@@ -15,6 +15,7 @@ export type PlayerInit = {
   /** Short tag shown on stage: the player's name or P1–P4. */
   name?: string;
   look?: Look;
+  gear?: Gear;
 };
 export type PadEdges = {
   connected: boolean;

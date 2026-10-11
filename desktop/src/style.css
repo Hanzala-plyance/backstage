@@ -3433,6 +3433,22 @@ kbd {
   /* Comic misprint: pink and cyan plates slightly off register. */
   filter: drop-shadow(3px 0 0 #ff2e8866) drop-shadow(-3px 0 0 #38e8ff55);
 }
+.band-stage.solo,
+.band-tags.solo {
+  top: 70px;
+  width: 34%;
+  height: 56vh;
+}
+.band-stage.side-right,
+.band-tags.side-right {
+  left: auto;
+  right: 12%;
+}
+.band-stage.side-left,
+.band-tags.side-left {
+  left: 17%;
+  right: auto;
+}
 .game-screen .highway,
 .game-screen .player-grid {
   z-index: 1;
@@ -3723,4 +3739,59 @@ kbd {
   .preset-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+.gear {
+  margin-top: 26px;
+  padding-top: 18px;
+  border-top: 1px solid #2a2538;
+}
+.gear h3 {
+  margin: 0 0 12px;
+  font-family: var(--display);
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.gear-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.gear-row > span {
+  width: 64px;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--volt);
+}
+.chip {
+  padding: 8px 12px;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  background: #14121c;
+  box-shadow: inset 0 0 0 1px #2a2538;
+  clip-path: var(--cut-sm);
+}
+.chip.chosen {
+  color: #07060b;
+  background: var(--hot);
+}
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 0 2px #07060b,
+    0 0 0 1px #2a2538;
+}
+.swatch.chosen {
+  box-shadow:
+    inset 0 0 0 2px #07060b,
+    0 0 0 3px #fff;
 }

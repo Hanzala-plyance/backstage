@@ -14,6 +14,19 @@ const PRESETS = [
   "zara",
 ];
 const MAX_PHOTO = 400 * 1024;
+const GUITARS = ["classic-s", "classic-t", "single-cut", "double-cut", "arrow"];
+const KITS = ["rock", "compact", "double-kick", "electronic"];
+/** Gear is optional; only known values are kept. */
+function cleanGear(gear) {
+  if (!gear || typeof gear !== "object") return undefined;
+  const out = {};
+  if (GUITARS.includes(gear.guitar)) out.guitar = gear.guitar;
+  if (typeof gear.finish === "string" && /^#[0-9a-f]{6}$/i.test(gear.finish))
+    out.finish = gear.finish.toLowerCase();
+  if (KITS.includes(gear.kit)) out.kit = gear.kit;
+  if (gear.side === "left" || gear.side === "right") out.side = gear.side;
+  return Object.keys(out).length ? out : undefined;
+}
 const cleanName = (text) =>
   String(text ?? "")
     .toUpperCase()
@@ -44,9 +57,11 @@ class Band {
     } catch {}
     return Array.from({ length: SLOTS }, (_, i) => {
       const s = Array.isArray(saved) ? saved[i] : null;
+      const gear = cleanGear(s?.gear);
       return {
         name: cleanName(s?.name),
         look: validLook(s?.look) ? s.look : fallback(i).look,
+        ...(gear ? { gear } : {}),
       };
     });
   }
@@ -55,7 +70,9 @@ class Band {
       throw Error("Invalid player slot.");
     if (!validLook(value?.look)) throw Error("Invalid avatar.");
     const all = this.all();
+    const gear = cleanGear(value.gear);
     all[slot] = {
+      ...(gear ? { gear } : {}),
       name: cleanName(value.name),
       look:
         value.look.kind === "preset"
@@ -68,4 +85,4 @@ class Band {
     return all;
   }
 }
-module.exports = { Band, PRESETS, cleanName };
+module.exports = { Band, PRESETS, GUITARS, KITS, cleanName };

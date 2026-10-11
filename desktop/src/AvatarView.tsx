@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Instrument, Look } from "./core/avatars";
+import type { Gear, Instrument, Look } from "./core/avatars";
 import { createStage, type PerformerState } from "./game/stage3d";
 const portraits = new Map<string, Promise<string>>();
 let queue: Promise<unknown> = Promise.resolve();
@@ -65,16 +65,18 @@ export function Portrait({
 export function StagePreview({
   look,
   instrument,
+  gear,
 }: {
   look: Look;
   instrument: Instrument;
+  gear: Gear;
 }) {
   const canvas = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     let alive = true,
       frame = 0;
     let dispose = () => {};
-    void createStage(canvas.current!, [{ look, instrument }], {
+    void createStage(canvas.current!, [{ look, instrument, gear }], {
       pixelRatio: 1.5,
     })
       .then((stage) => {
@@ -91,6 +93,8 @@ export function StagePreview({
           const t = (now - start) / 1000;
           const cycle = Math.floor(t / 2.4) % 4;
           state.hits = Math.floor(t / 0.5);
+          // Walk up and down the lanes so the fretting hand and sticks move.
+          state.lanes = [[0, 1, 2, 3, 4, 3, 2, 1][state.hits % 8]];
           state.combo = cycle === 1 ? 12 : 3;
           state.powerActive = cycle === 2;
           if (cycle === 3) state.misses = Math.floor(t / 2.4);
@@ -105,7 +109,7 @@ export function StagePreview({
       cancelAnimationFrame(frame);
       dispose();
     };
-  }, [keyOf(look), instrument]);
+  }, [keyOf(look), instrument, gear.guitar, gear.finish, gear.kit]);
   return (
     <canvas
       ref={canvas}

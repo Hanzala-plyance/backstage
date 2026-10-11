@@ -2,7 +2,62 @@
 // or a camera photo restyled to match.
 export type Look =
   { kind: "preset"; id: string } | { kind: "photo"; image: string };
-export type Slot = { name: string; look: Look };
+/** Instrument styles and where the performer stands in single player. */
+export type Gear = {
+  guitar: string;
+  finish: string;
+  kit: string;
+  side: "left" | "right";
+};
+export type Slot = { name: string; look: Look; gear?: Gear };
+// Generic style names: the shapes nod to classic designs, but brand and model
+// names are trademarks, so they are not used.
+export const guitarStyles = [
+  {
+    id: "classic-s",
+    name: "Classic S",
+    hint: "Double cutaway, long upper horn",
+  },
+  { id: "classic-t", name: "Classic T", hint: "Single cutaway slab" },
+  { id: "single-cut", name: "Single Cut", hint: "Carved top, rounded" },
+  { id: "double-cut", name: "Double Cut", hint: "Curvy twin horns" },
+  { id: "arrow", name: "Arrow", hint: "Pointed V wings" },
+];
+export const finishes = [
+  "#ff2e88",
+  "#38e8ff",
+  "#ffe03a",
+  "#3dff6e",
+  "#c04bff",
+  "#ff8a1f",
+  "#e8312f",
+  "#f5f0ff",
+  "#1c1a26",
+];
+export const drumKits = [
+  {
+    id: "rock",
+    name: "Rock",
+    hint: "Two rack toms, floor tom, crash and ride",
+  },
+  { id: "compact", name: "Compact", hint: "Kick, snare, hi-hat and crash" },
+  {
+    id: "double-kick",
+    name: "Double Kick",
+    hint: "Two kicks, three toms, two crashes",
+  },
+  { id: "electronic", name: "Electronic", hint: "Glowing hex pads" },
+];
+export const defaultGear = (slot: number): Gear => ({
+  guitar: guitarStyles[slot % guitarStyles.length].id,
+  finish: finishes[slot % finishes.length],
+  kit: drumKits[slot % drumKits.length].id,
+  side: slot % 2 ? "left" : "right",
+});
+export const gearOf = (slot: number, s?: Slot | null): Gear => ({
+  ...defaultGear(slot),
+  ...(s?.gear ?? {}),
+});
 export type Hair =
   | "spikes"
   | "mohawk"

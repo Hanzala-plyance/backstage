@@ -222,6 +222,7 @@ export default function Game({
         players.map((p, i) => ({
           look: p.look ?? defaultLook(i),
           instrument: instrumentFor(p.chart.part),
+          gear: p.gear,
         })),
         { pixelRatio: 1 },
       )
@@ -361,6 +362,7 @@ export default function Game({
           misses: r.judge.misses,
           combo: r.judge.combo,
           powerActive: r.judge.powerActive,
+          lanes: r.judge.lastLanes,
         })),
         live,
         beat,
@@ -394,10 +396,18 @@ export default function Game({
     };
   }, []);
   const solo = stats[0];
+  // Solo performers stand beside the highway, on the side they chose.
+  const soloSide = multi
+    ? ""
+    : ` solo side-${players[0].gear?.side ?? "right"}`;
   const band = (
     <>
-      <canvas ref={stageCanvas} className="band-stage" aria-hidden="true" />
-      <div className="band-tags">
+      <canvas
+        ref={stageCanvas}
+        className={"band-stage" + soloSide}
+        aria-hidden="true"
+      />
+      <div className={"band-tags" + soloSide}>
         {players.map((p, i) =>
           anchors[i] ? (
             <span

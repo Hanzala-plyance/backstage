@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Portrait, StagePreview } from "./AvatarView";
 import {
   cleanName,
+  drumKits,
+  finishes,
+  gearOf,
+  guitarStyles,
+  type Gear,
   handZones,
   motion,
   presets,
@@ -12,6 +17,17 @@ import {
   type Slot,
 } from "./core/avatars";
 const SIZE = 256;
+const FINISH_NAMES = [
+  "Hot pink",
+  "Cyan",
+  "Yellow",
+  "Green",
+  "Purple",
+  "Orange",
+  "Red",
+  "Pearl",
+  "Black",
+];
 type CameraState =
   | { step: "idle" }
   | { step: "starting" }
@@ -234,6 +250,9 @@ export default function Avatars({
   }, [slot]);
   if (!current) return null;
   const save = (value: Partial<Slot>) => onSave(slot, { ...current, ...value });
+  const gear = gearOf(slot, current);
+  const setGear = (value: Partial<Gear>) =>
+    save({ gear: { ...gear, ...value } });
   return (
     <div className="avatars-page">
       <div className="page-heading">
@@ -266,7 +285,11 @@ export default function Avatars({
       </div>
       <div className="avatar-editor">
         <section className="avatar-stage">
-          <StagePreview look={current.look} instrument={instrument} />
+          <StagePreview
+            look={current.look}
+            instrument={instrument}
+            gear={gear}
+          />
           <div className="avatar-stage-name">{slotName(slot, current)}</div>
           <div
             className="segmented"
@@ -354,6 +377,74 @@ export default function Avatars({
               />
             </>
           )}
+          <section className="gear" aria-label="Gear">
+            <h3>Gear</h3>
+            <div className="gear-row" role="group" aria-label="Guitar style">
+              <span>Guitar</span>
+              {guitarStyles.map((g) => (
+                <button
+                  key={g.id}
+                  title={g.hint}
+                  aria-pressed={gear.guitar === g.id}
+                  className={"chip" + (gear.guitar === g.id ? " chosen" : "")}
+                  onClick={() => {
+                    setGear({ guitar: g.id });
+                    if (instrument === "drums") setInstrument("guitar");
+                  }}
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
+            <div className="gear-row" role="group" aria-label="Guitar finish">
+              <span>Finish</span>
+              {finishes.map((f, i) => (
+                <button
+                  key={f}
+                  aria-label={FINISH_NAMES[i]}
+                  aria-pressed={gear.finish === f}
+                  className={"swatch" + (gear.finish === f ? " chosen" : "")}
+                  style={{ background: f }}
+                  onClick={() => {
+                    setGear({ finish: f });
+                    if (instrument === "drums") setInstrument("guitar");
+                  }}
+                />
+              ))}
+            </div>
+            <div className="gear-row" role="group" aria-label="Drum kit">
+              <span>Drums</span>
+              {drumKits.map((k) => (
+                <button
+                  key={k.id}
+                  title={k.hint}
+                  aria-pressed={gear.kit === k.id}
+                  className={"chip" + (gear.kit === k.id ? " chosen" : "")}
+                  onClick={() => {
+                    setGear({ kit: k.id });
+                    setInstrument("drums");
+                  }}
+                >
+                  {k.name}
+                </button>
+              ))}
+            </div>
+            <div className="gear-row" role="group" aria-label="Stage side">
+              <span>Stands</span>
+              {(["left", "right"] as const).map((side) => (
+                <button
+                  key={side}
+                  aria-pressed={gear.side === side}
+                  className={"chip" + (gear.side === side ? " chosen" : "")}
+                  onClick={() => setGear({ side })}
+                >
+                  {side === "left"
+                    ? "Left of the highway"
+                    : "Right of the highway"}
+                </button>
+              ))}
+            </div>
+          </section>
         </section>
       </div>
     </div>

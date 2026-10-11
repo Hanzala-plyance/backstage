@@ -40,7 +40,7 @@ import Controllers from "./Controllers";
 import Soundcheck, { CHECK_ID, loadProgress, saveProgress } from "./Soundcheck";
 import ControllerCheck from "./game/ControllerCheck";
 import Avatars from "./Avatars";
-import { defaultLook, slotName, type Slot } from "./core/avatars";
+import { defaultLook, gearOf, slotName, type Slot } from "./core/avatars";
 import { lessons } from "./core/lessons";
 import type { MidiPort } from "./game/Game";
 const Game = lazy(() => import("./game/Game"));
@@ -146,6 +146,7 @@ export default function App() {
   const performer = (i: number) => ({
     name: slotName(i, band[i]),
     look: band[i]?.look ?? defaultLook(i),
+    gear: gearOf(i, band[i]),
     label: band[i]?.name || `Player ${i + 1}`,
   });
   const loadScores = () =>

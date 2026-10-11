@@ -1,17 +1,20 @@
 import * as THREE from "three";
 import {
+  defaultGear,
   moodFor,
   presetFor,
+  type Gear,
   type Instrument,
   type Look,
   type Mood,
   type Preset,
 } from "../core/avatars";
 // The band on stage: chibi 3D performers in a comic-book style (toon bands,
-// halftone shadows, ink outlines) animated "on twos" at 12 poses a second.
-// Stepped posing is the look, and it means the stage only renders 12 times a
-// second, so it costs little next to the highway.
-const STEP = 1 / 12;
+// halftone shadows, ink outlines). Poses are computed 30 times a second and the
+// stage renders only then, on its own small canvas, so it costs little next to
+// the highway. Arms are two-bone chains that reach for real targets: the fret
+// for the note just hit, the strings, or the drum that matches the note.
+const STEP = 1 / 30;
 const INK = new THREE.Vector3(0.03, 0.02, 0.06);
 const rgb = (hex: string) => {
   const n = parseInt(hex.slice(1), 16);
@@ -398,62 +401,398 @@ function extra(mats: Mats, p: Preset) {
   }
   return g;
 }
-function guitar(mats: Mats, color: string, bass: boolean) {
-  const g = new THREE.Group();
-  const body = part(mats, sphere(0.55), color);
-  body.scale.set(1, 0.85, 0.32);
-  const upper = part(mats, sphere(0.42), color);
-  upper.scale.set(1, 0.85, 0.32);
-  upper.position.set(0.45, 0.06, 0);
-  const hole = part(mats, cylinder(0.14, 0.14, 0.04), "#07060b", false);
-  hole.rotation.x = Math.PI / 2;
-  hole.position.set(0.1, 0, 0.17);
-  const length = bass ? 2.1 : 1.6;
-  const neck = part(mats, new THREE.BoxGeometry(length, 0.16, 0.1), "#3a2a20");
-  neck.position.set(0.5 + length / 2, 0.1, 0);
-  const head = part(mats, new THREE.BoxGeometry(0.34, 0.26, 0.12), "#14121c");
-  head.position.set(0.5 + length + 0.15, 0.12, 0);
-  g.add(body, upper, hole, neck, head);
-  return g;
+// Guitar bodies: outlines in the guitar's plane, neck pointing to +x. Rounded
+// styles pass through a spline; the Arrow keeps its points sharp.
+const OUTLINES: Record<string, [number, number][]> = {
+  "classic-s": [
+    [0.42, 0.12],
+    [0.6, 0.3],
+    [0.66, 0.42],
+    [0.52, 0.42],
+    [0.3, 0.3],
+    [0.05, 0.35],
+    [-0.3, 0.46],
+    [-0.56, 0.34],
+    [-0.63, 0],
+    [-0.56, -0.34],
+    [-0.3, -0.46],
+    [0.05, -0.36],
+    [0.3, -0.3],
+    [0.5, -0.34],
+    [0.54, -0.24],
+    [0.42, -0.12],
+  ],
+  "classic-t": [
+    [0.42, 0.12],
+    [0.3, 0.3],
+    [0.0, 0.36],
+    [-0.35, 0.42],
+    [-0.58, 0.3],
+    [-0.62, 0],
+    [-0.58, -0.3],
+    [-0.35, -0.44],
+    [0.05, -0.38],
+    [0.35, -0.36],
+    [0.52, -0.3],
+    [0.5, -0.18],
+    [0.42, -0.12],
+  ],
+  "single-cut": [
+    [0.42, 0.12],
+    [0.32, 0.32],
+    [0.05, 0.33],
+    [-0.25, 0.45],
+    [-0.56, 0.36],
+    [-0.67, 0],
+    [-0.56, -0.4],
+    [-0.2, -0.49],
+    [0.15, -0.4],
+    [0.42, -0.35],
+    [0.52, -0.26],
+    [0.46, -0.14],
+  ],
+  "double-cut": [
+    [0.42, 0.12],
+    [0.56, 0.28],
+    [0.56, 0.4],
+    [0.38, 0.36],
+    [0.1, 0.37],
+    [-0.3, 0.46],
+    [-0.6, 0.32],
+    [-0.66, 0],
+    [-0.6, -0.32],
+    [-0.3, -0.46],
+    [0.1, -0.37],
+    [0.36, -0.34],
+    [0.54, -0.38],
+    [0.58, -0.26],
+    [0.42, -0.12],
+  ],
+  arrow: [
+    [0.42, 0.12],
+    [-0.72, 0.56],
+    [-0.82, 0.4],
+    [-0.28, 0],
+    [-0.82, -0.4],
+    [-0.72, -0.56],
+    [0.42, -0.12],
+  ],
+};
+function outline(style: string, scale = 1) {
+  const pts = (OUTLINES[style] ?? OUTLINES["classic-s"]).map(
+    ([x, y]) => new THREE.Vector2(x * scale, y * scale),
+  );
+  return new THREE.Shape(
+    style === "arrow"
+      ? pts
+      : new THREE.SplineCurve([...pts, pts[0]]).getPoints(72),
+  );
 }
-function drumKit(mats: Mats, color: string) {
+const light = (hex: string) => {
+  const n = parseInt(hex.slice(1), 16);
+  return ((n >> 16) & 255) + ((n >> 8) & 255) + (n & 255) > 520;
+};
+type GuitarInfo = { neckStart: number; neckLength: number };
+function guitar(mats: Mats, style: string, finish: string, bass: boolean) {
   const g = new THREE.Group();
-  // Low and spread out so the drummer's body and sticks stay visible.
-  const kick = part(mats, cylinder(0.45, 0.45, 0.4), color);
-  kick.rotation.x = Math.PI / 2;
-  kick.position.set(0, 0.45, 0.95);
-  const head = part(mats, cylinder(0.37, 0.37, 0.02), "#f5f0ff", false);
-  head.rotation.x = Math.PI / 2;
-  head.position.set(0, 0.45, 1.16);
-  const snare = part(mats, cylinder(0.3, 0.3, 0.18), "#e8e5f2");
-  snare.position.set(-0.8, 0.95, 0.75);
-  snare.rotation.x = 0.35;
-  const tom = part(mats, cylinder(0.26, 0.26, 0.22), color);
-  tom.position.set(0.8, 1.0, 0.75);
-  tom.rotation.x = 0.4;
-  const cymbal = part(mats, cylinder(0.45, 0.45, 0.03), "#ffe03a");
-  cymbal.position.set(1.3, 1.8, 0.4);
-  cymbal.rotation.set(0.5, 0, -0.3);
-  g.add(kick, head, snare, tom, cymbal);
-  return g;
+  const scale = bass ? 1.12 : 1;
+  const depth = 0.14;
+  const body = new THREE.ExtrudeGeometry(outline(style, scale), {
+    depth,
+    bevelEnabled: true,
+    bevelThickness: 0.035,
+    bevelSize: 0.035,
+    bevelSegments: 2,
+    curveSegments: 4,
+  });
+  body.translate(0, 0, -depth / 2);
+  g.add(part(mats, body, finish));
+  // Pickguard on the slab styles, a smaller echo of the body.
+  if (
+    style === "classic-s" ||
+    style === "classic-t" ||
+    style === "double-cut"
+  ) {
+    const guard = new THREE.ShapeGeometry(outline(style, scale * 0.66));
+    const mesh = new THREE.Mesh(
+      guard,
+      mats.toon(light(finish) ? "#14121c" : "#f5f0ff"),
+    );
+    mesh.position.set(0.12, -0.05, depth / 2 + 0.04);
+    g.add(mesh);
+  }
+  const pickups = style === "classic-s" ? 3 : 2;
+  for (let i = 0; i < pickups; i++) {
+    const p = part(
+      mats,
+      new THREE.BoxGeometry(0.08, 0.24, 0.04),
+      "#14121c",
+      false,
+    );
+    p.position.set(0.2 - i * 0.17, 0, depth / 2 + 0.06);
+    g.add(p);
+  }
+  const bridge = part(
+    mats,
+    new THREE.BoxGeometry(0.07, 0.3, 0.05),
+    "#c9c4d6",
+    false,
+  );
+  bridge.position.set(-0.32, 0, depth / 2 + 0.06);
+  g.add(bridge);
+  for (let i = 0; i < (style === "single-cut" ? 4 : 2); i++) {
+    const k = part(mats, cylinder(0.04, 0.04, 0.05), "#ffe03a", false);
+    k.rotation.x = Math.PI / 2;
+    k.position.set(
+      -0.28 - (i % 2) * 0.13,
+      -0.28 - Math.floor(i / 2) * 0.1,
+      depth / 2 + 0.05,
+    );
+    g.add(k);
+  }
+  const neckStart = 0.4 * scale,
+    neckLength = bass ? 2.05 : 1.55;
+  const neck = part(
+    mats,
+    new THREE.BoxGeometry(neckLength, 0.15, 0.09),
+    "#c98e5a",
+  );
+  neck.position.set(neckStart + neckLength / 2, 0, 0);
+  const board = new THREE.Mesh(
+    new THREE.BoxGeometry(neckLength, 0.15, 0.02),
+    mats.toon("#2b1a12"),
+  );
+  board.position.set(neckStart + neckLength / 2, 0, 0.055);
+  g.add(neck, board);
+  // Headstock: a paddle with inline pegs on the S/T styles, wider otherwise.
+  const inline = style === "classic-s" || style === "classic-t";
+  const headstock = part(
+    mats,
+    new THREE.BoxGeometry(inline ? 0.42 : 0.32, inline ? 0.16 : 0.26, 0.08),
+    style === "arrow" ? finish : "#2b1a12",
+  );
+  headstock.position.set(
+    neckStart + neckLength + (inline ? 0.2 : 0.15),
+    inline ? 0.05 : 0,
+    0,
+  );
+  headstock.rotation.z = inline ? 0.08 : 0;
+  g.add(headstock);
+  const strings = bass ? 4 : 6;
+  for (let i = 0; i < strings; i++) {
+    const peg = part(mats, cylinder(0.022, 0.022, 0.07), "#c9c4d6", false);
+    peg.rotation.x = Math.PI / 2;
+    peg.position.set(
+      neckStart +
+        neckLength +
+        0.06 +
+        (inline ? i * 0.055 : (i % (strings / 2)) * 0.08),
+      inline ? 0.11 : i < strings / 2 ? 0.15 : -0.15,
+      0.05,
+    );
+    g.add(peg);
+  }
+  // Strings: one line segment set, from bridge to nut.
+  const verts: number[] = [];
+  for (let i = 0; i < strings; i++) {
+    const y = (i - (strings - 1) / 2) * 0.022;
+    verts.push(
+      -0.32,
+      y * 1.6,
+      depth / 2 + 0.09,
+      neckStart + neckLength,
+      y,
+      0.07,
+    );
+  }
+  const wire = new THREE.BufferGeometry();
+  wire.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+  g.add(
+    new THREE.LineSegments(
+      wire,
+      new THREE.LineBasicMaterial({ color: 0xe8e5f2 }),
+    ),
+  );
+  return { group: g, info: { neckStart, neckLength } as GuitarInfo };
+}
+type Role = "kick" | "snare" | "hihat" | "tom" | "cymbal";
+type Piece = { role: Role; top: THREE.Vector3; mesh: THREE.Object3D };
+type KitSpec = {
+  role: Role;
+  kind: "kick" | "drum" | "cymbal" | "pad";
+  at: [number, number, number];
+  r: number;
+}[];
+// The drummer faces the audience, so their left hand (hi-hat, snare) is on
+// screen right (+x).
+const KITS: Record<string, KitSpec> = {
+  rock: [
+    { role: "kick", kind: "kick", at: [0, 0.45, 1.0], r: 0.45 },
+    { role: "snare", kind: "drum", at: [0.7, 0.95, 0.72], r: 0.28 },
+    { role: "hihat", kind: "cymbal", at: [1.15, 1.3, 0.55], r: 0.3 },
+    { role: "tom", kind: "drum", at: [0.25, 1.32, 0.92], r: 0.22 },
+    { role: "tom", kind: "drum", at: [-0.25, 1.32, 0.92], r: 0.24 },
+    { role: "tom", kind: "drum", at: [-0.85, 0.85, 0.66], r: 0.32 },
+    { role: "cymbal", kind: "cymbal", at: [0.9, 1.95, 0.4], r: 0.45 },
+    { role: "cymbal", kind: "cymbal", at: [-1.2, 1.65, 0.45], r: 0.48 },
+  ],
+  compact: [
+    { role: "kick", kind: "kick", at: [0, 0.4, 1.0], r: 0.38 },
+    { role: "snare", kind: "drum", at: [0.6, 0.92, 0.72], r: 0.28 },
+    { role: "hihat", kind: "cymbal", at: [1.05, 1.25, 0.55], r: 0.28 },
+    { role: "cymbal", kind: "cymbal", at: [-0.9, 1.75, 0.5], r: 0.42 },
+  ],
+  "double-kick": [
+    { role: "kick", kind: "kick", at: [-0.38, 0.42, 1.0], r: 0.38 },
+    { role: "kick", kind: "kick", at: [0.38, 0.42, 1.0], r: 0.38 },
+    { role: "snare", kind: "drum", at: [0.78, 0.98, 0.7], r: 0.27 },
+    { role: "hihat", kind: "cymbal", at: [1.2, 1.32, 0.52], r: 0.28 },
+    { role: "tom", kind: "drum", at: [0.38, 1.38, 0.9], r: 0.2 },
+    { role: "tom", kind: "drum", at: [0, 1.42, 0.95], r: 0.21 },
+    { role: "tom", kind: "drum", at: [-0.38, 1.38, 0.9], r: 0.22 },
+    { role: "tom", kind: "drum", at: [-0.9, 0.88, 0.65], r: 0.32 },
+    { role: "cymbal", kind: "cymbal", at: [1.05, 2.0, 0.35], r: 0.42 },
+    { role: "cymbal", kind: "cymbal", at: [-1.05, 2.0, 0.35], r: 0.42 },
+  ],
+  electronic: [
+    { role: "kick", kind: "pad", at: [0, 0.5, 1.0], r: 0.26 },
+    { role: "snare", kind: "pad", at: [0.6, 0.98, 0.75], r: 0.27 },
+    { role: "hihat", kind: "pad", at: [1.05, 1.28, 0.6], r: 0.25 },
+    { role: "tom", kind: "pad", at: [0.15, 1.3, 0.92], r: 0.22 },
+    { role: "tom", kind: "pad", at: [-0.45, 1.25, 0.88], r: 0.22 },
+    { role: "cymbal", kind: "pad", at: [-1.0, 1.6, 0.55], r: 0.3 },
+  ],
+};
+function drumKit(mats: Mats, kit: string, color: string) {
+  const g = new THREE.Group();
+  const pieces: Piece[] = [];
+  const neon = ["#ff2e88", "#38e8ff", "#ffe03a", "#3dff6e", "#c04bff"];
+  (KITS[kit] ?? KITS.rock).forEach((p, i) => {
+    const [x, y, z] = p.at;
+    const piece = new THREE.Group();
+    piece.position.set(x, y, z);
+    let top = new THREE.Vector3(x, y, z);
+    if (p.kind === "kick") {
+      const shell = part(mats, cylinder(p.r, p.r, 0.42), color);
+      shell.rotation.x = Math.PI / 2;
+      const face = part(
+        mats,
+        cylinder(p.r * 0.86, p.r * 0.86, 0.02),
+        "#f5f0ff",
+        false,
+      );
+      face.rotation.x = Math.PI / 2;
+      face.position.z = 0.22;
+      const logo = part(
+        mats,
+        new THREE.TorusGeometry(p.r * 0.45, 0.03, 6, 24),
+        color,
+        false,
+      );
+      logo.position.z = 0.235;
+      piece.add(shell, face, logo);
+      top = new THREE.Vector3(x, y + p.r, z);
+    } else if (p.kind === "drum") {
+      const shell = part(mats, cylinder(p.r, p.r, p.r * 0.8), color);
+      const skin = part(
+        mats,
+        cylinder(p.r * 0.92, p.r * 0.92, 0.02),
+        "#f5f0ff",
+        false,
+      );
+      skin.position.y = p.r * 0.41;
+      piece.add(shell, skin);
+      piece.rotation.x = 0.3;
+      top = new THREE.Vector3(x, y + p.r * 0.4, z + 0.05);
+    } else if (p.kind === "cymbal") {
+      const plate = part(mats, cylinder(p.r * 0.1, p.r, 0.05), "#ffd23a");
+      piece.add(plate);
+      piece.rotation.set(0.35, 0, x > 0 ? -0.2 : 0.2);
+      top = new THREE.Vector3(x - Math.sign(x) * p.r * 0.4, y, z + 0.1);
+    } else {
+      const pad = part(
+        mats,
+        new THREE.CylinderGeometry(p.r, p.r, 0.08, 6),
+        neon[i % neon.length],
+      );
+      const rim = part(
+        mats,
+        new THREE.CylinderGeometry(p.r * 1.08, p.r * 1.08, 0.05, 6),
+        "#14121c",
+        false,
+      );
+      rim.position.y = -0.04;
+      piece.add(pad, rim);
+      piece.rotation.x = p.role === "kick" ? 1.2 : 0.35;
+      top = new THREE.Vector3(x, y + 0.05, z);
+    }
+    // Stand to the floor.
+    if (p.kind !== "kick" || kit === "electronic") {
+      const stand = part(mats, cylinder(0.025, 0.025, y), "#6d6880", false);
+      stand.position.set(x, y / 2, z - 0.05);
+      g.add(stand);
+    }
+    g.add(piece);
+    pieces.push({ role: p.role, top, mesh: piece });
+  });
+  return { group: g, pieces };
+}
+type Arm = {
+  shoulder: THREE.Vector3;
+  upper: THREE.Mesh;
+  fore: THREE.Mesh;
+  hand: THREE.Mesh;
+  stick?: THREE.Mesh;
+  side: 1 | -1;
+  /** Smoothed hand target, so moves between targets ease. */
+  at: THREE.Vector3;
+};
+const UPPER = 0.5,
+  FORE = 0.48,
+  Y = new THREE.Vector3(0, 1, 0);
+/** Two-bone arm: places the elbow so the hand reaches `target`, bending away
+ * from the body and slightly down. */
+function reach(arm: Arm, target: THREE.Vector3) {
+  const s = arm.shoulder;
+  const d = target.clone().sub(s);
+  const dist = Math.min(Math.max(d.length(), 0.08), UPPER + FORE - 0.002);
+  const dir = d.normalize();
+  const a = (UPPER * UPPER - FORE * FORE + dist * dist) / (2 * dist);
+  const h = Math.sqrt(Math.max(0, UPPER * UPPER - a * a));
+  const pole = new THREE.Vector3(arm.side * 0.7, -1, -0.5);
+  pole.sub(dir.clone().multiplyScalar(pole.dot(dir))).normalize();
+  const elbow = s.clone().addScaledVector(dir, a).addScaledVector(pole, h);
+  const hand = s.clone().addScaledVector(dir, dist);
+  const place = (mesh: THREE.Mesh, from: THREE.Vector3, to: THREE.Vector3) => {
+    mesh.position.copy(from).add(to).multiplyScalar(0.5);
+    mesh.quaternion.setFromUnitVectors(Y, to.clone().sub(from).normalize());
+  };
+  place(arm.upper, s, elbow);
+  place(arm.fore, elbow, hand);
+  arm.hand.position.copy(hand);
+  return hand;
 }
 type Rig = {
   root: THREE.Group;
   body: THREE.Group;
+  torso: THREE.Mesh;
   head: THREE.Group;
-  armL: THREE.Group;
-  armR: THREE.Group;
+  arms: { strum: Arm; fret: Arm };
+  footR: THREE.Mesh;
   instrument: THREE.Group;
+  guitar?: GuitarInfo;
+  pieces: Piece[];
   face: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   faces: Record<Face, THREE.Texture>;
   aura: THREE.Mesh;
-  drums: boolean;
+  kind: Instrument;
 };
-/** One chibi performer: big head, small body, mitten hands. */
+/** One chibi performer: big head, small body, mitten hands, elbows. */
 function performer(
   mats: Mats,
   look: Look,
   instrument: Instrument,
+  gear: Gear,
   photo?: HTMLImageElement,
 ): Rig {
   const p = presetFor(look.kind === "preset" ? look.id : "");
@@ -463,13 +802,14 @@ function performer(
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
-  const drums = instrument === "drums";
+  let footR!: THREE.Mesh;
   for (const x of [-0.24, 0.24]) {
     const leg = part(mats, capsule(0.17, 0.45), "#14121c");
     leg.position.set(x, 0.42, 0);
     const shoe = part(mats, sphere(0.22), accent);
     shoe.scale.set(1, 0.6, 1.4);
     shoe.position.set(x, 0.1, 0.08);
+    if (x < 0) footR = shoe;
     root.add(leg, shoe);
   }
   const torso = part(mats, capsule(0.46, 0.5), outfit);
@@ -499,37 +839,46 @@ function performer(
     head.add(hair(mats, p));
     head.add(extra(mats, p));
   }
-  const arm = (side: 1 | -1) => {
-    const pivot = new THREE.Group();
-    pivot.position.set(side * 0.5, 1.5, 0);
-    const upper = part(mats, capsule(0.13, 0.5), skin);
-    upper.position.y = -0.32;
-    const hand = part(mats, sphere(0.17), skin);
-    hand.position.y = -0.68;
-    pivot.add(upper, hand);
+  const drums = instrument === "drums";
+  const arm = (side: 1 | -1): Arm => {
+    const shoulder = new THREE.Vector3(side * 0.48, 1.55, 0.05);
+    const ball = part(mats, sphere(0.15), outfit);
+    ball.position.copy(shoulder);
+    const upper = part(mats, capsule(0.12, UPPER - 0.12), skin);
+    const fore = part(mats, capsule(0.11, FORE - 0.12), skin);
+    const hand = part(mats, sphere(0.16), skin);
+    body.add(ball, upper, fore, hand);
+    let stick: THREE.Mesh | undefined;
     if (drums) {
-      const stick = part(mats, cylinder(0.03, 0.04, 0.9), "#f0d9a8");
-      stick.position.set(0, -0.72, 0.35);
-      stick.rotation.x = Math.PI / 2.3;
-      pivot.add(stick);
+      stick = part(mats, cylinder(0.025, 0.035, 0.8), "#f0d9a8");
+      body.add(stick);
     }
-    body.add(pivot);
-    return pivot;
+    return {
+      shoulder,
+      upper,
+      fore,
+      hand,
+      stick,
+      side,
+      at: shoulder.clone().add(new THREE.Vector3(0, -0.6, 0.4)),
+    };
   };
-  // Facing the audience, the figure's right arm is on screen left.
-  const armR = arm(-1),
-    armL = arm(1);
-  const inst = drums
-    ? drumKit(mats, accent)
-    : guitar(
-        mats,
-        instrument === "bass" ? "#2f8cff" : accent,
-        instrument === "bass",
-      );
-  if (drums) root.add(inst);
-  else {
-    inst.position.set(-0.35, 1.0, 0.55);
-    inst.rotation.z = 0.42;
+  // Facing the audience, the figure's right (strumming) arm is on screen left.
+  const arms = { strum: arm(-1), fret: arm(1) };
+  let inst: THREE.Group,
+    info: GuitarInfo | undefined,
+    pieces: Piece[] = [];
+  if (drums) {
+    const kit = drumKit(mats, gear.kit, accent);
+    inst = kit.group;
+    pieces = kit.pieces;
+    root.add(inst);
+  } else {
+    const made = guitar(mats, gear.guitar, gear.finish, instrument === "bass");
+    inst = made.group;
+    info = made.info;
+    inst.position.set(-0.3, 1.0, 0.5);
+    inst.rotation.z = 0.38;
     body.add(inst);
   }
   const aura = new THREE.Mesh(
@@ -548,22 +897,27 @@ function performer(
   return {
     root,
     body,
+    torso,
     head,
-    armL,
-    armR,
+    arms,
+    footR,
     instrument: inst,
+    guitar: info,
+    pieces,
     face,
     faces,
     aura,
-    drums,
+    kind: instrument,
   };
 }
-export type PerformerInit = { look: Look; instrument: Instrument };
+export type PerformerInit = { look: Look; instrument: Instrument; gear?: Gear };
 export type PerformerState = {
   hits: number;
   misses: number;
   combo: number;
   powerActive: boolean;
+  /** Lanes of the last note hit: picks the fret or the drum. */
+  lanes?: number[];
 };
 const loadPhoto = (src: string) =>
   new Promise<HTMLImageElement | undefined>((done) => {
@@ -572,8 +926,10 @@ const loadPhoto = (src: string) =>
     img.onerror = () => done(undefined);
     img.src = src;
   });
+const LANE_ROLE: Role[] = ["kick", "snare", "hihat", "tom", "cymbal"];
+const ease = (x: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
 /** A stage of performers on a transparent canvas. `frame` may be called every
- * animation frame; it renders only when the next 1/12 s pose is due. */
+ * animation frame; it renders only when the next 1/30 s pose is due. */
 export async function createStage(
   canvas: HTMLCanvasElement,
   cast: PerformerInit[],
@@ -602,8 +958,17 @@ export async function createStage(
   );
   const spacing = 3.6;
   const rigs = cast.map((c, i) => {
-    const rig = performer(mats, c.look, c.instrument, photos[i]);
+    const rig = performer(
+      mats,
+      c.look,
+      c.instrument,
+      c.gear ?? defaultGear(i),
+      photos[i],
+    );
     rig.root.position.x = (i - (cast.length - 1) / 2) * spacing;
+    // Turned a little toward the centre of the stage, like a real band.
+    rig.root.rotation.y =
+      cast.length > 1 ? -Math.sign(rig.root.position.x) * 0.18 : 0;
     scene.add(rig.root);
     if (!options.portrait) {
       // A spotlight cone and floor pool for each performer.
@@ -668,10 +1033,16 @@ export async function createStage(
     misses: 0,
     hitAt: -1,
     missAt: -1,
-    hits2: 0,
+    stroke: 1,
+    lanes: [0] as number[],
+    raise: 0,
+    piece: { L: null as Piece | null, R: null as Piece | null },
+    struck: { L: -1, R: -1, kick: -1 },
+    tom: 0,
   }));
   let last = -1;
   const moods: Mood[] = cast.map(() => "groove");
+  const local = new THREE.Vector3();
   const pose = (
     rig: Rig,
     i: number,
@@ -681,9 +1052,11 @@ export async function createStage(
     beat: number,
   ) => {
     const memo = seen[i];
-    if (s.hits > memo.hits) {
+    const hit = s.hits > memo.hits;
+    if (hit) {
       memo.hitAt = t;
-      memo.hits2 = s.hits;
+      memo.stroke = -memo.stroke; // alternate down and up strokes
+      memo.lanes = s.lanes?.length ? s.lanes : memo.lanes;
     }
     if (s.misses > memo.misses) memo.missAt = t;
     // A restart resets the counters.
@@ -696,51 +1069,111 @@ export async function createStage(
       combo: s.combo,
       missedRecently: memo.missAt >= 0 && t - memo.missAt < 0.7,
     }));
-    const phase = playing ? (t / beat) % 1 : 0;
-    const bounce = Math.abs(Math.sin(phase * Math.PI));
     const big = mood === "hyped" || mood === "power";
-    rig.body.position.y = -bounce * (big ? 0.16 : 0.08);
-    rig.head.rotation.x = playing ? (big ? 0.35 : 0.12) * bounce - 0.05 : 0;
-    rig.head.rotation.z = 0;
-    rig.root.rotation.y = 0;
+    // Groove: dip on the beat, sway over two beats, head follows a moment late.
+    const phase = playing ? t / beat : t * 0.6;
+    const dip = 0.5 + 0.5 * Math.cos(2 * Math.PI * phase);
+    rig.body.position.y = -(big ? 0.11 : playing ? 0.06 : 0.02) * dip;
+    rig.body.rotation.z = Math.sin(Math.PI * phase) * (playing ? 0.045 : 0.02);
+    rig.body.rotation.x = mood === "hyped" ? -0.07 : 0;
+    rig.torso.scale.set(1, 1 + 0.02 * Math.sin(t * 2.2), 1);
+    const nod = 0.5 + 0.5 * Math.cos(2 * Math.PI * (phase - 0.12));
+    rig.head.rotation.x =
+      (mood === "hyped" ? 0.38 : big ? 0.22 : playing ? 0.12 : 0.04) * nod -
+      0.06;
+    rig.head.rotation.z = Math.sin(Math.PI * (phase - 0.15)) * 0.07;
+    rig.head.rotation.y = 0;
     rig.root.position.y =
-      mood === "power" ? Math.max(0, Math.sin(phase * Math.PI)) * 0.35 : 0;
-    // Miss: a funny wobble for half a second.
+      mood === "power" ? 0.28 * Math.abs(Math.sin(Math.PI * phase)) : 0;
+    // Miss: a no-no head shake and a shrug.
     const sinceMiss = t - memo.missAt;
-    if (memo.missAt >= 0 && sinceMiss < 0.6) {
-      rig.head.rotation.z =
-        Math.sin(sinceMiss * 30) * 0.3 * (1 - sinceMiss / 0.6);
-      rig.body.rotation.z = Math.sin(sinceMiss * 24) * 0.08;
-    } else
-      rig.body.rotation.z = playing ? Math.sin(phase * Math.PI * 2) * 0.05 : 0;
-    // Hits: snappy strike for two poses, then settle.
-    const sinceHit = memo.hitAt >= 0 ? Math.floor((t - memo.hitAt) / STEP) : 99;
-    const strike =
-      sinceHit === 0 ? 1 : sinceHit === 1 ? 0.55 : sinceHit === 2 ? 0.2 : 0;
-    if (rig.drums) {
-      const left = memo.hits2 % 2 === 1;
-      rig.armR.rotation.set(
-        -0.9 + (!left ? strike * 0.9 : -0.25 * bounce),
-        0,
-        -0.25,
-      );
-      rig.armL.rotation.set(
-        -0.9 + (left ? strike * 0.9 : -0.25 * bounce),
-        0,
-        0.25,
-      );
-    } else {
-      // Strumming arm swings down through the strings; fretting arm reaches
-      // along the neck and slides a little with each hit.
-      rig.armR.rotation.set(-0.5 - strike * 0.7, 0, -0.55 + strike * 0.5);
-      // In Star Power the guitar goes up, and the fretting hand with it.
-      if (mood === "power") rig.armL.rotation.set(-0.7, 0, 2.3);
-      else rig.armL.rotation.set(-1.15, 0, 1.2 + ((memo.hits2 % 3) - 1) * 0.08);
-      rig.instrument.rotation.z = mood === "power" ? 0.95 : 0.42;
+    if (memo.missAt >= 0 && sinceMiss < 0.7) {
+      const fade = 1 - sinceMiss / 0.7;
+      rig.head.rotation.y = Math.sin(sinceMiss * 26) * 0.35 * fade;
+      rig.head.rotation.z += Math.sin(sinceMiss * 19) * 0.12 * fade;
+      rig.body.position.y += 0.07 * fade;
     }
-    // Faces: an occasional blink keeps idle performers alive.
-    const blink =
-      !playing || mood === "groove" ? Math.floor(t / STEP) % 40 === 39 : false;
+    const since = memo.hitAt >= 0 ? t - memo.hitAt : 99;
+    if (rig.kind === "drums") {
+      if (hit) {
+        for (const lane of memo.lanes) {
+          const role = LANE_ROLE[lane] ?? "snare";
+          if (role === "kick") {
+            memo.struck.kick = t;
+            continue;
+          }
+          const options = rig.pieces.filter((p) => p.role === role);
+          const pool = options.length
+            ? options
+            : rig.pieces.filter((p) => p.role !== "kick");
+          const piece = pool[memo.tom++ % pool.length];
+          // Hand on the side of the piece plays it.
+          const side = piece.top.x > 0 ? "L" : "R";
+          memo.piece[side] = piece;
+          memo.struck[side] = t;
+        }
+      }
+      for (const [side, arm] of [
+        ["L", rig.arms.fret],
+        ["R", rig.arms.strum],
+      ] as const) {
+        const piece =
+          memo.piece[side] ??
+          rig.pieces.find((p) =>
+            side === "L" ? p.role === "snare" : p.role === "tom" && p.top.x < 0,
+          ) ??
+          rig.pieces[1];
+        // Stick tip lands on the piece, then rebounds; idle sticks keep time.
+        const dt = t - memo.struck[side];
+        const lift =
+          memo.struck[side] >= 0 && dt < 0.35
+            ? 0.45 * ease(dt / 0.25)
+            : 0.45 - (playing ? 0.12 * dip : 0);
+        const tip = piece.top.clone();
+        tip.y += lift;
+        const handTarget = tip
+          .clone()
+          .add(new THREE.Vector3(-arm.side * 0.12, 0.22, -0.55));
+        arm.at.lerp(handTarget, 0.55);
+        const hand = reach(arm, arm.at);
+        if (arm.stick) {
+          const dir = tip.clone().sub(hand).normalize();
+          arm.stick.position.copy(hand).addScaledVector(dir, 0.38);
+          arm.stick.quaternion.setFromUnitVectors(Y, dir);
+        }
+      }
+      const kickDt = t - memo.struck.kick;
+      rig.footR.position.y =
+        0.1 +
+        (memo.struck.kick >= 0 && kickDt < 0.18
+          ? 0.14 * (1 - kickDt / 0.18)
+          : 0);
+    } else if (rig.guitar) {
+      // Star Power raises the guitar; the fretting hand follows the neck.
+      memo.raise += ((mood === "power" ? 1 : 0) - memo.raise) * 0.2;
+      rig.instrument.rotation.z = 0.38 + memo.raise * 0.55;
+      rig.instrument.position.y = 1.0 + memo.raise * 0.15;
+      rig.instrument.updateMatrix();
+      const { neckStart, neckLength } = rig.guitar;
+      // Lower lanes sit nearer the headstock.
+      const lane = Math.min(...memo.lanes);
+      local.set(neckStart + neckLength * (0.78 - lane * 0.13), -0.02, 0.16);
+      const fret = local.clone().applyMatrix4(rig.instrument.matrix);
+      rig.arms.fret.at.lerp(fret, 0.45);
+      reach(rig.arms.fret, rig.arms.fret.at);
+      // Strum: a quick stroke through the strings, alternating down and up.
+      const stroke = since < 0.3 ? ease(since / 0.09) : 1;
+      const sweep =
+        since < 0.3
+          ? memo.stroke * (0.24 - 0.48 * stroke)
+          : 0.1 + (playing ? 0.05 * dip : 0);
+      local.set(-0.02, sweep, 0.28);
+      const strum = local.clone().applyMatrix4(rig.instrument.matrix);
+      rig.arms.strum.at.lerp(strum, since < 0.3 ? 0.9 : 0.3);
+      reach(rig.arms.strum, rig.arms.strum.at);
+    }
+    // Faces: an occasional blink keeps performers alive.
+    const blink = mood === "groove" && Math.floor(t / STEP) % 110 >= 107;
     const face: Face = blink ? "blink" : mood;
     if (rig.face.material.map !== rig.faces[face]) {
       rig.face.material.map = rig.faces[face];
@@ -750,7 +1183,7 @@ export async function createStage(
     rig.aura.rotation.z = t * 2;
   };
   return {
-    /** Advances to the pose for song time `t` (seconds). */
+    /** Advances to the pose for time `t` (seconds). */
     frame(
       t: number,
       states: PerformerState[],
@@ -789,10 +1222,13 @@ export async function createStage(
     snapshot: () => canvas.toDataURL("image/png"),
     dispose() {
       scene.traverse((o) => {
-        if (o instanceof THREE.Mesh) {
+        if (o instanceof THREE.Mesh || o instanceof THREE.LineSegments) {
           o.geometry.dispose();
-          if (o.material instanceof THREE.MeshBasicMaterial) {
-            o.material.map?.dispose();
+          if (
+            o.material instanceof THREE.MeshBasicMaterial ||
+            o.material instanceof THREE.LineBasicMaterial
+          ) {
+            if ("map" in o.material) o.material.map?.dispose();
             o.material.dispose();
           }
         }

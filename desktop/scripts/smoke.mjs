@@ -576,6 +576,12 @@ try {
   await expect(page.getByRole("tab", { name: /PLAYER 1/ })).toContainText(
     "SHREDDER",
   );
+  // Gear: guitar style and which side of the highway the performer stands.
+  await page.getByRole("button", { name: "Single Cut", exact: true }).click();
+  await page.getByRole("button", { name: "Left of the highway" }).click();
+  await expect(
+    page.getByRole("button", { name: "Left of the highway" }),
+  ).toHaveAttribute("aria-pressed", "true");
   // Player 2 takes a camera avatar from the fake camera.
   await page.getByRole("tab", { name: /PLAYER 2/ }).click();
   await page.getByRole("button", { name: "Use my camera" }).click();
@@ -614,6 +620,7 @@ try {
   await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
   await expect(page.locator(".performer-tag")).toHaveText("SHREDDER");
+  await expect(page.locator(".band-stage")).toHaveClass(/side-left/);
   await page.waitForFunction(
     () => window.__testAudio.currentTime >= 0.3,
     {},
