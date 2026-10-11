@@ -890,6 +890,28 @@ try {
 } catch (error) {
   if (page && !page.isClosed()) {
     console.error("Smoke screen:", await page.locator("body").innerText());
+    // Controller state, for failures that only reproduce on CI.
+    console.error(
+      "Smoke pads:",
+      await page
+        .evaluate(() =>
+          JSON.stringify({
+            pads: Array.from(navigator.getGamepads())
+              .filter(Boolean)
+              .map((p) => ({
+                index: p.index,
+                id: p.id,
+                connected: p.connected,
+                pressed: p.buttons.flatMap((b, i) => (b.pressed ? [i] : [])),
+              })),
+            capturing: document.body.hasAttribute("data-capturing"),
+            visible: document.visibilityState,
+            focused: document.hasFocus(),
+            dialogs: document.querySelectorAll("[role=dialog]").length,
+          }),
+        )
+        .catch((e) => String(e)),
+    );
     await mkdir("test-results", { recursive: true });
     await page
       .screenshot({ path: "test-results/smoke-failure.png" })
