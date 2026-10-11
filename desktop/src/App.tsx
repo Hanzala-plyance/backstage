@@ -678,8 +678,14 @@ export default function App() {
   if (checking)
     return (
       <ControllerCheck
-        device={device === "midi" ? "keyboard" : device}
-        profile={profile}
+        // Every joined player tests their own controller at once.
+        players={lineupAll().map((p, i) => ({
+          device: p.device,
+          profile: profileOf(p.device),
+          name: slotName(i, band[i]),
+        }))}
+        pads={pads}
+        midi={midi}
         onPassed={() => markDone(CHECK_ID)}
         onNext={() => {
           setChecking(false);
@@ -698,11 +704,16 @@ export default function App() {
       >
         <LessonRun
           key={lesson}
-          lesson={lessons[lesson]}
-          // Lessons teach guitar; a MIDI drum kit falls back to the keyboard.
-          device={device === "midi" ? "keyboard" : device}
-          profile={profile}
-          mode={mode}
+          step={lesson}
+          // Everyone in the band takes the lesson for their own instrument.
+          players={lineupAll().map((p, i) => ({
+            device: p.device,
+            profile: profileOf(p.device),
+            part: p.device === "midi" ? "Drums" : p.part,
+            mode: p.strum === undefined ? mode : p.strum ? "strum" : "tap",
+            name: slotName(i, band[i]),
+          }))}
+          midi={midi}
           offset={offset}
           nextLabel={
             lesson + 1 < lessons.length ? "Next lesson" : "Play the full track"
@@ -1253,6 +1264,10 @@ export default function App() {
           <Controllers
             device={device}
             onDevice={setDevice}
+            players={players.map((p, i) => ({
+              device: p.device,
+              name: slotName(i, band[i]),
+            }))}
             profile={profile}
             onProfile={setProfile}
             midi={midi}

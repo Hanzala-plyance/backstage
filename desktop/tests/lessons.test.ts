@@ -12,6 +12,8 @@ import {
   lessonEnd,
   lessonResult,
   lessons,
+  drumLessons,
+  lessonsFor,
 } from "../src/core/lessons";
 const idle = [false, false, false, false, false];
 // Runs a lesson at 60 fps with the demo player, or with no input at all.
@@ -131,5 +133,25 @@ test("controller check covers every input a player needs", () => {
       pause: false,
     }),
     ["lane0", "lane4", "strumDown", "whammy"],
+  );
+});
+test("drum lessons parallel the guitar lessons and their demos pass", () => {
+  assert.equal(drumLessons.length, lessons.length);
+  assert.equal(lessonsFor("Drums"), drumLessons);
+  assert.equal(lessonsFor("Bass"), lessons);
+  for (const [i, lesson] of drumLessons.entries()) {
+    assert.equal(lessonChart(lesson).part, "Drums");
+    assert.equal(
+      lesson.goal.kind,
+      lessons[i].goal.kind === "sustain" ? "hits" : lessons[i].goal.kind,
+    );
+    assert.ok(lessonEnd(lesson) < 31, lesson.id);
+    const result = run(lesson, false);
+    assert.ok(result.passed, `${lesson.id}: ${result.value}`);
+    assert.equal(run(lesson, false, false).passed, false, `${lesson.id} idle`);
+  }
+  assert.equal(
+    cueFor({ time: 0, duration: 0, lanes: [0, 4] }, false, true),
+    "Kick + Cymbal · Hit",
   );
 });

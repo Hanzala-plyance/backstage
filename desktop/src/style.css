@@ -4294,7 +4294,6 @@ body,
   background: none;
 }
 .card-row.name .row-value,
-.card-row.avatar .row-value,
 .card-row.color .card-colors {
   grid-column: 2 / span 3;
 }
@@ -4313,13 +4312,31 @@ body,
   width: 20px;
   height: 20px;
 }
-.card-row.avatar .row-value {
-  font-size: 13px;
-  color: #a39dbb;
+/* Locked in: the card is final until red (or a click on READY) unlocks it. */
+.select-card {
+  position: relative;
 }
-.card-hint {
-  font-size: 11px;
-  color: #8f89a6;
+.select-card.locked .card-rows {
+  opacity: 0.55;
+  pointer-events: none;
+}
+.card-ready {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 12px;
+  border: 2px solid var(--pc);
+  border-radius: 6px;
+  background: var(--pc);
+  color: #12101a;
+  font:
+    italic 900 18px/1.1 Impact,
+    "Arial Narrow",
+    sans-serif;
+  letter-spacing: 2px;
+  transform: rotate(-6deg);
+  box-shadow: 0 0 18px var(--pc);
+  cursor: pointer;
 }
 .row-value {
   display: block;
@@ -4364,9 +4381,6 @@ body,
   .card-row {
     min-height: 28px;
   }
-  .card-hint {
-    display: none;
-  }
   .select-card {
     padding: 8px;
     gap: 4px;
@@ -4390,4 +4404,121 @@ body,
   min-width: 0;
   height: auto;
   aspect-ratio: 1;
+}
+/* Multiplayer lessons: each lane carries its own cue and progress. */
+.player-lane .lesson-hud {
+  top: 44px;
+  right: 8px;
+  gap: 6px;
+}
+.player-lane .lesson-hud b {
+  font-size: 20px;
+}
+.player-lane .lesson-cue {
+  bottom: 12%;
+  font-size: 17px;
+}
+.player-lane .lesson-power [role="meter"] {
+  width: 100px;
+}
+.lesson-group h3 {
+  margin: 14px 0 0;
+  font-family: var(--display);
+  font-style: italic;
+  text-transform: uppercase;
+  color: var(--volt);
+}
+.lesson-results {
+  display: grid;
+  gap: 4px;
+}
+.lesson-results .lesson-score {
+  margin: 0;
+  font-size: 20px;
+}
+/* Controller check for the band: one panel per player, side by side. */
+.check-panels {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+}
+.check-body.multi {
+  max-width: none;
+  padding-left: 40px;
+  padding-right: 40px;
+}
+.check-panel {
+  padding: 12px;
+  background: #0f0d16cc;
+  box-shadow: inset 0 0 0 2px
+    color-mix(in srgb, var(--pc, #ff2e88) 45%, transparent);
+  clip-path: var(--cut);
+}
+.check-panel.passed {
+  box-shadow: inset 0 0 0 3px #3dff6e;
+}
+.check-panel header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  font-weight: 650;
+}
+.check-panel header .player-badge {
+  height: 28px;
+  padding: 0 10px;
+}
+.check-body.multi .check-grid {
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+  gap: 6px;
+  margin-top: 0;
+}
+.check-body.multi .check-tile {
+  padding: 10px 4px 8px;
+}
+.check-body.multi .check-tile i {
+  width: 26px;
+  height: 26px;
+  margin-bottom: 6px;
+}
+.check-body.multi .check-tile strong {
+  font-size: 12px;
+}
+.check-body.multi .check-tile small {
+  font-size: 10px;
+}
+.check-panel .check-count {
+  margin: 10px 0 0;
+}
+
+/* Mapper: choose whose controller to map. */
+.map-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.map-tab {
+  display: grid;
+  min-width: 120px;
+  padding: 6px 12px;
+  text-align: left;
+  background: #14121c;
+  box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--pc) 40%, transparent);
+  clip-path: var(--cut-sm);
+}
+.map-tab b {
+  font-family: var(--display);
+  font-style: italic;
+  color: var(--pc);
+}
+.map-tab small {
+  font-size: 11px;
+  color: #8f89a6;
+}
+.map-tab.active {
+  background: color-mix(in srgb, var(--pc) 25%, #14121c);
+  box-shadow: inset 0 -3px 0 var(--pc);
 }

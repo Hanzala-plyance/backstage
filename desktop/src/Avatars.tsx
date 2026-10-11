@@ -9,7 +9,7 @@ import {
 import { Portrait } from "./AvatarView";
 import NamePad from "./NamePad";
 import type { MenuButton } from "./core/menu";
-import { isPad, type PlayerSetup } from "./core/players";
+import type { PlayerSetup } from "./core/players";
 import {
   defaultLook,
   drumKits,
@@ -240,7 +240,7 @@ function Camera({ onUse }: { onUse: (image: string) => void }) {
   );
 }
 type Tile = { kind: "preset"; id: string; name: string } | { kind: "camera" };
-const CARD_ROWS = ["name", "guitar", "kit", "side", "color", "avatar"] as const;
+const CARD_ROWS = ["name", "guitar", "kit", "side", "color"] as const;
 type CardRow = (typeof CARD_ROWS)[number];
 const TILES: Tile[] = [
   ...presets.map((p) => ({ kind: "preset" as const, id: p.id, name: p.name })),
@@ -287,6 +287,12 @@ export default function Avatars({
   const setZone = (i: number, zone: "grid" | number) =>
     setZones((z) => z.map((v, k) => (k === i ? zone : v)));
   const [mouse, setMouse] = useState(0);
+  // Blue locks a player in: no more changes until red unlocks them.
+  const [locked, setLocked] = useState<boolean[]>([false, false, false, false]);
+  const lock = (i: number, on: boolean) => {
+    setLocked((l) => l.map((v, k) => (k === i ? on : v)));
+    if (!on) setZone(i, "grid");
+  };
   const nameInputs = useMemo(
     () => [0, 1, 2, 3].map(() => createRef<(b: MenuButton) => void>()),
     [],
@@ -322,9 +328,9 @@ export default function Avatars({
       setGear(i, { side: g.side === "left" ? "right" : "left" });
     else if (row === "color")
       setGear(i, { finish: cycle(finishes, g.finish, step) });
-    else setZone(i, "grid");
   };
   const pick = (i: number, tile: number) => {
+    if (locked[i]) return;
     const t = TILES[tile];
     // The player's token follows their pick (mouse picks too).
     setCursors((c) => c.map((v, k) => (k === i ? tile : v)));
@@ -343,6 +349,14 @@ export default function Avatars({
           ?.click();
       else if (b === "red") setCamera(null);
       return b !== "start";
+    }
+    if (locked[i]) {
+      if (b === "red") lock(i, false);
+      return b !== "start"; // Start still opens the player's pop-up
+    }
+    if (b === "blue") {
+      lock(i, true);
+      return true;
     }
     const move = (step: number) =>
       setCursors((c) =>
@@ -371,13 +385,6 @@ export default function Avatars({
       if (TILES[cursors[i]].kind !== "camera") setZone(i, 1);
     } else if (b === "yellow")
       setGear(i, { finish: cycle(finishes, gearOf(i, slot(i)).finish) });
-    else if (b === "blue")
-      setGear(i, {
-        guitar: cycle(
-          guitarStyles.map((g) => g.id),
-          gearOf(i, slot(i)).guitar,
-        ),
-      });
     else if (b === "orange") nameMode(i, true);
     else return false; // red goes back, Start opens the player's pop-up
     return true;
@@ -390,8 +397,9 @@ export default function Avatars({
           <h1>Who’s on stage?</h1>
           <p>
             Every player picks at once with their own controller: strum to move
-            your token, green to pick, then set up your card row by row. With a
-            mouse, choose a card, then an avatar.
+            your token, green to pick, then set up your card row by row. Blue
+            locks you in; red unlocks to change. With a mouse, choose a card,
+            then an avatar.
           </p>
         </div>
       </div>
@@ -458,12 +466,22 @@ export default function Avatars({
               className={
                 `select-card p${i + 1}` +
                 (mouse === i ? " mouse" : "") +
-                (naming[i] ? " naming" : "")
+                (naming[i] ? " naming" : "") +
+                (locked[i] ? " locked" : "")
               }
               aria-label={`Player ${i + 1} card`}
               onClick={() => setMouse(i)}
             >
               <Portrait look={s.look} gear={gear} className="card-portrait" />
+              {locked[i] && (
+                <button
+                  className="card-ready"
+                  aria-label={`Player ${i + 1} ready, click to change`}
+                  onClick={() => lock(i, false)}
+                >
+                  READY
+                </button>
+              )}
               {naming[i] ? (
                 <NamePad
                   label={`Player ${i + 1}`}
@@ -494,7 +512,6 @@ export default function Avatars({
                       kit: "Drum kit",
                       side: "Stage",
                       color: "Color",
-                      avatar: "Avatar",
                     }[r];
                     const aria = {
                       name: "name",
@@ -502,7 +519,6 @@ export default function Avatars({
                       kit: "drum kit",
                       side: "stage side",
                       color: "finish",
-                      avatar: "avatar",
                     }[r];
                     return (
                       <div
@@ -530,13 +546,6 @@ export default function Avatars({
                               />
                             ))}
                           </div>
-                        ) : r === "avatar" ? (
-                          <button
-                            className="row-value"
-                            onClick={() => setZone(i, "grid")}
-                          >
-                            ▲ Pick another
-                          </button>
                         ) : (
                           <>
                             {r !== "name" && (
@@ -577,13 +586,6 @@ export default function Avatars({
                       </div>
                     );
                   })}
-                  {players[i] && isPad(players[i].device) && (
-                    <small className="card-hint">
-                      {zones[i] === "grid"
-                        ? "Strum to choose · green to pick"
-                        : "Strum to move · green changes · red: avatars"}
-                    </small>
-                  )}
                 </div>
               )}
             </div>

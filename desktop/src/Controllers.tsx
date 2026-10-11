@@ -9,6 +9,7 @@ import {
   newlyPressed,
 } from "./core/input";
 import type { MidiPort } from "./game/Game";
+import { deviceLabel, isPad } from "./core/players";
 const snapshot = (pad: Gamepad): Pick<Gamepad, "buttons" | "axes"> => ({
   buttons: pad.buttons.map((b) => ({
     pressed: b.pressed,
@@ -24,6 +25,7 @@ export default function Controllers({
   onProfile,
   midi,
   onMidi,
+  players = [],
 }: {
   device: string;
   onDevice: (s: string) => void;
@@ -31,6 +33,8 @@ export default function Controllers({
   onProfile: (p: Profile) => void;
   midi?: MidiPort;
   onMidi: (p: MidiPort) => void;
+  /** Joined players: the mapper can edit any player's controller. */
+  players?: { device: string; name: string }[];
 }) {
   const [pads, setPads] = useState<Gamepad[]>([]),
     [capture, setCapture] = useState<Action | null>(null),
@@ -42,9 +46,21 @@ export default function Controllers({
   const captureRef = useRef(capture);
   captureRef.current = capture;
   const access = useRef<MIDIAccess | null>(null);
-  const current = pads.find((p) => device === `pad:${p.index}:${p.id}`);
+  // Whose controller the mapping panel edits: Player 1 uses the selection on
+  // the left; other players' pads keep their own saved mapping.
+  const [target, setTarget] = useState(0);
+  const t = Math.min(target, Math.max(0, players.length - 1));
+  const mapDevice = t === 0 ? device : players[t].device;
+  const [otherProfile, setOtherProfile] = useState<Profile>(defaultProfile);
+  useEffect(() => {
+    if (t > 0 && isPad(mapDevice))
+      setOtherProfile(loadProfile(mapDevice.split(":").slice(2).join(":")));
+  }, [t, mapDevice]);
+  const mapProfile = t === 0 ? profile : otherProfile;
+  const setMapProfile = t === 0 ? onProfile : setOtherProfile;
+  const current = pads.find((p) => mapDevice === `pad:${p.index}:${p.id}`);
   const persist = (p: Profile) => {
-    onProfile(p);
+    setMapProfile(p);
     if (current)
       localStorage.setItem("backstage:pad:" + current.id, JSON.stringify(p));
   };
@@ -57,19 +73,21 @@ export default function Controllers({
           (p): p is Gamepad => !!p?.connected,
         );
         setPads(connected);
-        const pad = connected.find((p) => device === `pad:${p.index}:${p.id}`);
+        const pad = connected.find(
+          (p) => mapDevice === `pad:${p.index}:${p.id}`,
+        );
         if (pad) {
           if (captureRef.current && previous.current) {
             const binding = newlyPressed(pad, previous.current);
             if (binding) {
               const updated = {
-                ...profile,
+                ...mapProfile,
                 bindings: {
-                  ...profile.bindings,
+                  ...mapProfile.bindings,
                   [captureRef.current]: binding,
                 },
               };
-              onProfile(updated);
+              setMapProfile(updated);
               localStorage.setItem(
                 "backstage:pad:" + pad.id,
                 JSON.stringify(updated),
@@ -85,7 +103,7 @@ export default function Controllers({
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [device, profile]);
+  }, [mapDevice, mapProfile]);
   useEffect(() => {
     if (!capture) return;
     document.body.setAttribute("data-capturing", "");
@@ -184,6 +202,7 @@ export default function Controllers({
               }
               key={p.index}
               onClick={() => {
+                setTarget(0);
                 onDevice(`pad:${p.index}:${p.id}`);
                 onProfile(loadProfile(p.id));
                 setCapture(null);
@@ -236,11 +255,35 @@ export default function Controllers({
           {error && <p className="error-text">{error}</p>}
         </section>
         <section className="panel mapping-panel">
+          {players.length > 1 && (
+            <div
+              className="map-tabs"
+              role="tablist"
+              aria-label="Map a player's controller"
+            >
+              {players.map((pl, i) => (
+                <button
+                  key={i}
+                  role="tab"
+                  aria-selected={i === t}
+                  className={`map-tab p${i + 1}` + (i === t ? " active" : "")}
+                  onClick={() => {
+                    setTarget(i);
+                    setCapture(null);
+                    previous.current = null;
+                  }}
+                >
+                  <b>{pl.name}</b>
+                  <small>{deviceLabel(pl.device, pads)}</small>
+                </button>
+              ))}
+            </div>
+          )}
           <div className="section-heading">
             <h3>
               {current
                 ? "Map your controller"
-                : device === "midi"
+                : mapDevice === "midi"
                   ? "MIDI drum pads"
                   : "Keyboard controls"}
             </h3>
@@ -257,11 +300,11 @@ export default function Controllers({
             <>
               <p className="muted">
                 Choose an action, then press a button or move a stick. Settings
-                are saved for this device.
+                are saved for this mapDevice.
               </p>
               <div className="mapping-grid">
                 {actions.map((a, i) => {
-                  const binding = profile.bindings[a];
+                  const binding = mapProfile.bindings[a];
                   return (
                     <div className="mapping-row" key={a}>
                       <span>
@@ -274,7 +317,7 @@ export default function Controllers({
                           // Baseline the pad now so a held button that
                           // started listening is not captured.
                           const pad = Array.from(navigator.getGamepads()).find(
-                            (p) => p && device === `pad:${p.index}:${p.id}`,
+                            (p) => p && mapDevice === `pad:${p.index}:${p.id}`,
                           );
                           if (pad) previous.current = snapshot(pad);
                           setCapture(capture === a ? null : a);
@@ -291,15 +334,15 @@ export default function Controllers({
                 })}
               </div>
               <label className="slider-label">
-                Axis threshold <b>{Math.round(profile.deadzone * 100)}%</b>
+                Axis threshold <b>{Math.round(mapProfile.deadzone * 100)}%</b>
                 <input
                   type="range"
                   min=".15"
                   max=".9"
                   step=".05"
-                  value={profile.deadzone}
+                  value={mapProfile.deadzone}
                   onChange={(e) =>
-                    persist({ ...profile, deadzone: Number(e.target.value) })
+                    persist({ ...mapProfile, deadzone: Number(e.target.value) })
                   }
                 />
               </label>
@@ -324,7 +367,7 @@ export default function Controllers({
                 ))}
               </div>
             </>
-          ) : device === "midi" ? (
+          ) : mapDevice === "midi" ? (
             <>
               <p className="muted">
                 General MIDI drum notes work by default. Choose a lane and
