@@ -1,8 +1,8 @@
 {
   "version": "0.2.0-dev",
   "status": "blocked",
-  "tested_commit": "109a80e8c2fa35f114e6d8b79d107640b6d401e8",
-  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 5b447dfdb9ca44f03215df627e7a8077d9159fb2c5ddc1bb2ba6a9bac313c638",
+  "tested_commit": "aabf5ae91dcb6a3aafad0fac2117abace3fff9fc",
+  "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 31ba789fa04de6a983239134b5fb2f860c3b631caba977f1fc18c88500e76c01",
   "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md",
   "reviewer": "",
   "rollback": "Keep the current main release; do not deploy this candidate before acceptance.",
@@ -25,7 +25,7 @@
     },
     "runtime_build": {
       "status": "passed",
-      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified title screen and main menu, audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation with Up/Down, Select and Back leading every hint bar, disconnect pause, two-player input routing (keyboard and pad score only for their owners), hover song preview, confirmed song removal to a trash, readable folder renaming, album cover display, saved best scores with stars, song details panel, Soundcheck (main menu entry, controller check of every input, one-button flow through all steps, full track straight to Easy, demo played through the real rules, graded keyboard turn, saved progress, practice track and its banner out of the library), player names and avatars (premade choice, fake-camera photo capture, 3D comic-style band on stage with the performer's hit count following a keyboard hit, camera usage description in Info.plist), dev-mode covers and audio and strict bundle signature. 60 desktop unit, 50 converter, 11 controller-routing and promotion tests pass. A real camera, physical controllers (including two or more at once), audible timing, clean install and recovery remain unverified."
+      "evidence": "Native macOS arm64 package rebuilt from the tested commit and launched. Packaged Electron smoke verified title screen and main menu, audio, guitar scoring, phrase Star Power with unchanged playback rate, remapped gamepad capture, controller menu navigation with Up/Down, Select and Back leading every hint bar, disconnect pause, two-player input routing (keyboard and pad score only for their owners), hover song preview, confirmed song removal to a trash, readable folder renaming, album cover display, saved best scores with stars, song details panel, Soundcheck (main menu entry, controller check of every input, one-button flow through all steps, full track straight to Easy, demo played through the real rules, graded keyboard turn, saved progress, practice track and its banner out of the library), player names and avatars (premade choice, fake-camera photo capture, 3D comic-style band on stage with the performer's hit count following a keyboard hit, guitar style and stage side choices applied in game, camera usage description in Info.plist), dev-mode covers and audio and strict bundle signature. 61 desktop unit, 50 converter, 11 controller-routing and promotion tests pass. A real camera, physical controllers (including two or more at once), audible timing, clean install and recovery remain unverified."
     }
   },
   "runtime": "electron"
