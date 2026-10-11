@@ -22,6 +22,7 @@ const { PreparationService, validVideo } = require("./service.cjs");
 const covers = require("./covers.cjs");
 const { Scores } = require("./scores.cjs");
 const { Band } = require("./band.cjs");
+const { Riffmasters, macriffBusy } = require("./riff.cjs");
 app.setName("Backstage");
 if (process.env.BACKSTAGE_TEST_DATA)
   app.setPath("userData", process.env.BACKSTAGE_TEST_DATA);
@@ -37,7 +38,7 @@ protocol.registerSchemesAsPrivileged([
     },
   },
 ]);
-let win, service, library, settings;
+let win, service, library, settings, riff;
 let quitting = false;
 const origin = "backstage://app";
 const devURL = !app.isPackaged && process.env.BACKSTAGE_DEV_URL;
@@ -444,6 +445,17 @@ app.whenReady().then(async () => {
   handle("saveSlot", (slot, value) => band.save(slot, value));
   // Camera avatars: macOS asks the person once; tests use Chromium's fake
   // camera and never touch the real one.
+  // Riffmaster guitars, read by Backstage itself (see riff.cjs). They connect
+  // on their own unless MacRiff is already using them; tests connect by hand.
+  riff = new Riffmasters((pads) => {
+    if (win && !win.isDestroyed()) win.webContents.send("backstage:riff", pads);
+  });
+  if (!process.env.BACKSTAGE_RIFF_FAKE && !macriffBusy())
+    void riff.connectAll();
+  handle("riffStatus", () => riff.status());
+  handle("riffConnect", () => riff.connectAll());
+  handle("riffDisconnect", () => riff.disconnect());
+  handle("riffAdmin", () => riff.useAdmin());
   handle("cameraAccess", async () =>
     process.platform === "darwin" && !process.env.BACKSTAGE_TEST_DATA
       ? systemPreferences.askForMediaAccess("camera")
@@ -481,6 +493,11 @@ app.whenReady().then(async () => {
     ]),
   );
   await createWindow();
+});
+app.on("will-quit", () => {
+  // Readers stop on their own once the lease lapses; ending the session
+  // releases the receivers right away.
+  void riff?.disconnect();
 });
 app.on("before-quit", (event) => {
   if (quitting) return;

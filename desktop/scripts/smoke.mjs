@@ -89,6 +89,9 @@ try {
     env: {
       ...process.env,
       BACKSTAGE_TEST_DATA: path.join(temp, "data"),
+      // Two fake Riffmaster receivers: same supervisor and socket protocol,
+      // no USB and no administrator prompt.
+      BACKSTAGE_RIFF_FAKE: "1",
       BACKSTAGE_SONGS_DIR: path.join(temp, "songs"),
       BACKSTAGE_PYTHON: process.env.BACKSTAGE_TEST_SERVICE
         ? process.env.BACKSTAGE_PYTHON
@@ -268,12 +271,11 @@ try {
       })),
       axes: [0, 0],
     };
-    Object.defineProperty(navigator, "getGamepads", {
-      configurable: true,
-      value: () => (window.__pad ? [window.__pad] : []),
-    });
   });
-  await page.getByRole("button", { name: /Test generic gamepad/ }).click();
+  await page
+    .locator(".device-list")
+    .getByRole("button", { name: /Test generic gamepad/ })
+    .click();
   await page.locator(".mapping-row").first().getByRole("button").click();
   await page.evaluate(() => (window.__pad.buttons[7].pressed = true));
   await expect(page.locator(".mapping-row").first()).toContainText("Button 7");
@@ -496,6 +498,103 @@ try {
       "PASS: packaged app starts optional service and renders live song search results.",
     );
   }
+  // Riffmaster guitars, read by Backstage: each receiver is its own controller
+  // (fake receivers here). One arriving while Player 1 is on the keyboard
+  // becomes Player 1.
+  await page.getByRole("button", { name: "Controllers", exact: true }).click();
+  await page.getByRole("button", { name: /Keyboard Always ready/ }).click();
+  const riff = page.getByLabel("Riffmaster guitars");
+  await expect(riff).toContainText("2 receivers plugged in");
+  await riff.getByRole("button", { name: "Connect Riffmasters" }).click();
+  await expect(riff.locator(".riff-row i.on")).toHaveCount(2, {
+    timeout: 10000,
+  });
+  await expect(page.locator(".toast")).toContainText(
+    "PDP Riffmaster 1 is now Player 1",
+  );
+  // Clone Hero-style join: another controller presses Start, joins as Player 2
+  // and sets itself up from its own pop-up. (Its green is button 7, remapped
+  // earlier.) Each press is held until its effect shows, then released.
+  const hold = async (button, done) => {
+    await page.evaluate(
+      (b) => (window.__pad.buttons[b].pressed = true),
+      button,
+    );
+    await expect.poll(done, { timeout: 8000 }).toBe(true);
+    await page.evaluate(
+      (b) => (window.__pad.buttons[b].pressed = false),
+      button,
+    );
+    await frames();
+  };
+  const setup = page.getByRole("group", { name: "Player 2 setup" });
+  // Player 2 is still the keyboard from the band round: leave from the bar.
+  const earlier = page.getByRole("button", { name: /^Player 2: / });
+  if (await earlier.count()) {
+    await earlier.click();
+    await setup.getByRole("button", { name: "Leave" }).click();
+    await expect(earlier).toHaveCount(0);
+  }
+  await hold(9, () => setup.isVisible());
+  await expect(page.locator(".toast")).toContainText(
+    "Test generic gamepad joined as Player 2",
+  );
+  const row = async () =>
+    (await setup.locator(".setup-row.current").textContent()) ?? "";
+  // The pop-up starts on the avatar: green picks the next one (Riot to Nova).
+  await expect(setup.locator(".setup-row.current")).toContainText("Riot");
+  await hold(7, async () => (await row()).includes("Nova"));
+  await hold(13, async () => (await row()).includes("Instrument"));
+  await hold(13, async () => (await row()).includes("Difficulty"));
+  await hold(
+    7,
+    async () =>
+      (await setup.locator(".setup-row.current strong").textContent()) ===
+      "Medium",
+  );
+  // Strumming is per player: on by default here, green turns it off.
+  await hold(13, async () => (await row()).includes("Strumming"));
+  await expect(setup.locator(".setup-row.current")).toContainText("On");
+  await hold(7, async () => (await row()).includes("Off · frets only"));
+  await page.screenshot({ path: "/tmp/backstage-desktop-join.png" });
+  await hold(1, async () => (await setup.count()) === 0);
+  await expect(
+    page.getByRole("button", {
+      name: "Player 2: P2, Test generic gamepad, Guitar Medium",
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /PDP Riffmaster 1 \(Xbox\)/ }).click();
+  // Receiver 1 keeps pressing orange: live input shows button 4.
+  await expect(page.locator(".button-meter span").nth(4)).toHaveClass(
+    /pressed/,
+    { timeout: 5000 },
+  );
+  await expect(
+    page.getByRole("button", { name: /PDP Riffmaster 2 \(Xbox\)/ }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "/tmp/backstage-desktop-riffmaster.png",
+    fullPage: true,
+  });
+  // In a song, a guitar nobody is playing says so instead of being ignored.
+  await page.getByRole("button", { name: "Song library", exact: true }).click();
+  await page.getByRole("button", { name: /Renamed Song/ }).click();
+  const soloP2 = page.getByRole("button", { name: "Remove player 2" });
+  if (await soloP2.count()) await soloP2.click();
+  await expect(page.locator(".song-dialog")).toContainText("PDP Riffmaster 1");
+  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await page.getByRole("button", { name: /Start playing/ }).click();
+  await expect(page.locator(".game-hint")).toContainText(
+    "PDP Riffmaster 2 isn’t playing this song",
+    { timeout: 8000 },
+  );
+  // The 4 s fixture may already have finished; either way, leave the stage.
+  await page.keyboard.press("Escape");
+  const leave = page.getByRole("button", { name: "← Library" });
+  if (await leave.count()) await leave.click();
+  await page.getByRole("button", { name: "Controllers", exact: true }).click();
+  await riff.getByRole("button", { name: "Disconnect Riffmasters" }).click();
+  await expect(riff.locator(".riff-row")).toHaveCount(0);
   // Soundcheck: demo-first lessons in their own section. Lessons follow the
   // Controllers selection, so play this one on the keyboard.
   await page.getByRole("button", { name: "Controllers", exact: true }).click();
@@ -611,12 +710,14 @@ try {
   // On stage the avatar plays one strum per note hit.
   await page.getByRole("button", { name: "Song library", exact: true }).click();
   await page.getByRole("button", { name: /Renamed Song/ }).click();
+  // Names label the lineup: show it with a second player, then play solo.
+  const removeP2 = page.getByRole("button", { name: "Remove player 2" });
+  if (!(await removeP2.count()))
+    await page.getByRole("button", { name: /Add player/ }).click();
   await expect(page.locator(".lineup-row .player-badge").first()).toHaveText(
     "SHREDDER",
   );
-  // The two-player lineup from earlier is still set; play this one solo.
-  const removeP2 = page.getByRole("button", { name: "Remove player 2" });
-  if (await removeP2.count()) await removeP2.click();
+  await removeP2.click();
   await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
   await expect(page.locator(".performer-tag")).toHaveText("SHREDDER");
@@ -644,7 +745,7 @@ try {
   await page.getByRole("button", { name: "← Library" }).click();
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel, Soundcheck lessons (demo, graded turn, progress), player names and premade/camera avatars on stage.",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel, Soundcheck lessons (demo, graded turn, progress), player names and premade/camera avatars on stage, Riffmaster receivers as separate controllers.",
   );
 } catch (error) {
   if (page && !page.isClosed()) {

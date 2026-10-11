@@ -144,6 +144,39 @@ trill/tremolo lane forgiveness, big rock endings, mixed open/fretted chords,
 engine presets/dynamic windows, song-speed practice and exact sustain-burst
 rounding remain tracked work. Physical guitar timing still needs acceptance.
 
+### Players: press Start to join
+
+A bar along the bottom of the main menu and every page shows Players 1–4, Clone
+Hero style. A controller that connects while Player 1 is on the keyboard becomes
+Player 1. Any other controller joins as the next player by pressing **Start**.
+Its setup pop-up opens above the bar and only that controller drives it: strum to
+move, green to change (yellow goes back), red or Start to close. It has a live
+fret and strum test, the player's **avatar** (the 10 premade looks, or their camera
+photo), **instrument**, **difficulty**, **strumming** (on: strum to hit notes;
+off: frets alone, for that player only; it starts from the Settings choice) and
+**Leave**. Start on a player's own
+controller reopens it; the mouse works too. The Avatars section edits the same
+players (names, camera photos, gear). Choosing a song keeps each player's choices
+where the song has those charts. During a song, a controller nobody is playing
+says so instead of being ignored.
+
+### PDP Riffmaster for Xbox
+
+macOS has no driver for the Riffmaster's USB receiver, so it never shows up as a
+gamepad on its own. Backstage reads the receivers itself (`electron/riff/`, with
+the Xbox GIP handling adapted from MacRiff in `mac-riff/`): no separate program or
+command. Receivers connect automatically when Backstage starts or one is plugged
+in, and reconnect after a replug. Each appears as its own controller, "PDP
+Riffmaster 1 (Xbox)", "2", and so on, with a built-in guitar mapping: frets,
+strum, Start, Select or tilt for Star Power, and whammy. Choose them like any
+gamepad, for any of up to four players. **Controllers → PDP Riffmaster (Xbox)**
+shows each receiver's state; **Disconnect** releases them for other apps.
+
+If MacRiff is running it holds the receivers: stop its session or quit MacRiff
+Setup, then click **Connect Riffmasters**. If macOS still won't let Backstage open
+a receiver, **Use administrator access** runs the same reader with one password
+prompt; it stops and releases USB when you disconnect or quit Backstage.
+
 ## Search and prepare songs
 
 **Add new songs** searches YouTube audio or community charts on Chorus Encore.

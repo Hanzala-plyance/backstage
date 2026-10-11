@@ -75,7 +75,12 @@ try {
     ...(process.platform === "darwin" ? { icon: "public/Backstage.icns" } : {}),
     out: "release",
     overwrite: true,
-    asar: true,
+    // The Riffmaster reader runs as plain Node with administrator rights, so
+    // it and the native usb module must be real files outside the archive.
+    asar: {
+      unpack:
+        "{**/node_modules/usb/**,**/node_modules/node-gyp-build/**,**/node_modules/node-addon-api/**,**/electron/riff/**}",
+    },
     prune: true,
     platform: process.platform,
     arch: process.arch,
@@ -93,6 +98,9 @@ try {
       /^\/node_modules\/(three|react|react-dom|scheduler)($|\/)/,
       /^\/node_modules\/\.(vite|cache|bin)($|\/)/,
       /^\/node_modules\/\.package-lock\.json$/,
+      // usb: keep only this platform's prebuilt binary; drop sources.
+      new RegExp(`^/node_modules/usb/prebuilds/(?!${process.platform}-)`),
+      /^\/node_modules\/usb\/(libusb|src)($|\/)/,
     ],
     extraResource: [service, licensedSource],
   });

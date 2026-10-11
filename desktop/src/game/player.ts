@@ -16,6 +16,8 @@ export type PlayerInit = {
   name?: string;
   look?: Look;
   gear?: Gear;
+  /** This player's own strum or tap choice; unset uses the game's. */
+  mode?: "tap" | "strum";
 };
 export type PadEdges = {
   connected: boolean;

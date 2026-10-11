@@ -15,11 +15,25 @@ function parseMidi(bytes, settings = {}) {
   if (!raw.header.ticksPerBeat)
     throw Error("SMPTE MIDI timing is unsupported.");
   const ppq = midi.header.ppq;
-  const cutoff = Number.isFinite(Number(settings.sustain_cutoff_threshold)) && Number(settings.sustain_cutoff_threshold) >= 0 ? Math.max(1, Number(settings.sustain_cutoff_threshold)) : ppq / 3;
+  const cutoff =
+    Number.isFinite(Number(settings.sustain_cutoff_threshold)) &&
+    Number(settings.sustain_cutoff_threshold) >= 0
+      ? Math.max(1, Number(settings.sustain_cutoff_threshold))
+      : ppq / 3;
   const legacyHopo = Number(settings.hopofreq);
-  const threshold = Number(settings.hopo_frequency) > 0 ? Number(settings.hopo_frequency)
-    : settings.eighthnote_hopo !== undefined ? ppq / (["true", "1"].includes(String(settings.eighthnote_hopo).toLowerCase()) ? 2 : 3)
-    : Number.isInteger(legacyHopo) && legacyHopo >= 0 && legacyHopo <= 5 ? 4 * ppq / [24,16,12,8,6,4][legacyHopo] : ppq / 3;
+  const threshold =
+    Number(settings.hopo_frequency) > 0
+      ? Number(settings.hopo_frequency)
+      : settings.eighthnote_hopo !== undefined
+        ? ppq /
+          (["true", "1"].includes(
+            String(settings.eighthnote_hopo).toLowerCase(),
+          )
+            ? 2
+            : 3)
+        : Number.isInteger(legacyHopo) && legacyHopo >= 0 && legacyHopo <= 5
+          ? (4 * ppq) / [24, 16, 12, 8, 6, 4][legacyHopo]
+          : ppq / 3;
   const tempos = midi.header.tempos.map((t) => ({
     time: midi.header.ticksToSeconds(t.ticks),
     bpm: t.bpm,

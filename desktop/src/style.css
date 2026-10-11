@@ -3795,3 +3795,224 @@ kbd {
     inset 0 0 0 2px #07060b,
     0 0 0 3px #fff;
 }
+
+/* Riffmaster guitars */
+.riff-panel {
+  display: grid;
+  gap: 8px;
+}
+.riff-panel > strong {
+  font-size: 15px;
+}
+.riff-panel > small {
+  font-size: 12px;
+  color: #8f89a6;
+}
+.riff-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #14121c;
+  clip-path: var(--cut-sm);
+}
+.riff-row i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #4a4460;
+}
+.riff-row i.on {
+  background: #3dff6e;
+  box-shadow: 0 0 8px #3dff6e;
+}
+.riff-row i.wait {
+  background: var(--gold);
+}
+.riff-row i.off {
+  background: #ff5a6e;
+}
+.riff-row span {
+  display: grid;
+  gap: 2px;
+  font-size: 14px;
+  font-weight: 650;
+}
+.riff-row small {
+  font-size: 12px;
+  font-weight: 400;
+  color: #8f89a6;
+}
+
+.game-hint {
+  position: absolute;
+  top: 150px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: min(620px, 90vw);
+  padding: 10px 18px;
+  font-weight: 650;
+  text-align: center;
+  color: #07060b;
+  background: var(--gold);
+  clip-path: var(--cut-sm);
+}
+
+/* Players: Clone Hero-style bar and setup pop-ups */
+.player-bar {
+  position: fixed;
+  right: 16px;
+  bottom: 6px;
+  z-index: 61;
+  display: flex;
+  gap: 6px;
+}
+.player-slot {
+  display: grid;
+  align-content: center;
+  min-width: 112px;
+  max-width: 190px;
+  height: 36px;
+  padding: 0 10px;
+  text-align: left;
+  background: #14121c;
+  box-shadow: inset 3px 0 var(--pc, #4a4460);
+  clip-path: var(--cut-sm);
+}
+.player-slot b {
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1;
+  letter-spacing: 0.5px;
+  color: var(--pc, #e8e5f2);
+}
+.player-slot small {
+  overflow: hidden;
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: #8f89a6;
+}
+.player-slot.empty {
+  --pc: #3a3550;
+  opacity: 0.7;
+}
+.player-slot.empty small {
+  color: var(--gold);
+}
+.player-slot.open,
+.player-slot:hover {
+  background: #1f1b2b;
+}
+.player-setup {
+  position: fixed;
+  right: 16px;
+  bottom: 52px;
+  z-index: 70;
+  display: grid;
+  gap: 6px;
+  width: 300px;
+  padding: 14px;
+  background: linear-gradient(180deg, #1d1028, #120d1b);
+  box-shadow:
+    inset 0 0 0 1px var(--pc, #ff2e88),
+    0 18px 40px #000a;
+  clip-path: var(--cut);
+}
+.player-setup header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 650;
+}
+.player-setup header .player-badge {
+  padding: 0 10px;
+  height: 28px;
+}
+.setup-test {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 4px;
+  font-size: 12px;
+}
+.setup-test .fret {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 3px solid currentColor;
+  opacity: 0.45;
+}
+.setup-test .fret.on {
+  opacity: 1;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+.setup-test .lane0 {
+  color: #3dff6e;
+}
+.setup-test .lane1 {
+  color: #ff2e4d;
+}
+.setup-test .lane2 {
+  color: #ffe03a;
+}
+.setup-test .lane3 {
+  color: #2f8cff;
+}
+.setup-test .lane4 {
+  color: #ff8a1f;
+}
+.setup-test b {
+  color: #4a4460;
+}
+.setup-test b.on {
+  color: var(--volt);
+}
+.setup-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 9px 12px;
+  background: #14121c;
+  clip-path: var(--cut-sm);
+  font-weight: 650;
+}
+.setup-row strong {
+  font-family: var(--display);
+  font-style: italic;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+.setup-row.current,
+.setup-row:hover {
+  background: #4a1838;
+  box-shadow: inset 3px 0 var(--hot);
+}
+.setup-row.leave span {
+  color: #ff5a6e;
+}
+.setup-hint {
+  font-size: 11px;
+  color: #8f89a6;
+}
+@media (max-width: 900px) {
+  .player-slot {
+    min-width: 0;
+    max-width: 90px;
+  }
+  .player-slot small {
+    display: none;
+  }
+}
+.setup-avatar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.setup-avatar .avatar-mini {
+  width: 34px;
+}

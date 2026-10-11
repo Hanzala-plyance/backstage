@@ -3,7 +3,7 @@ import type { LoadedSong } from "../types";
 import { SongAudio } from "../core/audio";
 import { keyboardLanes } from "../core/input";
 import { activateFocused, focusFirst, moveFocus } from "../core/menu";
-import { isPad } from "../core/players";
+import { deviceLabel, isPad } from "../core/players";
 import ButtonHints, { type Hint } from "../ButtonHints";
 import Stars from "../Stars";
 import { defaultLook, instrumentFor, slotName } from "../core/avatars";
@@ -66,7 +66,8 @@ export default function Game({
     [stats, setStats] = useState<PlayerStats[]>(() => players.map(emptyStats)),
     [time, setTime] = useState(0),
     [results, setResults] = useState<{ stars: number; best: boolean }[]>([]),
-    [volume, setVolume] = useState(0.65);
+    [volume, setVolume] = useState(0.65),
+    [hint, setHint] = useState("");
   // The band on stage, and comic captions that pop up over each performer.
   const stageCanvas = useRef<HTMLCanvasElement | null>(null);
   const stage = useRef<Stage | null>(null);
@@ -198,7 +199,7 @@ export default function Game({
           new PlayerRuntime(
             p,
             canvases.current[i]!,
-            mode,
+            p.mode ?? mode,
             song.duration,
             ratio,
           ),
@@ -243,7 +244,26 @@ export default function Game({
     const keys = all[keyboardPlayer];
     const drums = all.find((r) => r.device === "midi");
     let frame = 0,
-      lastUI = 0;
+      lastUI = 0,
+      lastHint = -Infinity;
+    // A controller nobody is playing doesn't score; say so instead of
+    // silently ignoring it.
+    const owned = new Set(players.map((p) => p.device));
+    const unassigned = (now: number) => {
+      if (now - lastHint < 5000) return;
+      for (const pad of navigator.getGamepads()) {
+        if (!pad?.connected) continue;
+        const key = `pad:${pad.index}:${pad.id}`;
+        if (owned.has(key)) continue;
+        if (!pad.buttons.some((b) => b.pressed)) continue;
+        lastHint = now;
+        setHint(
+          `${deviceLabel(key, [pad])} isn’t playing this song. Choose it in Controllers, or add it as a player, before you start.`,
+        );
+        setTimeout(() => setHint(""), 5000);
+        return;
+      }
+    };
     const keydown = (event: KeyboardEvent) => {
       if (
         [
@@ -354,6 +374,7 @@ export default function Game({
               : "Controller disconnected. Reconnect it to continue.",
         );
       for (const r of all) r.frame(t, status.current === "playing", now);
+      unassigned(now);
       const live = status.current === "playing";
       stage.current?.frame(
         live ? t : now / 1000,
@@ -465,6 +486,11 @@ export default function Game({
       }
     >
       {band}
+      {hint && (
+        <div className="game-hint" role="status">
+          {hint}
+        </div>
+      )}
       <header className="game-header">
         <button className="quiet" onClick={exit}>
           ← {backTo}
@@ -648,7 +674,8 @@ export default function Game({
                 (phase === "ready"
                   ? multi
                     ? "Each player scores on their own highway. Any player’s Start pauses the band."
-                    : mode === "strum" && chart.part !== "Drums"
+                    : (players[0].mode ?? mode) === "strum" &&
+                        chart.part !== "Drums"
                       ? "Strum solid gems. White caps are HOPOs; hollow caps are taps. Hold long notes and complete glowing phrases to earn Star Power."
                       : "Tap the matching controls as notes cross the line."
                   : "Your song and score are right where you left them.")}
@@ -659,7 +686,7 @@ export default function Game({
                 {["A", "S", "D", "F", "G"].map((k) => (
                   <kbd key={k}>{k}</kbd>
                 ))}
-                {mode === "strum" &&
+                {(players[keyboardPlayer].mode ?? mode) === "strum" &&
                   players[keyboardPlayer].chart.part !== "Drums" && (
                     <>
                       <kbd>SPACE · STRUM</kbd>

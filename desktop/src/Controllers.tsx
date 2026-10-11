@@ -1,3 +1,4 @@
+import { onRiff, riffName, type RiffPad, type RiffStatus } from "./core/riff";
 import { useEffect, useRef, useState } from "react";
 import type { Action, Profile } from "./types";
 import {
@@ -230,6 +231,8 @@ export default function Controllers({
               </div>
             </button>
           ))}
+          <div className="divider" />
+          <RiffPanel />
           {error && <p className="error-text">{error}</p>}
         </section>
         <section className="panel mapping-panel">
@@ -371,8 +374,123 @@ export default function Controllers({
       <p className="footnote">
         Xbox, PlayStation, Switch-style and generic controllers can be mapped
         when Chromium exposes their inputs. Detection does not certify a model.
-        The existing Xbox Riffmaster USB bridge is not part of this build.
+        PDP Riffmaster guitars for Xbox are read by Backstage itself (see
+        above); tested with the receivers on this computer, not every model.
       </p>
     </>
+  );
+}
+
+/** PDP Riffmaster for Xbox: macOS has no driver for its receiver, so
+ * Backstage reads it itself and shows each receiver as its own controller. */
+function RiffPanel() {
+  const [status, setStatus] = useState<RiffStatus | null>(null),
+    [pads, setPads] = useState<RiffPad[]>([]),
+    [working, setWorking] = useState(false),
+    [problem, setProblem] = useState("");
+  const refresh = () =>
+    window.backstage
+      .riffStatus()
+      .then(setStatus)
+      .catch(() => {});
+  useEffect(() => {
+    void refresh();
+    const timer = setInterval(refresh, 3000);
+    const stop = onRiff(setPads);
+    return () => {
+      clearInterval(timer);
+      stop();
+    };
+  }, []);
+  const run = async (action: () => Promise<RiffStatus>) => {
+    setWorking(true);
+    setProblem("");
+    try {
+      setStatus(await action());
+    } catch (e) {
+      setProblem(
+        String((e as Error).message || e).replace(
+          /^Error invoking remote method '[^']+': (Error: )?/,
+          "",
+        ),
+      );
+    } finally {
+      setWorking(false);
+    }
+  };
+  const found = status?.receivers.length ?? 0;
+  const live = status?.active || status?.mode === "admin";
+  return (
+    <div className="riff-panel" aria-label="Riffmaster guitars">
+      <strong>PDP Riffmaster (Xbox)</strong>
+      <small>
+        {found
+          ? `${found} receiver${found === 1 ? "" : "s"} plugged in`
+          : "No receivers found. Plug in the guitar’s USB receiver."}
+        {status?.mode === "admin" && " · administrator access"}
+      </small>
+      {live &&
+        pads.map((p, i) => (
+          <div key={p.key} className="riff-row">
+            <i className={p.connected ? (p.input ? "on" : "wait") : "off"} />
+            <span>
+              {riffName(i + 1)}
+              <small>
+                {!p.connected
+                  ? p.error ||
+                    "Reconnecting… keep the receiver in the same USB port"
+                  : p.input
+                    ? "Connected · choose it above to map or test"
+                    : "Receiver ready · turn on the guitar and press a fret"}
+              </small>
+            </span>
+          </div>
+        ))}
+      {status?.busy && !live && (
+        <p className="error-text">
+          MacRiff is using the receivers. Stop its session or quit MacRiff
+          Setup, then connect.
+        </p>
+      )}
+      {live ? (
+        <button
+          className="secondary wide"
+          disabled={working}
+          onClick={() => run(() => window.backstage.riffDisconnect())}
+        >
+          Disconnect Riffmasters
+        </button>
+      ) : (
+        <button
+          className="secondary wide"
+          disabled={working || !found}
+          onClick={() => run(() => window.backstage.riffConnect())}
+        >
+          {working ? "Connecting…" : "Connect Riffmasters"}
+        </button>
+      )}
+      {status?.denied && status.mode !== "admin" && (
+        <>
+          <small>
+            If another app isn’t holding the receiver, macOS may require
+            administrator access to open it.
+          </small>
+          <button
+            className="secondary wide"
+            disabled={working}
+            onClick={() => run(() => window.backstage.riffAdmin())}
+          >
+            {working ? "Waiting for approval…" : "Use administrator access"}
+          </button>
+        </>
+      )}
+      {!status?.denied && (
+        <small>
+          Backstage reads the receivers itself and connects them automatically
+          when plugged in. Disconnect releases them for other apps.
+        </small>
+      )}
+      {problem && <p className="error-text">{problem}</p>}
+    </div>
   );
 }

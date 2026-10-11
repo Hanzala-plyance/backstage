@@ -44,7 +44,17 @@ export class MenuPad {
     pads: readonly (Gamepad | null)[],
     profileFor: (pad: Gamepad) => Profile,
   ): MenuButton[] {
-    const pressed: MenuButton[] = [];
+    return this.pollFrom(now, pads, profileFor).map((p) => p.button);
+  }
+  /** Like poll, but says which controller pressed each button, as the
+   * device string ("pad:<index>:<id>"), so a player's own pad can be told
+   * apart (joining, their setup pop-up). */
+  pollFrom(
+    now: number,
+    pads: readonly (Gamepad | null)[],
+    profileFor: (pad: Gamepad) => Profile,
+  ): { button: MenuButton; source: string }[] {
+    const pressed: { button: MenuButton; source: string }[] = [];
     const seen = new Set<string>();
     for (const pad of pads) {
       if (!pad?.connected) continue;
@@ -58,7 +68,7 @@ export class MenuPad {
       for (const b of buttons) {
         const repeat = key + b;
         if (current[b] && !before[b]) {
-          pressed.push(b);
+          pressed.push({ button: b, source: `pad:${key}` });
           if (b === "up" || b === "down")
             this.repeatAt.set(repeat, now + REPEAT_DELAY);
         } else if (
@@ -66,7 +76,7 @@ export class MenuPad {
           (b === "up" || b === "down") &&
           now >= (this.repeatAt.get(repeat) ?? Infinity)
         ) {
-          pressed.push(b);
+          pressed.push({ button: b, source: `pad:${key}` });
           this.repeatAt.set(repeat, now + REPEAT_RATE);
         } else if (!current[b]) this.repeatAt.delete(repeat);
       }
