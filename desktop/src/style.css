@@ -5163,3 +5163,21 @@ body,
 .side-panel .amplifier > strong i {
   font-size: clamp(26px, 3.8vh, 42px);
 }
+/* The footer is a solid strip of fixed height, and highways end exactly at
+   its top (they used to run under it and show through). */
+.game-screen {
+  --footer: 58px;
+}
+.game-footer {
+  height: var(--footer);
+  padding-top: 0;
+  padding-bottom: 0;
+  background: #0b0a10;
+}
+.game-screen .highway {
+  inset: 170px 0 var(--footer);
+  height: calc(100% - 170px - var(--footer));
+}
+.game-screen .player-grid {
+  bottom: var(--footer);
+}
