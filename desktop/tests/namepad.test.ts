@@ -6,7 +6,7 @@ const press = (name: string, keys: [number, number][]) => {
   for (const [key, at] of keys) ({ name, last } = tapKey(name, key, last, at));
   return name;
 };
-test("multi-tap cycles a key's letters, then its digit, then wraps", () => {
+test("multi-tap cycles a key's letters, then wraps", () => {
   assert.equal(press("", [[1, 0]]), "A");
   assert.equal(
     press("", [
@@ -20,17 +20,16 @@ test("multi-tap cycles a key's letters, then its digit, then wraps", () => {
       [1, 0],
       [1, 300],
       [1, 600],
-      [1, 900],
     ]),
-    "2",
+    "C",
   );
+  assert.equal(press("", [[0, 0]]), "1", "the 123 key types digits");
   assert.equal(
     press("", [
       [1, 0],
       [1, 300],
       [1, 600],
       [1, 900],
-      [1, 1200],
     ]),
     "A",
   );
@@ -54,7 +53,7 @@ test("a pause or another key starts a new letter", () => {
   );
 });
 test("delete, OK and the 8-character limit", () => {
-  const back = KEYPAD.findIndex((k) => k.label === "⌫");
+  const back = KEYPAD.findIndex((k) => k.label === "←");
   const ok = KEYPAD.findIndex((k) => k.label === "OK");
   assert.equal(tapKey("ACE", back, null, 0).name, "AC");
   assert.equal(tapKey("ACE", ok, null, 0).done, true);

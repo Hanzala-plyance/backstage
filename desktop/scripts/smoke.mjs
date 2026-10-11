@@ -783,6 +783,29 @@ try {
   await page.screenshot({ path: "/tmp/backstage-desktop-avatar-stage.png" });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "← Library" }).click();
+  // Every page fits the window: long lists scroll in their own panels and
+  // the app itself never scrolls.
+  for (const name of [
+    "Song library",
+    "Soundcheck",
+    "Avatars",
+    "Add new songs",
+    "Preparation queue",
+    "Controllers",
+    "Settings",
+  ]) {
+    await page.getByRole("button", { name, exact: true }).first().click();
+    expect(
+      await page.evaluate(
+        () =>
+          document.scrollingElement.scrollHeight -
+          innerHeight +
+          (document.querySelector(".main-content").scrollHeight -
+            document.querySelector(".main-content").clientHeight),
+      ),
+      `${name} overflows the window`,
+    ).toBeLessThanOrEqual(0);
+  }
   expect(errors).toEqual([]);
   console.log(
     "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel, Soundcheck lessons (demo, graded turn, progress), player names and premade/camera avatars on stage, Riffmaster receivers as separate controllers.",

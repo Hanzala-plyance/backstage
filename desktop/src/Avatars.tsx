@@ -403,7 +403,9 @@ export default function Avatars({
             <div
               key={i}
               className={
-                `select-card p${i + 1}` + (mouse === i ? " mouse" : "")
+                `select-card p${i + 1}` +
+                (mouse === i ? " mouse" : "") +
+                (naming[i] ? " naming" : "")
               }
               aria-label={`Player ${i + 1} card`}
               onClick={() => setMouse(i)}

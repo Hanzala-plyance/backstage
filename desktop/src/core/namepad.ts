@@ -1,19 +1,18 @@
-// Phone-keypad name entry for guitars: tap a key repeatedly (within a second)
-// to cycle its letters, then its digit, as on an old phone.
+// Name entry for guitars, laid out like Smash Bros. Brawl's: letter-group keys
+// (ABC, DEF …) and a 123 key; tap a key again within a second to cycle it.
 export type PadKey =
   { label: string; chars: string } | { label: string; action: "back" | "ok" };
 export const KEYPAD: PadKey[] = [
-  { label: "1", chars: "1" },
-  { label: "2 ABC", chars: "ABC2" },
-  { label: "3 DEF", chars: "DEF3" },
-  { label: "4 GHI", chars: "GHI4" },
-  { label: "5 JKL", chars: "JKL5" },
-  { label: "6 MNO", chars: "MNO6" },
-  { label: "7 PQRS", chars: "PQRS7" },
-  { label: "8 TUV", chars: "TUV8" },
-  { label: "9 WXYZ", chars: "WXYZ9" },
-  { label: "⌫", action: "back" },
-  { label: "0", chars: "0" },
+  { label: "123", chars: "1234567890" },
+  { label: "ABC", chars: "ABC" },
+  { label: "DEF", chars: "DEF" },
+  { label: "GHI", chars: "GHI" },
+  { label: "JKL", chars: "JKL" },
+  { label: "MNO", chars: "MNO" },
+  { label: "PQRS", chars: "PQRS" },
+  { label: "TUV", chars: "TUV" },
+  { label: "WXYZ", chars: "WXYZ" },
+  { label: "←", action: "back" },
   { label: "OK", action: "ok" },
 ];
 export const MAX_NAME = 8;

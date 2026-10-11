@@ -33,7 +33,8 @@ export default function NamePad({
     if (b === "up") move(-1);
     else if (b === "down") move(1);
     else if (b === "yellow") move(-3);
-    else if (b === "blue") move(3);
+    else if (b === "blue")
+      move(3); // a row up or down
     else if (b === "green") press(cursor);
     else if (b === "red") {
       last.current = null;
@@ -59,23 +60,23 @@ export default function NamePad({
         {KEYPAD.map((k, i) => (
           <button
             key={k.label}
-            className={"pad-key" + (i === cursor ? " current" : "")}
+            className={
+              "pad-key" +
+              (i === cursor ? " current" : "") +
+              ("action" in k ? ` ${k.action}` : "")
+            }
             onClick={() => {
               setCursor(i);
               press(i);
             }}
           >
-            {k.label
-              .split(" ")
-              .map((part, j) =>
-                j ? <small key={j}>{part}</small> : <b key={j}>{part}</b>,
-              )}
+            {k.label}
           </button>
         ))}
       </div>
       <small className="setup-hint">
-        Strum to move · green to type (tap again for the next letter) · red
-        deletes · Start when done
+        Strum to move · green types (again for the next letter) · red deletes ·
+        Start when done
       </small>
     </div>
   );
