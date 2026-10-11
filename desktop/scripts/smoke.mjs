@@ -272,7 +272,10 @@ try {
       axes: [0, 0],
     };
   });
-  await page.getByRole("button", { name: /Test generic gamepad/ }).click();
+  await page
+    .locator(".device-list")
+    .getByRole("button", { name: /Test generic gamepad/ })
+    .click();
   await page.locator(".mapping-row").first().getByRole("button").click();
   await page.evaluate(() => (window.__pad.buttons[7].pressed = true));
   await expect(page.locator(".mapping-row").first()).toContainText("Button 7");
@@ -509,6 +512,51 @@ try {
   await expect(page.locator(".toast")).toContainText(
     "PDP Riffmaster 1 is now Player 1",
   );
+  // Clone Hero-style join: another controller presses Start, joins as Player 2
+  // and sets itself up from its own pop-up. (Its green is button 7, remapped
+  // earlier.) Each press is held until its effect shows, then released.
+  const hold = async (button, done) => {
+    await page.evaluate(
+      (b) => (window.__pad.buttons[b].pressed = true),
+      button,
+    );
+    await expect.poll(done, { timeout: 8000 }).toBe(true);
+    await page.evaluate(
+      (b) => (window.__pad.buttons[b].pressed = false),
+      button,
+    );
+    await frames();
+  };
+  const setup = page.getByRole("group", { name: "Player 2 setup" });
+  // Player 2 is still the keyboard from the band round: leave from the bar.
+  const earlier = page.getByRole("button", { name: /^Player 2: / });
+  if (await earlier.count()) {
+    await earlier.click();
+    await setup.getByRole("button", { name: "Leave" }).click();
+    await expect(earlier).toHaveCount(0);
+  }
+  await hold(9, () => setup.isVisible());
+  await expect(page.locator(".toast")).toContainText(
+    "Test generic gamepad joined as Player 2",
+  );
+  await hold(13, async () =>
+    ((await setup.locator(".setup-row.current").textContent()) ?? "").includes(
+      "Difficulty",
+    ),
+  );
+  await hold(
+    7,
+    async () =>
+      (await setup.locator(".setup-row.current strong").textContent()) ===
+      "Medium",
+  );
+  await page.screenshot({ path: "/tmp/backstage-desktop-join.png" });
+  await hold(1, async () => (await setup.count()) === 0);
+  await expect(
+    page.getByRole("button", {
+      name: "Player 2: P2, Test generic gamepad, Guitar Medium",
+    }),
+  ).toBeVisible();
   await page.getByRole("button", { name: /PDP Riffmaster 1 \(Xbox\)/ }).click();
   // Receiver 1 keeps pressing orange: live input shows button 4.
   await expect(page.locator(".button-meter span").nth(4)).toHaveClass(

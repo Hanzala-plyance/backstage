@@ -21,6 +21,7 @@ import ButtonHints, { type Hint } from "./ButtonHints";
 import {
   MAX_PLAYERS,
   addPlayer,
+  joinPlayer,
   cycleDevice,
   cycleLevel,
   cyclePart,
@@ -40,6 +41,7 @@ import Controllers from "./Controllers";
 import Soundcheck, { CHECK_ID, loadProgress, saveProgress } from "./Soundcheck";
 import ControllerCheck from "./game/ControllerCheck";
 import Avatars from "./Avatars";
+import PlayerBar from "./PlayerBar";
 import { defaultLook, gearOf, slotName, type Slot } from "./core/avatars";
 import { lessons } from "./core/lessons";
 import type { MidiPort } from "./game/Game";
@@ -177,7 +179,10 @@ export default function App() {
   const [padHints, setPadHints] = useState(() =>
     Array.from(navigator.getGamepads?.() ?? []).some((p) => p?.connected),
   );
-  const navigate = useRef<(b: MenuButton) => void>(() => {});
+  const navigate = useRef<(b: MenuButton, source?: string) => void>(() => {});
+  // Clone Hero-style join: a player's setup pop-up, driven by their own pad.
+  const [setupSlot, setSetupSlot] = useState<number | null>(null);
+  const setupInput = useRef<(b: MenuButton) => void>(() => {});
   const returnFocus = useRef<HTMLElement | null>(null);
   const later = (fn: () => void) => setTimeout(fn, 40);
   const back = () => {
@@ -216,10 +221,26 @@ export default function App() {
       later(() => focusFirst());
     }
   };
-  navigate.current = (b) => {
+  navigate.current = (b, source) => {
     setPadHints(true);
     if (screen === "title") {
       if (b === "green" || b === "start") enterMenu();
+      return;
+    }
+    // A player's own controller drives their open setup pop-up.
+    const players = lineupAll();
+    const owner = source ? players.findIndex((p) => p.device === source) : -1;
+    if (setupSlot !== null && owner === setupSlot) return setupInput.current(b);
+    // Start on a controller: its player's setup, or join as the next player.
+    if (b === "start" && source) {
+      if (owner >= 0) return setSetupSlot(owner);
+      if (players.length < MAX_PLAYERS) {
+        applyLineup(joinPlayer(players, source));
+        setSetupSlot(players.length);
+        setNotice(
+          `${deviceLabel(source, pads)} joined as Player ${players.length + 1}`,
+        );
+      }
       return;
     }
     if (screen === "menu" && b === "red") {
@@ -283,10 +304,10 @@ export default function App() {
         padKey = key;
         setPads(connected);
       }
-      const pressed = menu.poll(now, all, profileFor);
+      const pressed = menu.pollFrom(now, all, profileFor);
       // Controllers captures raw presses while remapping.
       if (!document.body.hasAttribute("data-capturing"))
-        pressed.forEach((b) => navigate.current(b));
+        pressed.forEach((p) => navigate.current(p.button, p.source));
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -309,7 +330,9 @@ export default function App() {
         }
         return;
       }
-      if (e.key === "Escape" && screen === "menu") {
+      if (e.key === "Escape" && setupSlot !== null) {
+        setSetupSlot(null);
+      } else if (e.key === "Escape" && screen === "menu") {
         setPadHints(false);
         setScreen("title");
       } else if (e.key === "Escape") {
@@ -508,12 +531,12 @@ export default function App() {
     setConfirmRemove(false);
     preview.current.hover(song);
     setFocusId(song.id);
+    // Keep each player's chosen instrument and difficulty where the song has
+    // them (players set these in their pop-up before choosing a song).
     setLineup((l) => fitToSong(l, song));
-    const chart =
-      song.charts.find((c) => c.part === "Guitar" && c.level === "Easy") ||
-      song.charts[0];
-    setPart(chart.part);
-    setLevel(chart.level);
+    const [first] = fitToSong([{ device, part, level }], song);
+    setPart(first.part);
+    setLevel(first.level);
   };
   const changePart = (p: Part) => {
     setPart(p);
@@ -693,8 +716,30 @@ export default function App() {
     );
   if (screen === "title")
     return <TitleScreen pad={padHints} onStart={enterMenu} />;
+  const players = lineupAll();
+  const joinable = pads.some(
+    (p) => !players.some((l) => l.device === `pad:${p.index}:${p.id}`),
+  );
+  const bar = (
+    <PlayerBar
+      players={players}
+      names={band.map((b) => b.name)}
+      pads={pads}
+      profileOf={profileOf}
+      open={setupSlot}
+      setOpen={setSetupSlot}
+      onChange={applyLineup}
+      input={setupInput}
+      joinable={joinable}
+    />
+  );
   if (screen === "menu")
-    return <MainMenu pad={padHints} onChoose={chooseMenu} />;
+    return (
+      <>
+        <MainMenu pad={padHints} onChoose={chooseMenu} />
+        {bar}
+      </>
+    );
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -1305,6 +1350,7 @@ export default function App() {
           </>
         )}
       </main>
+      {bar}
       <ButtonHints
         className="app-hints"
         pad={padHints}

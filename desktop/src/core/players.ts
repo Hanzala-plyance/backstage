@@ -108,3 +108,38 @@ export function lineupProblem(
   }
   return null;
 }
+const PARTS: Part[] = ["Guitar", "Bass", "Rhythm", "Drums"];
+const LEVELS: Level[] = ["Easy", "Medium", "Hard", "Expert"];
+/** A controller pressing Start joins as the next player. */
+export function joinPlayer(
+  players: readonly PlayerSetup[],
+  device: string,
+): PlayerSetup[] {
+  if (players.length >= MAX_PLAYERS || players.some((p) => p.device === device))
+    return [...players];
+  return [
+    ...players,
+    { device, part: device === "midi" ? "Drums" : "Guitar", level: "Easy" },
+  ];
+}
+/** Before a song is chosen, any instrument or difficulty can be picked; the
+ * song dialog later fits each player to the charts the song has. */
+export function cycleSetting(
+  players: readonly PlayerSetup[],
+  index: number,
+  setting: "part" | "level",
+  step: 1 | -1 = 1,
+): PlayerSetup[] {
+  const list: string[] = setting === "part" ? PARTS : LEVELS;
+  return players.map((p, i) => {
+    if (i !== index) return p;
+    const at = list.indexOf(p[setting]);
+    return {
+      ...p,
+      [setting]: list[(at + step + list.length) % list.length],
+    } as PlayerSetup;
+  });
+}
+/** Removes a joined player; Player 1 always stays. */
+export const leavePlayer = (players: readonly PlayerSetup[], index: number) =>
+  index > 0 ? players.filter((_, i) => i !== index) : [...players];

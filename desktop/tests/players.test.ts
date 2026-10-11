@@ -2,6 +2,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addPlayer,
+  cycleSetting,
+  joinPlayer,
+  leavePlayer,
   cycleDevice,
   cycleLevel,
   cyclePart,
@@ -75,4 +78,32 @@ test("a lineup needs distinct, connected devices", () => {
     lineupProblem([one[0], one[0]], pads) ?? "",
     /Player 2 shares a controller/,
   );
+});
+
+test("a controller pressing Start joins once, up to four players", () => {
+  let lineup = [
+    { device: "keyboard", part: "Guitar", level: "Expert" },
+  ] as PlayerSetup[];
+  lineup = joinPlayer(lineup, "pad:16:Riff");
+  assert.deepEqual(lineup[1], {
+    device: "pad:16:Riff",
+    part: "Guitar",
+    level: "Easy",
+  });
+  assert.equal(joinPlayer(lineup, "pad:16:Riff").length, 2, "no double join");
+  assert.equal(joinPlayer(lineup, "midi")[2].part, "Drums");
+  for (const d of ["pad:1:a", "pad:2:b", "pad:3:c"])
+    lineup = joinPlayer(lineup, d);
+  assert.equal(lineup.length, 4);
+});
+test("setup cycles any instrument or difficulty; Player 1 can't leave", () => {
+  const lineup = [
+    { device: "keyboard", part: "Guitar", level: "Expert" },
+    { device: "pad:16:Riff", part: "Drums", level: "Easy" },
+  ] as PlayerSetup[];
+  assert.equal(cycleSetting(lineup, 1, "part")[1].part, "Guitar", "wraps");
+  assert.equal(cycleSetting(lineup, 0, "level")[0].level, "Easy", "wraps");
+  assert.equal(cycleSetting(lineup, 1, "level", -1)[1].level, "Expert");
+  assert.equal(leavePlayer(lineup, 0).length, 2);
+  assert.deepEqual(leavePlayer(lineup, 1), [lineup[0]]);
 });
