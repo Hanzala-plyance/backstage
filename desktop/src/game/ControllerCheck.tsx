@@ -1,37 +1,55 @@
 import { useEffect, useRef, useState } from "react";
 import type { Profile } from "../types";
 import { readPad } from "../core/input";
-import { isPad } from "../core/players";
-import { checkItems, keyItem, padActive } from "../core/lessons";
+import { deviceLabel, isPad } from "../core/players";
+import { checkItemsFor, keyItem, padActive } from "../core/lessons";
 import ButtonHints from "../ButtonHints";
-/** Soundcheck step one: press every input once so the player knows the whole
- * controller works before the lessons. Menu buttons are part of the check, so
- * green and red only navigate once everything has been pressed. */
+import { drumNotes, type MidiPort } from "./player";
+export type CheckPlayer = { device: string; profile: Profile; name: string };
+/** Soundcheck step one: every player presses each of their inputs once, at
+ * the same time, so the band knows every controller works before the
+ * lessons. Each panel lights only from its own player's controller. Menu
+ * buttons are part of the check, so green and red only navigate once every
+ * panel has passed. */
 export default function ControllerCheck({
-  device,
-  profile,
+  players,
+  pads = [],
+  midi,
   onPassed,
   onNext,
   onExit,
 }: {
-  device: string;
-  profile: Profile;
+  players: CheckPlayer[];
+  pads?: readonly Gamepad[];
+  midi?: MidiPort;
   onPassed: () => void;
   onNext: () => void;
   onExit: () => void;
 }) {
-  const pad = isPad(device);
-  const items = checkItems(pad);
-  const [seen, setSeen] = useState<string[]>([]),
-    [held, setHeld] = useState<string[]>([]),
-    [connected, setConnected] = useState(true);
-  const done = items.every((i) => seen.includes(i.id));
+  const items = players.map((p) => checkItemsFor(p.device));
+  const [seen, setSeen] = useState<string[][]>(() => players.map(() => [])),
+    [held, setHeld] = useState<string[][]>(() => players.map(() => [])),
+    [connected, setConnected] = useState<boolean[]>(() =>
+      players.map(() => true),
+    );
+  const passed = items.map((list, i) =>
+    list.every((it) => seen[i].includes(it.id)),
+  );
+  const done = passed.every(Boolean);
   const state = useRef({ done, onNext, onExit, onPassed });
   state.current = { done, onNext, onExit, onPassed };
-  const mark = (ids: string[]) =>
+  const mark = (i: number, ids: string[]) =>
     ids.length &&
-    setSeen((s) =>
-      ids.every((id) => s.includes(id)) ? s : [...new Set([...s, ...ids])],
+    setSeen((all) =>
+      all.map((s, k) =>
+        k !== i || ids.every((id) => s.includes(id))
+          ? s
+          : [...new Set([...s, ...ids])],
+      ),
+    );
+  const hold = (i: number, ids: string[]) =>
+    setHeld((all) =>
+      all.map((h, k) => (k === i && h.join() !== ids.join() ? ids : h)),
     );
   useEffect(() => {
     if (done) {
@@ -46,9 +64,15 @@ export default function ControllerCheck({
     }
   }, [done]);
   useEffect(() => {
+    const keyboard = players.findIndex((p) => p.device === "keyboard");
+    const drumKit = players.findIndex((p) => p.device === "midi");
     const keys = new Set<string>();
     const sync = () =>
-      setHeld([...keys].map(keyItem).filter((id): id is string => !!id));
+      keyboard >= 0 &&
+      hold(
+        keyboard,
+        [...keys].map(keyItem).filter((id): id is string => !!id),
+      );
     const keydown = (e: KeyboardEvent) => {
       if (e.code === "Escape") return state.current.onExit();
       if (e.code === "Enter" && state.current.done) {
@@ -57,37 +81,53 @@ export default function ControllerCheck({
         return;
       }
       const id = keyItem(e.code);
-      if (!id || pad) return;
+      if (!id || keyboard < 0) return;
       e.preventDefault();
       keys.add(e.code);
-      mark([id]);
+      mark(keyboard, [id]);
       sync();
     };
     const keyup = (e: KeyboardEvent) => {
       keys.delete(e.code);
       sync();
     };
-    let frame = 0,
-      before: string[] | null = null;
+    const midiMessage = (event: MIDIMessageEvent) => {
+      const data = event.data;
+      if (!data || drumKit < 0 || (data[0] & 0xf0) !== 0x90 || data[2] === 0)
+        return;
+      const lane = drumNotes[data[1]];
+      if (lane !== undefined) mark(drumKit, [`lane${lane}`]);
+    };
+    if (drumKit >= 0 && midi)
+      midi.input.addEventListener("midimessage", midiMessage);
+    let frame = 0;
+    const before: (string[] | null)[] = players.map(() => null);
     const tick = () => {
-      if (pad) {
-        const index = Number(device.split(":")[1]);
-        const p = navigator.getGamepads()[index];
-        const valid = p && device === `pad:${p.index}:${p.id}` ? p : null;
-        const now = readPad(valid, profile);
-        setConnected(now.connected);
+      players.forEach((p, i) => {
+        if (!isPad(p.device)) return;
+        const index = Number(p.device.split(":")[1]);
+        const pad = navigator.getGamepads()[index];
+        const valid =
+          pad && p.device === `pad:${pad.index}:${pad.id}` ? pad : null;
+        const now = readPad(valid, p.profile);
+        setConnected((c) =>
+          c[i] === now.connected
+            ? c
+            : c.map((v, k) => (k === i ? now.connected : v)),
+        );
         const active = now.connected ? padActive(now) : [];
         // Ignore inputs already held when the check opened.
-        if (before) {
-          const fresh = active.filter((id) => !before!.includes(id));
+        const prev = before[i];
+        if (prev) {
+          const fresh = active.filter((id) => !prev.includes(id));
           if (state.current.done) {
             if (fresh.includes("lane0")) state.current.onNext();
             else if (fresh.includes("lane1")) state.current.onExit();
-          } else mark(fresh);
+          } else mark(i, fresh);
         }
-        before = active;
-        setHeld((h) => (h.join() === active.join() ? h : active));
-      }
+        before[i] = active;
+        hold(i, active);
+      });
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -97,8 +137,10 @@ export default function ControllerCheck({
       cancelAnimationFrame(frame);
       window.removeEventListener("keydown", keydown);
       window.removeEventListener("keyup", keyup);
+      midi?.input.removeEventListener("midimessage", midiMessage);
     };
   }, []);
+  const multi = players.length > 1;
   return (
     <div className="game-screen check-screen">
       <header className="game-header">
@@ -107,43 +149,73 @@ export default function ControllerCheck({
         </button>
         <div>
           <strong>Controller check</strong>
-          <small>Step 1 · {pad ? "Your controller" : "Your keyboard"}</small>
+          <small>
+            Step 1 ·{" "}
+            {multi
+              ? `${players.length} players`
+              : deviceLabel(players[0].device, pads)}
+          </small>
         </div>
         <span />
       </header>
-      <main className="check-body">
+      <main className={"check-body" + (multi ? " multi" : "")}>
         <span className="eyebrow">
           {done ? "ALL INPUTS WORKING" : "TEST EVERY INPUT"}
         </span>
-        <h1>{done ? "You’re all set." : "Press everything once."}</h1>
+        <h1>
+          {done
+            ? multi
+              ? "Band’s all set."
+              : "You’re all set."
+            : "Press everything once."}
+        </h1>
         <p>
-          {!connected
-            ? "Controller disconnected. Reconnect it, or choose another in Controllers."
-            : done
-              ? "Every fret, strum and button answered. Next: the lessons."
+          {done
+            ? "Every controller answered. Next: the lessons."
+            : multi
+              ? "Everyone at once: each panel lights up from its own player’s controller. If a tile never lights, remap it in Controllers."
               : "Each tile lights up when Backstage hears it. If one never lights, remap it in Controllers."}
         </p>
-        <ul className="check-grid" aria-label="Inputs">
-          {items.map((item) => (
-            <li
-              key={item.id}
-              className={
-                "check-tile " +
-                item.id +
-                (seen.includes(item.id) ? " seen" : "") +
-                (held.includes(item.id) ? " held" : "")
-              }
+        <div className="check-panels">
+          {players.map((p, i) => (
+            <section
+              key={i}
+              className={`check-panel p${i + 1}` + (passed[i] ? " passed" : "")}
+              aria-label={`${p.name} check`}
             >
-              <i aria-hidden="true">{seen.includes(item.id) ? "✓" : ""}</i>
-              <strong>{item.label}</strong>
-              <small>{item.hint}</small>
-            </li>
+              {multi && (
+                <header>
+                  <b className={`player-badge p${i + 1}`}>{p.name}</b>
+                  <span>{deviceLabel(p.device, pads)}</span>
+                </header>
+              )}
+              <ul className="check-grid" aria-label="Inputs">
+                {items[i].map((item) => (
+                  <li
+                    key={item.id}
+                    className={
+                      "check-tile " +
+                      item.id +
+                      (seen[i].includes(item.id) ? " seen" : "") +
+                      (held[i].includes(item.id) ? " held" : "")
+                    }
+                  >
+                    <i aria-hidden="true">
+                      {seen[i].includes(item.id) ? "✓" : ""}
+                    </i>
+                    <strong>{item.label}</strong>
+                    <small>{item.hint}</small>
+                  </li>
+                ))}
+              </ul>
+              <p className="check-count" aria-live="polite">
+                {!connected[i]
+                  ? "Disconnected: reconnect it"
+                  : `${items[i].filter((it) => seen[i].includes(it.id)).length} of ${items[i].length} working`}
+              </p>
+            </section>
           ))}
-        </ul>
-        <p className="check-count" aria-live="polite">
-          {items.filter((i) => seen.includes(i.id)).length} of {items.length}{" "}
-          working
-        </p>
+        </div>
         <div className="menu-list">
           {done ? (
             <button className="primary" data-menu-default onClick={onNext}>
@@ -160,7 +232,7 @@ export default function ControllerCheck({
         </div>
         {done && (
           <ButtonHints
-            pad={pad}
+            pad={players.some((p) => isPad(p.device))}
             hints={[
               { button: "green", label: "Select" },
               { button: "red", label: "Back", key: "Esc" },

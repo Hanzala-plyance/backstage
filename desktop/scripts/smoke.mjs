@@ -7,6 +7,9 @@ import midiPackage from "@tonejs/midi";
 import { execFileSync } from "node:child_process";
 const temp = await mkdtemp(path.join(os.tmpdir(), "backstage-smoke-"));
 let app, page;
+// Page and console errors, printed when the smoke fails.
+const errors = [];
+const consoleErrors = [];
 try {
   await mkdir(path.join(temp, "songs"));
   const fixtureFolder = path.join(temp, "songs", "fixture");
@@ -99,8 +102,11 @@ try {
     },
   });
   page = await app.firstWindow();
-  const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  page.on(
+    "console",
+    (m) => m.type() === "error" && consoleErrors.push(m.text()),
+  );
   const openFullTrack = async () => {
     await page.getByRole("button", { name: "Soundcheck", exact: true }).click();
     await page.getByRole("button", { name: /Full Soundcheck track/ }).click();
@@ -731,6 +737,14 @@ try {
       1,
   );
   await hold(7, async () => (await p2kit.textContent()) === "Double Kick");
+  // Blue locks Player 2 in: green no longer changes anything; red unlocks.
+  const ready = page.getByRole("button", {
+    name: "Player 2 ready, click to change",
+  });
+  await hold(3, () => ready.isVisible());
+  await hold(7, async () => (await frames(), true));
+  await expect(p2kit).toHaveText("Double Kick");
+  await hold(1, async () => (await ready.count()) === 0);
   // Player 2's card, then the camera tile: a photo from the fake camera.
   await page.getByLabel("Player 2 card").click({ position: { x: 8, y: 8 } });
   await page.getByRole("button", { name: "Camera avatar" }).click();
@@ -793,6 +807,68 @@ try {
   await page.screenshot({ path: "/tmp/backstage-desktop-avatar-stage.png" });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "← Library" }).click();
+  // Multiplayer Soundcheck: the band maps, checks controllers and takes a
+  // lesson together, each player on their own instrument. Player 2 left for
+  // the solo song; Start joins them again and opens their pop-up. Menus
+  // ignore a button already held when they start, so wait until the library
+  // is back before pressing.
+  await expect(page.getByText("Press START to join").first()).toBeVisible();
+  await frames();
+  await frames();
+  await hold(9, () => setup.isVisible());
+  await hold(13, async () => (await row()).includes("Instrument"));
+  for (const part of ["Bass", "Rhythm", "Drums"])
+    await hold(7, async () => (await row()).includes(part));
+  await hold(1, async () => (await setup.count()) === 0);
+  // The mapper edits Player 2's own controller from their tab.
+  await page.getByRole("button", { name: "Controllers", exact: true }).click();
+  await page.getByRole("tab", { name: /Test generic gamepad/ }).click();
+  await expect(page.locator(".map-tab.active")).toContainText(
+    "Test generic gamepad",
+  );
+  await expect(page.locator(".mapping-row").first()).toContainText("Button 7");
+  // Controller check: one panel per player, each lit by its own controller.
+  await page.getByRole("button", { name: "Soundcheck", exact: true }).click();
+  await page.getByRole("button", { name: /Controller check/ }).click();
+  await expect(page.locator(".check-panel")).toHaveCount(2);
+  for (const key of ["a", "s", "d", "f", "g", "Space", "Shift", "w"])
+    await page.keyboard.press(key);
+  await expect(page.locator(".check-panel").first()).toHaveClass(/passed/);
+  const p2check = page.locator(".check-panel").nth(1);
+  for (const [n, button] of [7, 1, 2, 3, 4, 12, 13, 8, 6, 9].entries())
+    await hold(
+      button,
+      async () => (await p2check.locator(".check-tile.seen").count()) === n + 1,
+    );
+  await expect(
+    page.getByRole("heading", { name: "Band’s all set." }),
+  ).toBeVisible();
+  await page.screenshot({ path: "/tmp/backstage-desktop-band-check.png" });
+  // The lesson explains guitar and drums, then demos both lanes.
+  await page.getByRole("button", { name: /Start the lessons/ }).click();
+  const intro = page.getByRole("dialog");
+  await expect(intro).toContainText("Frets & strum");
+  await expect(intro).toContainText("Pads & kick");
+  await page.getByRole("button", { name: /Watch the demo/ }).click();
+  await expect(page.locator(".player-lane")).toHaveCount(2);
+  await expect
+    .poll(
+      async () =>
+        Number(
+          (
+            await page
+              .locator(".player-lane")
+              .nth(1)
+              .locator(".lesson-hud div:nth-child(3) b")
+              .textContent()
+          ).split("/")[0],
+        ),
+      { timeout: 15000 },
+    )
+    .toBeGreaterThanOrEqual(1);
+  await page.screenshot({ path: "/tmp/backstage-desktop-band-lesson.png" });
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
   // Every page fits the window: long lists scroll in their own panels and
   // the app itself never scrolls.
   for (const name of [
@@ -823,6 +899,29 @@ try {
 } catch (error) {
   if (page && !page.isClosed()) {
     console.error("Smoke screen:", await page.locator("body").innerText());
+    // Controller state, for failures that only reproduce on CI.
+    console.error(
+      "Smoke pads:",
+      await page
+        .evaluate(() =>
+          JSON.stringify({
+            pads: Array.from(navigator.getGamepads())
+              .filter(Boolean)
+              .map((p) => ({
+                index: p.index,
+                id: p.id,
+                connected: p.connected,
+                pressed: p.buttons.flatMap((b, i) => (b.pressed ? [i] : [])),
+              })),
+            capturing: document.body.hasAttribute("data-capturing"),
+            visible: document.visibilityState,
+            focused: document.hasFocus(),
+            dialogs: document.querySelectorAll("[role=dialog]").length,
+          }),
+        )
+        .catch((e) => String(e)),
+    );
+    console.error("Smoke page errors:", errors, consoleErrors.slice(-20));
     await mkdir("test-results", { recursive: true });
     await page
       .screenshot({ path: "test-results/smoke-failure.png" })
