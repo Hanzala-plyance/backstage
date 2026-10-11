@@ -960,8 +960,13 @@ try {
     console.error(
       "Smoke pads:",
       await page
-        .evaluate(() =>
+        .evaluate(async () =>
           JSON.stringify({
+            // Whether animation frames (which read controllers) still run.
+            frames: await Promise.race([
+              new Promise((r) => requestAnimationFrame(() => r("running"))),
+              new Promise((r) => setTimeout(() => r("stalled"), 2000)),
+            ]),
             pads: Array.from(navigator.getGamepads())
               .filter(Boolean)
               .map((p) => ({
