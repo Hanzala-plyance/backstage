@@ -104,16 +104,20 @@ test("administrator fallback streams each receiver over its own socket", async (
     const status = await session.connect();
     assert.deepEqual(status.receivers, ["usb:9:1", "usb:9:2"]);
     const dir = session.dir;
-    // The fake readers press orange on receiver 1 and blue on receiver 2.
+    // The fake readers press orange on receiver 1, d-pad right on receiver 2.
     assert.ok(
       await wait(
-        () => !!seen["usb:9:1"]?.has(4) && !!seen["usb:9:2"]?.has(3),
+        () => !!seen["usb:9:1"]?.has(4) && !!seen["usb:9:2"]?.has(15),
         10000,
       ),
       "each receiver's own input",
     );
     assert.deepEqual([...seen["usb:9:1"]], [4], "receiver 1 only ever orange");
-    assert.deepEqual([...seen["usb:9:2"]], [3], "receiver 2 only ever blue");
+    assert.deepEqual(
+      [...seen["usb:9:2"]],
+      [15],
+      "receiver 2 only ever d-pad right",
+    );
     assert.ok(latest.every((p) => p.connected && p.input));
     await new Promise((r) => setTimeout(r, 600)); // health is written every 0.5 s
     const health = JSON.parse(fs.readFileSync(`${dir}/p1/status.json`, "utf8"));
@@ -181,7 +185,7 @@ test("Backstage reads several receivers itself and reconnects after a replug", a
   assert.equal(status.mode, "direct");
   assert.deepEqual(status.receivers, ["usb:9:1", "usb:9:2"]);
   assert.ok(
-    await wait(() => !!seen["usb:9:1"]?.has(4) && !!seen["usb:9:2"]?.has(3)),
+    await wait(() => !!seen["usb:9:1"]?.has(4) && !!seen["usb:9:2"]?.has(15)),
     "each receiver's own input",
   );
   assert.deepEqual([...seen["usb:9:1"]], [4], "receiver 1 only ever orange");
@@ -199,7 +203,7 @@ test("Backstage reads several receivers itself and reconnects after a replug", a
   usb.devices[1].unplugged = false;
   usb.usb.emit("attach", usb.devices[1]);
   assert.ok(
-    await wait(() => latest[1].connected && latest[1].buttons[3] === 1),
+    await wait(() => latest[1].connected && latest[1].buttons[15] === 1),
   );
   assert.equal(latest[1].index, 17);
   await riff.disconnect();

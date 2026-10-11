@@ -495,15 +495,20 @@ try {
       "PASS: packaged app starts optional service and renders live song search results.",
     );
   }
-  // Riffmaster guitars through the MacRiff reader: each receiver is its own
-  // controller (fake receivers here).
+  // Riffmaster guitars, read by Backstage: each receiver is its own controller
+  // (fake receivers here). One arriving while Player 1 is on the keyboard
+  // becomes Player 1.
   await page.getByRole("button", { name: "Controllers", exact: true }).click();
+  await page.getByRole("button", { name: /Keyboard Always ready/ }).click();
   const riff = page.getByLabel("Riffmaster guitars");
   await expect(riff).toContainText("2 receivers plugged in");
   await riff.getByRole("button", { name: "Connect Riffmasters" }).click();
   await expect(riff.locator(".riff-row i.on")).toHaveCount(2, {
     timeout: 10000,
   });
+  await expect(page.locator(".toast")).toContainText(
+    "PDP Riffmaster 1 is now Player 1",
+  );
   await page.getByRole("button", { name: /PDP Riffmaster 1 \(Xbox\)/ }).click();
   // Receiver 1 keeps pressing orange: live input shows button 4.
   await expect(page.locator(".button-meter span").nth(4)).toHaveClass(
@@ -517,6 +522,23 @@ try {
     path: "/tmp/backstage-desktop-riffmaster.png",
     fullPage: true,
   });
+  // In a song, a guitar nobody is playing says so instead of being ignored.
+  await page.getByRole("button", { name: "Song library", exact: true }).click();
+  await page.getByRole("button", { name: /Renamed Song/ }).click();
+  const soloP2 = page.getByRole("button", { name: "Remove player 2" });
+  if (await soloP2.count()) await soloP2.click();
+  await expect(page.locator(".song-dialog")).toContainText("PDP Riffmaster 1");
+  await page.getByRole("button", { name: /Take the stage/ }).click();
+  await page.getByRole("button", { name: /Start playing/ }).click();
+  await expect(page.locator(".game-hint")).toContainText(
+    "PDP Riffmaster 2 isn’t playing this song",
+    { timeout: 8000 },
+  );
+  // The 4 s fixture may already have finished; either way, leave the stage.
+  await page.keyboard.press("Escape");
+  const leave = page.getByRole("button", { name: "← Library" });
+  if (await leave.count()) await leave.click();
+  await page.getByRole("button", { name: "Controllers", exact: true }).click();
   await riff.getByRole("button", { name: "Disconnect Riffmasters" }).click();
   await expect(riff.locator(".riff-row")).toHaveCount(0);
   // Soundcheck: demo-first lessons in their own section. Lessons follow the
@@ -634,12 +656,14 @@ try {
   // On stage the avatar plays one strum per note hit.
   await page.getByRole("button", { name: "Song library", exact: true }).click();
   await page.getByRole("button", { name: /Renamed Song/ }).click();
+  // Names label the lineup: show it with a second player, then play solo.
+  const removeP2 = page.getByRole("button", { name: "Remove player 2" });
+  if (!(await removeP2.count()))
+    await page.getByRole("button", { name: /Add player/ }).click();
   await expect(page.locator(".lineup-row .player-badge").first()).toHaveText(
     "SHREDDER",
   );
-  // The two-player lineup from earlier is still set; play this one solo.
-  const removeP2 = page.getByRole("button", { name: "Remove player 2" });
-  if (await removeP2.count()) await removeP2.click();
+  await removeP2.click();
   await page.getByRole("button", { name: /Take the stage/ }).click();
   await page.getByRole("button", { name: /Start playing/ }).click();
   await expect(page.locator(".performer-tag")).toHaveText("SHREDDER");

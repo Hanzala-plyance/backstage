@@ -1,8 +1,8 @@
 // Test stand-in for the usb module: two Riffmaster receivers that stream GIP
-// input. Receiver 1 cycles orange, receiver 2 blue (not green or red, which
-// would also drive the menus).
+// input. Receiver 1 cycles orange, receiver 2 d-pad right: buttons no menu
+// acts on, so a test can leave them connected.
 const { EventEmitter } = require("events");
-function receiver(port, fret) {
+function receiver(port, frets, dpad = 0) {
   const input = new EventEmitter();
   Object.assign(input, {
     direction: "in",
@@ -16,7 +16,9 @@ function receiver(port, fret) {
       const gip = Buffer.alloc(18);
       gip[0] = 0x20;
       gip[3] = 14;
-      gip[9] = (on = !on) ? fret : 0;
+      on = !on;
+      gip[5] = on ? dpad : 0;
+      gip[9] = on ? frets : 0;
       input.emit("data", gip);
     }, 400);
   };
@@ -58,7 +60,7 @@ function receiver(port, fret) {
   return device;
 }
 module.exports = function fakeUsb() {
-  const devices = [receiver(1, 0x10), receiver(2, 0x08)];
+  const devices = [receiver(1, 0x10), receiver(2, 0, 0x08)];
   const usb = new EventEmitter();
   return {
     getDeviceList: () => devices.filter((d) => !d.unplugged),

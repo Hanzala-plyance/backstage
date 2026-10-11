@@ -3843,3 +3843,18 @@ kbd {
   font-weight: 400;
   color: #8f89a6;
 }
+
+.game-hint {
+  position: absolute;
+  top: 150px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  max-width: min(620px, 90vw);
+  padding: 10px 18px;
+  font-weight: 650;
+  text-align: center;
+  color: #07060b;
+  background: var(--gold);
+  clip-path: var(--cut-sm);
+}

@@ -240,6 +240,23 @@ export default function App() {
       later(() => focusFirst());
     }
   };
+  // A controller that arrives while Player 1 is on the keyboard becomes
+  // Player 1, as on a console; menus already follow every controller, but a
+  // song only listens to the players' own.
+  const seenPads = useRef(new Set<string>());
+  useEffect(() => {
+    const fresh = pads.filter(
+      (p) => !seenPads.current.has(`pad:${p.index}:${p.id}`),
+    );
+    pads.forEach((p) => seenPads.current.add(`pad:${p.index}:${p.id}`));
+    const arrived = fresh
+      .map((p) => `pad:${p.index}:${p.id}`)
+      .find((key) => !lineup.some((l) => l.device === key));
+    if (!arrived || device !== "keyboard") return;
+    setDevice(arrived);
+    setProfile(loadProfile(arrived.split(":").slice(2).join(":")));
+    setNotice(`${deviceLabel(arrived, pads)} is now Player 1`);
+  }, [pads]);
   // Guitar and gamepad menu navigation, using each pad's saved mapping. Off
   // while a song or lesson owns the controllers.
   const onStage = !!playing || lesson !== null || checking;
