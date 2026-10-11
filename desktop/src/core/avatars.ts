@@ -79,7 +79,8 @@ export type Hair =
   | "highpony"
   | "mullet"
   | "curls"
-  | "teased";
+  | "teased"
+  | "quiff";
 export type Extra =
   | "shades"
   | "visor"
@@ -98,7 +99,17 @@ export type FaceStyle = {
   /** Bat-wing paint around the eyes, a star or lightning bolt over one eye,
    * or a goth tear under one. */
   paint?: "bat" | "star" | "bolt" | "tear";
+  /** Facial hair colour. */
+  mustache?: string;
+  stubble?: boolean;
+  freckles?: boolean;
+  /** Heavy dark liner around the eyes. */
+  eyeliner?: boolean;
 };
+export type Top = "tank" | "tee" | "longsleeve" | "stripes" | "hoodie";
+export type Legs = "straight" | "skinny" | "ripped" | "shorts" | "flares";
+export type Shoes = "sneakers" | "boots" | "platforms";
+export type Graphic = "bolt" | "star" | "skull" | "heart" | "target";
 export type Preset = {
   id: string;
   name: string;
@@ -112,6 +123,16 @@ export type Preset = {
   jacket?: string;
   build?: "slim";
   face?: FaceStyle;
+  /** Clothing: shirt cut, trousers and their colour, shoes, a print on the
+   * chest and a tie. */
+  top?: Top;
+  legs?: Legs;
+  pants?: string;
+  shoes?: Shoes;
+  graphic?: Graphic;
+  tie?: string;
+  /** Frame colour for shades. */
+  extraColor?: string;
 };
 export const presets: Preset[] = [
   {
@@ -123,6 +144,11 @@ export const presets: Preset[] = [
     outfit: "#1b1530",
     accent: "#38e8ff",
     extra: "shades",
+    top: "tee",
+    graphic: "bolt",
+    legs: "ripped",
+    pants: "#2a2f4a",
+    shoes: "sneakers",
   },
   {
     id: "riot",
@@ -133,6 +159,11 @@ export const presets: Preset[] = [
     outfit: "#2a0f1f",
     accent: "#ff2e88",
     extra: "none",
+    face: { stubble: true },
+    top: "tank",
+    legs: "skinny",
+    pants: "#7a1020",
+    shoes: "boots",
   },
   {
     id: "nova",
@@ -143,6 +174,11 @@ export const presets: Preset[] = [
     outfit: "#1f1640",
     accent: "#ffe03a",
     extra: "headphones",
+    face: { freckles: true },
+    top: "longsleeve",
+    legs: "flares",
+    pants: "#c8a060",
+    shoes: "platforms",
   },
   {
     id: "blaze",
@@ -153,6 +189,11 @@ export const presets: Preset[] = [
     outfit: "#2b1408",
     accent: "#ff8a1f",
     extra: "bandana",
+    top: "tee",
+    graphic: "star",
+    legs: "straight",
+    pants: "#3a5a8a",
+    shoes: "boots",
   },
   {
     id: "echo",
@@ -163,6 +204,10 @@ export const presets: Preset[] = [
     outfit: "#170f2c",
     accent: "#c04bff",
     extra: "visor",
+    top: "longsleeve",
+    legs: "skinny",
+    pants: "#1c1a26",
+    shoes: "sneakers",
   },
   {
     id: "jinx",
@@ -173,6 +218,10 @@ export const presets: Preset[] = [
     outfit: "#0d2416",
     accent: "#3dff6e",
     extra: "shades",
+    top: "tank",
+    legs: "shorts",
+    pants: "#3d6b4a",
+    shoes: "sneakers",
   },
   {
     id: "moxie",
@@ -183,6 +232,11 @@ export const presets: Preset[] = [
     outfit: "#2a0f19",
     accent: "#ff5a6e",
     extra: "headphones",
+    face: { freckles: true },
+    top: "stripes",
+    legs: "skinny",
+    pants: "#14121c",
+    shoes: "boots",
   },
   {
     id: "rook",
@@ -193,6 +247,10 @@ export const presets: Preset[] = [
     outfit: "#121a2e",
     accent: "#2f8cff",
     extra: "none",
+    top: "hoodie",
+    legs: "straight",
+    pants: "#2a4a7a",
+    shoes: "sneakers",
   },
   {
     id: "vex",
@@ -203,6 +261,12 @@ export const presets: Preset[] = [
     outfit: "#1d1029",
     accent: "#ff2e88",
     extra: "visor",
+    face: { eyeliner: true },
+    top: "tee",
+    graphic: "skull",
+    legs: "skinny",
+    pants: "#0b0a10",
+    shoes: "platforms",
   },
   {
     id: "zara",
@@ -213,6 +277,11 @@ export const presets: Preset[] = [
     outfit: "#0f1d33",
     accent: "#38e8ff",
     extra: "bandana",
+    top: "tee",
+    graphic: "heart",
+    legs: "flares",
+    pants: "#38506a",
+    shoes: "sneakers",
   },
   // Long-haired rockers.
   {
@@ -226,6 +295,10 @@ export const presets: Preset[] = [
     extra: "choker",
     build: "slim",
     face: { lashes: true, lips: "#c2185b" },
+    top: "longsleeve",
+    legs: "skinny",
+    pants: "#0b0a10",
+    shoes: "boots",
   },
   {
     id: "raven",
@@ -238,7 +311,11 @@ export const presets: Preset[] = [
     extra: "choker",
     build: "slim",
     jacket: "#1c1626",
-    face: { lashes: true, lips: "#4a1650", paint: "tear" },
+    face: { eyeliner: true, lashes: true, lips: "#4a1650", paint: "tear" },
+    top: "tee",
+    legs: "skinny",
+    pants: "#0b0a10",
+    shoes: "platforms",
   },
   {
     id: "halo",
@@ -251,6 +328,11 @@ export const presets: Preset[] = [
     extra: "headband",
     build: "slim",
     face: { lashes: true, lips: "#ff7aa8", paint: "star" },
+    top: "tee",
+    graphic: "star",
+    legs: "flares",
+    pants: "#f5f0ff",
+    shoes: "platforms",
   },
   {
     id: "viper",
@@ -264,6 +346,10 @@ export const presets: Preset[] = [
     build: "slim",
     jacket: "#232032",
     face: { lashes: true, lips: "#7a2a5a" },
+    top: "tank",
+    legs: "ripped",
+    pants: "#232032",
+    shoes: "boots",
   },
   {
     id: "juno",
@@ -275,7 +361,11 @@ export const presets: Preset[] = [
     accent: "#ffe03a",
     extra: "hoops",
     build: "slim",
-    face: { lashes: true, lips: "#b0405a" },
+    face: { freckles: true, lashes: true, lips: "#b0405a" },
+    top: "stripes",
+    legs: "flares",
+    pants: "#e07a1a",
+    shoes: "platforms",
   },
   {
     id: "lyric",
@@ -288,6 +378,11 @@ export const presets: Preset[] = [
     extra: "headband",
     build: "slim",
     face: { lashes: true, lips: "#9c3a4a" },
+    top: "tee",
+    graphic: "target",
+    legs: "straight",
+    pants: "#3a5a8a",
+    shoes: "sneakers",
   },
   {
     id: "starla",
@@ -300,6 +395,11 @@ export const presets: Preset[] = [
     extra: "none",
     build: "slim",
     face: { lashes: true, lips: "#ff2e88", paint: "star" },
+    top: "tee",
+    graphic: "heart",
+    legs: "shorts",
+    pants: "#2a0f2a",
+    shoes: "platforms",
   },
   {
     id: "rogue",
@@ -313,6 +413,10 @@ export const presets: Preset[] = [
     build: "slim",
     jacket: "#1d2a44",
     face: { lashes: true, lips: "#c03050", paint: "bolt" },
+    top: "tee",
+    legs: "skinny",
+    pants: "#1d2a44",
+    shoes: "boots",
   },
   {
     id: "axel",
@@ -324,6 +428,11 @@ export const presets: Preset[] = [
     accent: "#ff8a1f",
     extra: "bandana",
     jacket: "#3a2a1c",
+    face: { stubble: true },
+    top: "tee",
+    legs: "ripped",
+    pants: "#5a7aa8",
+    shoes: "boots",
   },
   {
     id: "duke",
@@ -335,6 +444,10 @@ export const presets: Preset[] = [
     accent: "#c04bff",
     extra: "tophat",
     jacket: "#2a1f3a",
+    top: "tee",
+    legs: "skinny",
+    pants: "#14121c",
+    shoes: "boots",
   },
   {
     id: "gunner",
@@ -346,6 +459,11 @@ export const presets: Preset[] = [
     accent: "#e8312f",
     extra: "shades",
     jacket: "#18181c",
+    face: { stubble: true },
+    top: "tee",
+    legs: "ripped",
+    pants: "#2a3a5a",
+    shoes: "boots",
   },
   // Rock-legend tributes: demon face paint, and a psychedelic guitar hero.
   {
@@ -359,6 +477,10 @@ export const presets: Preset[] = [
     extra: "none",
     jacket: "#1a1a20",
     face: { paint: "bat", lips: "#0b0a10" },
+    top: "longsleeve",
+    legs: "skinny",
+    pants: "#0b0a10",
+    shoes: "platforms",
   },
   {
     id: "voodoo",
@@ -370,6 +492,144 @@ export const presets: Preset[] = [
     accent: "#ffe03a",
     extra: "headband",
     jacket: "#e07a1a",
+    face: { mustache: "#1a120c" },
+    top: "longsleeve",
+    legs: "flares",
+    pants: "#c04bff",
+    shoes: "boots",
+  },
+  // Tributes to well-known rock and indie looks, by costume only.
+  {
+    // Schoolboy shorts, tie and cap: a hard-rock lead guitarist.
+    id: "thunder",
+    name: "Thunder",
+    skin: "#f1c7a8",
+    hair: "#1f3a7a",
+    style: "cap",
+    outfit: "#f5f0ff",
+    accent: "#e8312f",
+    extra: "none",
+    jacket: "#1f3a7a",
+    top: "tee",
+    tie: "#e8312f",
+    legs: "shorts",
+    pants: "#1f3a7a",
+    shoes: "sneakers",
+  },
+  {
+    // White vest, yellow jacket and a moustache: a stadium-rock frontman.
+    id: "champ",
+    name: "Champ",
+    skin: "#d9a07a",
+    hair: "#14121c",
+    style: "buzz",
+    outfit: "#f5f0ff",
+    accent: "#ffe03a",
+    extra: "none",
+    jacket: "#ffe03a",
+    top: "tank",
+    legs: "straight",
+    pants: "#f5f0ff",
+    shoes: "sneakers",
+    face: { mustache: "#14121c" },
+  },
+  {
+    // Long blond hair, striped jumper, ripped jeans and white shades.
+    id: "grunge",
+    name: "Grunge",
+    skin: "#f4d9c4",
+    hair: "#e8cf7a",
+    style: "long",
+    outfit: "#3a6b4a",
+    accent: "#e8cf7a",
+    extra: "shades",
+    extraColor: "#f5f0ff",
+    top: "stripes",
+    legs: "ripped",
+    pants: "#7aa0c8",
+    shoes: "sneakers",
+    face: { stubble: true },
+  },
+  {
+    // Red, white and black only: a garage-rock duo.
+    id: "stripe",
+    name: "Stripe",
+    skin: "#f6dcc8",
+    hair: "#0b0a10",
+    style: "long",
+    outfit: "#e8312f",
+    accent: "#f5f0ff",
+    extra: "none",
+    top: "tee",
+    legs: "skinny",
+    pants: "#0b0a10",
+    shoes: "boots",
+  },
+  {
+    // Bowl cut, leather jacket, ripped jeans and sneakers: first-wave punk.
+    id: "gabba",
+    name: "Gabba",
+    skin: "#f1c7a8",
+    hair: "#14121c",
+    style: "curtain",
+    outfit: "#f5f0ff",
+    accent: "#f5f0ff",
+    extra: "shades",
+    jacket: "#14121c",
+    top: "tee",
+    legs: "ripped",
+    pants: "#5a7aa8",
+    shoes: "sneakers",
+  },
+  {
+    // Greased quiff and leather: an indie band gone rock and roll.
+    id: "quiff",
+    name: "Quiff",
+    skin: "#f1c7a8",
+    hair: "#14121c",
+    style: "quiff",
+    outfit: "#14121c",
+    accent: "#c9c4d6",
+    extra: "none",
+    jacket: "#2a2630",
+    top: "tee",
+    legs: "skinny",
+    pants: "#0b0a10",
+    shoes: "boots",
+  },
+  {
+    // Black bob, bright stage outfit and heavy eyeliner: an art-punk singer.
+    id: "karma",
+    name: "Karma",
+    skin: "#e9c9b4",
+    hair: "#0b0a10",
+    style: "bob",
+    outfit: "#ffe03a",
+    accent: "#ff2e88",
+    extra: "none",
+    build: "slim",
+    top: "tee",
+    graphic: "star",
+    legs: "skinny",
+    pants: "#ff2e88",
+    shoes: "boots",
+    face: { lashes: true, lips: "#e8312f", eyeliner: true },
+  },
+  {
+    // A target on the chest: sixties mod revival.
+    id: "mod",
+    name: "Mod",
+    skin: "#c98e6b",
+    hair: "#3a2a20",
+    style: "swoop",
+    outfit: "#f5f0ff",
+    accent: "#2f8cff",
+    extra: "none",
+    top: "tee",
+    graphic: "target",
+    legs: "skinny",
+    pants: "#1c1a26",
+    shoes: "boots",
   },
 ];
 export const defaultLook = (slot: number): Look => ({
@@ -463,7 +723,7 @@ export function motion(
     }
   return total ? changed / total : 0;
 }
-export type Mood = "groove" | "hyped" | "miss" | "power";
+export type Mood = "groove" | "hyped" | "shred" | "miss" | "power";
 /** The avatar's expression right now. */
 export function moodFor(state: {
   powerActive: boolean;
@@ -472,6 +732,7 @@ export function moodFor(state: {
 }): Mood {
   if (state.powerActive) return "power";
   if (state.missedRecently) return "miss";
+  if (state.combo >= 30) return "shred";
   return state.combo >= 10 ? "hyped" : "groove";
 }
 export type Instrument = "guitar" | "bass" | "drums";
