@@ -541,9 +541,8 @@ try {
   );
   const row = async () =>
     (await setup.locator(".setup-row.current").textContent()) ?? "";
-  // The pop-up starts on the avatar: green picks the next one (Riot to Nova).
-  await expect(setup.locator(".setup-row.current")).toContainText("Riot");
-  await hold(7, async () => (await row()).includes("Nova"));
+  // The pop-up starts on the player's name.
+  await expect(setup.locator(".setup-row.current")).toContainText("Name");
   await hold(13, async () => (await row()).includes("Instrument"));
   await hold(13, async () => (await row()).includes("Difficulty"));
   await hold(
@@ -556,6 +555,9 @@ try {
   await hold(13, async () => (await row()).includes("Strumming"));
   await expect(setup.locator(".setup-row.current")).toContainText("On");
   await hold(7, async () => (await row()).includes("Off · frets only"));
+  // Guitar style and colour change from the pop-up too.
+  await hold(13, async () => (await row()).includes("Guitar"));
+  await hold(7, async () => (await row()).includes("Single Cut"));
   await page.screenshot({ path: "/tmp/backstage-desktop-join.png" });
   await hold(1, async () => (await setup.count()) === 0);
   await expect(
@@ -661,29 +663,67 @@ try {
     path: "/tmp/backstage-desktop-soundcheck.png",
     fullPage: true,
   });
-  // Avatars: names replace P1–P4; premade or camera avatars play along.
+  // Avatars: a Smash-style select screen. Every joined player picks at once
+  // with their own controller; cards hold names and gear.
   await page.getByRole("button", { name: "Avatars", exact: true }).click();
-  await page.getByRole("textbox", { name: "Player name" }).fill("shredder99");
-  await expect(page.getByRole("textbox", { name: "Player name" })).toHaveValue(
-    "SHREDDER",
-  );
-  await page.getByRole("button", { name: /Jinx/ }).click();
-  await expect(page.getByRole("button", { name: /Jinx/ })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByRole("tab", { name: /PLAYER 1/ })).toContainText(
-    "SHREDDER",
-  );
-  // Gear: guitar style and which side of the highway the performer stands.
-  await page.getByRole("button", { name: "Single Cut", exact: true }).click();
-  await page.getByRole("button", { name: "Left of the highway" }).click();
+  // Player 1 (keyboard and mouse): name, avatar, guitar and stage side.
+  await page.getByRole("button", { name: "Player 1 name" }).click();
+  const p1name = page.getByRole("textbox", { name: "Player 1 name" });
+  await p1name.fill("shredder99");
+  await expect(p1name).toHaveValue("SHREDDER");
+  await p1name.press("Enter");
   await expect(
-    page.getByRole("button", { name: "Left of the highway" }),
-  ).toHaveAttribute("aria-pressed", "true");
-  // Player 2 takes a camera avatar from the fake camera.
-  await page.getByRole("tab", { name: /PLAYER 2/ }).click();
-  await page.getByRole("button", { name: "Use my camera" }).click();
+    page.getByRole("button", { name: "Player 1 name" }),
+  ).toContainText("SHREDDER");
+  await page.getByRole("button", { name: "Jinx", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Jinx", exact: true }),
+  ).toHaveClass(/chosen/);
+  const style = page.getByRole("button", { name: "Player 1 guitar style" });
+  await style.click();
+  await style.click();
+  await expect(style).toContainText("Single Cut");
+  await page.getByRole("button", { name: "Player 1 stage side" }).click();
+  await expect(
+    page.getByRole("button", { name: "Player 1 stage side" }),
+  ).toContainText("left");
+  // Player 2 joins with Start, then picks with their own controller while
+  // Player 1 keeps the mouse: strum down moves their token, green picks.
+  await hold(9, () =>
+    page.getByRole("group", { name: "Player 2 setup" }).isVisible(),
+  );
+  await hold(
+    1,
+    async () =>
+      (await page.getByRole("group", { name: "Player 2 setup" }).count()) === 0,
+  );
+  const nova = page.getByRole("button", { name: "Nova", exact: true });
+  await hold(13, async () => (await nova.locator(".token.p2").count()) === 1);
+  await hold(7, async () =>
+    /chosen/.test((await nova.getAttribute("class")) ?? ""),
+  );
+  await expect(
+    page.getByRole("button", { name: "Jinx", exact: true }),
+  ).toHaveClass(/chosen/);
+  // Phone-keypad name entry on the guitar: orange opens it, green twice on
+  // "2 ABC" types B, Start finishes.
+  await hold(4, () =>
+    page.getByRole("group", { name: "Player 2 name" }).isVisible(),
+  );
+  const p2name = page.getByRole("textbox", { name: "Player 2 name" });
+  await hold(7, async () => (await p2name.inputValue()) === "A");
+  await hold(7, async () => (await p2name.inputValue()) === "B");
+  await hold(
+    9,
+    async () =>
+      (await page.getByRole("group", { name: "Player 2 name" }).count()) === 0,
+  );
+  await expect(
+    page.getByRole("button", { name: "Player 2 name" }),
+  ).toContainText("B");
+  // Player 2's card, then the camera tile: a photo from the fake camera.
+  await page.getByLabel("Player 2 card").click({ position: { x: 8, y: 8 } });
+  await page.getByRole("button", { name: "Camera avatar" }).click();
   await page.getByRole("button", { name: "Turn on camera" }).click();
   await expect
     .poll(() =>
@@ -700,9 +740,9 @@ try {
   });
   await page.screenshot({ path: "/tmp/backstage-desktop-camera.png" });
   await page.getByRole("button", { name: "Use this photo" }).click();
-  await expect(
-    page.getByRole("tab", { name: /PLAYER 2/ }).locator(".portrait img"),
-  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Camera avatar" })).toHaveClass(
+    /chosen/,
+  );
   await page.screenshot({
     path: "/tmp/backstage-desktop-avatars.png",
     fullPage: true,

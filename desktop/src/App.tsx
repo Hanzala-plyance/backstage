@@ -189,6 +189,10 @@ export default function App() {
   // Player 1's own strum choice (other players keep theirs in the lineup).
   const [strum1, setStrum1] = useState<boolean | undefined>(undefined);
   const setupInput = useRef<(b: MenuButton) => void>(() => {});
+  // The Avatars screen takes each joined player's own controller presses.
+  const avatarsInput = useRef<
+    ((slot: number, b: MenuButton) => boolean) | null
+  >(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const later = (fn: () => void) => setTimeout(fn, 40);
   const back = () => {
@@ -237,6 +241,14 @@ export default function App() {
     const players = lineupAll();
     const owner = source ? players.findIndex((p) => p.device === source) : -1;
     if (setupSlot !== null && owner === setupSlot) return setupInput.current(b);
+    if (
+      page === "avatars" &&
+      screen === "app" &&
+      owner >= 0 &&
+      !selected &&
+      avatarsInput.current?.(owner, b)
+    )
+      return;
     // Start on a controller: its player's setup, or join as the next player.
     if (b === "start" && source) {
       if (owner >= 0) return setSetupSlot(owner);
@@ -995,7 +1007,15 @@ export default function App() {
             </p>
           </>
         )}
-        {page === "avatars" && <Avatars band={band} onSave={saveSlot} />}
+        {page === "avatars" && (
+          <Avatars
+            band={band}
+            onSave={saveSlot}
+            players={players}
+            joinable={joinable}
+            input={avatarsInput}
+          />
+        )}
         {page === "soundcheck" && (
           <Soundcheck
             done={lessonsDone}

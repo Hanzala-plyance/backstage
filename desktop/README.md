@@ -56,13 +56,18 @@ implemented yet.
 
 ### Library
 
-**Avatars** (main menu or sidebar) sets a name and look for each of the four
-players. Names are up to 8 letters or numbers and replace P1–P4 in the song dialog
-and on stage. Pick one of 10 premade avatars, or **Use my camera**: raise a hand
-(motion in the dashed upper corners starts a 3-2-1 countdown) or press **Take
-photo**; the photo is restyled in the stage colours. Camera avatars can't be
-customized, and photos stay on this computer (`band.json` in the app's data
-folder). Only video is requested; the microphone is never used.
+**Avatars** (main menu or sidebar) is a Smash-style select screen. Every joined
+player has their own token on the grid of 10 avatars and a Camera tile, moved with
+their own controller (strum) and picked with green, so players choose at the same
+time. Cards along the bottom show each player's avatar (with their guitar), name
+plate, guitar style, drum kit, stage side and finish colours; on your controller
+yellow changes colour, blue the guitar and orange opens name entry. Names are up to
+8 letters or numbers and use a phone keypad on the guitar: strum to a key, press
+green repeatedly to cycle its letters (2 = ABC …), red deletes, Start finishes;
+keyboards type directly. With a mouse, click a card, then an avatar. The Camera
+tile takes a photo (raise a hand in the dashed corners for a 3-2-1, or press Take
+photo) restyled in the stage colours; photos stay on this computer (`band.json`)
+and only video is requested. Names replace P1–P4 in the song dialog and on stage.
 
 In game the band performs in 3D on the stage behind the highway, in the
 spotlights: chibi performers drawn comic-book style (toon shading, halftone
@@ -151,8 +156,8 @@ Hero style. A controller that connects while Player 1 is on the keyboard becomes
 Player 1. Any other controller joins as the next player by pressing **Start**.
 Its setup pop-up opens above the bar and only that controller drives it: strum to
 move, green to change (yellow goes back), red or Start to close. It has a live
-fret and strum test, the player's **avatar** (the 10 premade looks, or their camera
-photo), **instrument**, **difficulty**, **strumming** (on: strum to hit notes;
+fret and strum test, the player's **name** (keypad), **instrument**,
+**difficulty**, **strumming**, **guitar** style and **colour** (or **drum kit**) (on: strum to hit notes;
 off: frets alone, for that player only; it starts from the Settings choice) and
 **Leave**. Start on a player's own
 controller reopens it; the mouse works too. The Avatars section edits the same
