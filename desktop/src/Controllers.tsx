@@ -1,4 +1,4 @@
-import { onRiff, riffName, type RiffPad, type RiffStatus } from "./core/riff";
+import { onRiff, riffName, riffNumber, type RiffPad } from "./core/riff";
 import { useEffect, useRef, useState } from "react";
 import type { Action, Profile } from "./types";
 import {
@@ -26,6 +26,7 @@ export default function Controllers({
   midi,
   onMidi,
   players = [],
+  onTools,
 }: {
   device: string;
   onDevice: (s: string) => void;
@@ -35,6 +36,8 @@ export default function Controllers({
   onMidi: (p: MidiPort) => void;
   /** Joined players: the mapper can edit any player's controller. */
   players?: { device: string; name: string }[];
+  /** Opens the Controller tools drawer. */
+  onTools: () => void;
 }) {
   const [pads, setPads] = useState<Gamepad[]>([]),
     [capture, setCapture] = useState<Action | null>(null),
@@ -251,7 +254,7 @@ export default function Controllers({
             </button>
           ))}
           <div className="divider" />
-          <RiffPanel />
+          <RiffPanel onTools={onTools} />
           {error && <p className="error-text">{error}</p>}
         </section>
         <section className="panel mapping-panel">
@@ -425,115 +428,50 @@ export default function Controllers({
 }
 
 /** PDP Riffmaster for Xbox: macOS has no driver for its receiver, so
- * Backstage reads it itself and shows each receiver as its own controller. */
-function RiffPanel() {
-  const [status, setStatus] = useState<RiffStatus | null>(null),
-    [pads, setPads] = useState<RiffPad[]>([]),
-    [working, setWorking] = useState(false),
-    [problem, setProblem] = useState("");
-  const refresh = () =>
-    window.backstage
-      .riffStatus()
-      .then(setStatus)
-      .catch(() => {});
-  useEffect(() => {
-    void refresh();
-    const timer = setInterval(refresh, 3000);
-    const stop = onRiff(setPads);
-    return () => {
-      clearInterval(timer);
-      stop();
-    };
-  }, []);
-  const run = async (action: () => Promise<RiffStatus>) => {
-    setWorking(true);
-    setProblem("");
-    try {
-      setStatus(await action());
-    } catch (e) {
-      setProblem(
-        String((e as Error).message || e).replace(
-          /^Error invoking remote method '[^']+': (Error: )?/,
-          "",
-        ),
-      );
-    } finally {
-      setWorking(false);
-    }
-  };
-  const found = status?.receivers.length ?? 0;
-  const live = status?.active || status?.mode === "admin";
+ * Backstage reads it itself and shows each receiver as its own controller.
+ * Releasing, reconnecting and debugging live in Controller tools. */
+function RiffPanel({ onTools }: { onTools: () => void }) {
+  const [pads, setPads] = useState<RiffPad[]>([]);
+  useEffect(() => onRiff(setPads), []);
   return (
     <div className="riff-panel" aria-label="Riffmaster guitars">
       <strong>PDP Riffmaster (Xbox)</strong>
       <small>
-        {found
-          ? `${found} receiver${found === 1 ? "" : "s"} plugged in`
+        {pads.length
+          ? `${pads.length} receiver${pads.length === 1 ? "" : "s"} plugged in`
           : "No receivers found. Plug in the guitar’s USB receiver."}
-        {status?.mode === "admin" && " · administrator access"}
       </small>
-      {live &&
-        pads.map((p, i) => (
-          <div key={p.key} className="riff-row">
-            <i className={p.connected ? (p.input ? "on" : "wait") : "off"} />
-            <span>
-              {riffName(i + 1)}
-              <small>
-                {!p.connected
-                  ? p.error ||
-                    "Reconnecting… keep the receiver in the same USB port"
-                  : p.input
-                    ? "Connected · choose it above to map or test"
-                    : "Receiver ready · turn on the guitar and press a fret"}
-              </small>
-            </span>
-          </div>
-        ))}
-      {status?.busy && !live && (
-        <p className="error-text">
-          MacRiff is using the receivers. Stop its session or quit MacRiff
-          Setup, then connect.
-        </p>
-      )}
-      {live ? (
-        <button
-          className="secondary wide"
-          disabled={working}
-          onClick={() => run(() => window.backstage.riffDisconnect())}
-        >
-          Disconnect Riffmasters
-        </button>
-      ) : (
-        <button
-          className="secondary wide"
-          disabled={working || !found}
-          onClick={() => run(() => window.backstage.riffConnect())}
-        >
-          {working ? "Connecting…" : "Connect Riffmasters"}
-        </button>
-      )}
-      {status?.denied && status.mode !== "admin" && (
-        <>
-          <small>
-            If another app isn’t holding the receiver, macOS may require
-            administrator access to open it.
-          </small>
-          <button
-            className="secondary wide"
-            disabled={working}
-            onClick={() => run(() => window.backstage.riffAdmin())}
-          >
-            {working ? "Waiting for approval…" : "Use administrator access"}
-          </button>
-        </>
-      )}
-      {!status?.denied && (
-        <small>
-          Backstage reads the receivers itself and connects them automatically
-          when plugged in. Disconnect releases them for other apps.
-        </small>
-      )}
-      {problem && <p className="error-text">{problem}</p>}
+      {pads.map((p) => (
+        <div key={p.key} className="riff-row">
+          <i
+            className={
+              p.connected
+                ? "on"
+                : p.state === "released"
+                  ? "off"
+                  : p.state === "held" || p.state === "error"
+                    ? "bad"
+                    : "wait"
+            }
+          />
+          <span>
+            {riffName(riffNumber(p))}
+            <small>
+              {p.connected
+                ? "Connected · choose it above to map or test"
+                : p.reason}
+            </small>
+          </span>
+        </div>
+      ))}
+      <button className="secondary wide" onClick={onTools}>
+        Controller tools
+      </button>
+      <small>
+        Backstage connects receivers by itself. Controller tools release a
+        receiver for other apps, reconnect a guitar stuck on a yellow light, and
+        copy a debug report.
+      </small>
     </div>
   );
 }

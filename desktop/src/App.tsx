@@ -29,7 +29,9 @@ import {
   fitToSong,
   freeDevices,
   isPad,
+  leavePlayer,
   lineupProblem,
+  rematch,
   type PlayerSetup,
 } from "./core/players";
 import { MainMenu, TitleScreen, type MenuChoice } from "./Title";
@@ -42,6 +44,7 @@ import Soundcheck, { CHECK_ID, loadProgress, saveProgress } from "./Soundcheck";
 import ControllerCheck from "./game/ControllerCheck";
 import Avatars from "./Avatars";
 import PlayerBar from "./PlayerBar";
+import ControllerTools from "./ControllerTools";
 import { defaultLook, gearOf, slotName, type Slot } from "./core/avatars";
 import { lessons } from "./core/lessons";
 import type { MidiPort } from "./game/Game";
@@ -186,6 +189,8 @@ export default function App() {
   const navigate = useRef<(b: MenuButton, source?: string) => void>(() => {});
   // Clone Hero-style join: a player's setup pop-up, driven by their own pad.
   const [setupSlot, setSetupSlot] = useState<number | null>(null);
+  // The Controller tools drawer (Settings and Controllers open it).
+  const [tools, setTools] = useState(false);
   // Player 1's own strum choice (other players keep theirs in the lineup).
   const [strum1, setStrum1] = useState<boolean | undefined>(undefined);
   const setupInput = useRef<(b: MenuButton) => void>(() => {});
@@ -197,7 +202,10 @@ export default function App() {
   const later = (fn: () => void) => setTimeout(fn, 40);
   const back = () => {
     const el = document.activeElement as HTMLElement | null;
-    if (confirmRemove) {
+    if (tools) {
+      setTools(false);
+      later(() => focusFirst());
+    } else if (confirmRemove) {
       setConfirmRemove(false);
       later(() => focusFirst());
     } else if (selected) setSelected(null);
@@ -288,6 +296,14 @@ export default function App() {
       (p) => !seenPads.current.has(`pad:${p.index}:${p.id}`),
     );
     pads.forEach((p) => seenPads.current.add(`pad:${p.index}:${p.id}`));
+    // A player's pad that came back at another index keeps its player.
+    const current = lineupAll();
+    const moved = rematch(current, pads);
+    if (moved.some((p, i) => p.device !== current[i].device)) {
+      applyLineup(moved);
+      setNotice("A controller reconnected and kept its player.");
+      return;
+    }
     const arrived = fresh
       .map((p) => `pad:${p.index}:${p.id}`)
       .find((key) => !lineup.some((l) => l.device === key));
@@ -1268,6 +1284,7 @@ export default function App() {
               device: p.device,
               name: slotName(i, band[i]),
             }))}
+            onTools={() => setTools(true)}
             profile={profile}
             onProfile={setProfile}
             midi={midi}
@@ -1401,6 +1418,21 @@ export default function App() {
                   </button>
                 </div>
               </section>
+              <section className="panel settings-panel">
+                <h3>Controllers</h3>
+                <div className="setting-row">
+                  <div>
+                    <strong>Controller tools</strong>
+                    <p>
+                      See every controller, release or reconnect a Riffmaster
+                      receiver, and copy a debug report.
+                    </p>
+                  </div>
+                  <button className="secondary" onClick={() => setTools(true)}>
+                    Open
+                  </button>
+                </div>
+              </section>
             </div>
             <p className="footnote">
               Development build · Five-fret guitar with HOPOs, taps, sustains
@@ -1410,6 +1442,25 @@ export default function App() {
           </>
         )}
       </main>
+      {tools && (
+        <ControllerTools
+          players={players.map((p, i) => ({
+            device: p.device,
+            name: slotName(i, band[i]),
+          }))}
+          onRelease={(released) => {
+            const i = players.findIndex((p) => p.device === released);
+            if (i === 0) {
+              setDevice("keyboard");
+              setProfile(defaultProfile());
+            } else if (i > 0) applyLineup(leavePlayer(players, i));
+          }}
+          onClose={() => {
+            setTools(false);
+            later(() => focusFirst());
+          }}
+        />
+      )}
       {bar}
       <ButtonHints
         className="app-hints"

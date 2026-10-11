@@ -1,8 +1,10 @@
 // Test stand-in for the usb module: two Riffmaster receivers that stream GIP
 // input. Receiver 1 cycles orange, receiver 2 d-pad right: buttons no menu
-// acts on, so a test can leave them connected.
+// acts on, so a test can leave them connected. Unit tests build their own:
+// a receiver with no guitar on (silent until `pairGuitar()`), or one another
+// program holds (claiming fails).
 const { EventEmitter } = require("events");
-function receiver(port, frets, dpad = 0) {
+function receiver(port, frets, dpad = 0, { guitar = true, held = false } = {}) {
   const input = new EventEmitter();
   Object.assign(input, {
     direction: "in",
@@ -13,6 +15,7 @@ function receiver(port, frets, dpad = 0) {
   input.startPoll = () => {
     let on = false;
     timer = setInterval(() => {
+      if (!device.guitar) return;
       const gip = Buffer.alloc(18);
       gip[0] = 0x20;
       gip[3] = 14;
@@ -33,13 +36,30 @@ function receiver(port, frets, dpad = 0) {
     deviceDescriptor: { idVendor: 0x0e6f, idProduct: 0x0248 },
     sent: [],
     opened: false,
+    guitar,
+    configured: 0,
+    configurations: 0,
+    get configDescriptor() {
+      return { bConfigurationValue: device.configured };
+    },
+    /** The guitar turns on: it announces itself, then streams input. */
+    pairGuitar() {
+      device.guitar = true;
+      const announce = Buffer.alloc(8);
+      announce[0] = 0x02;
+      input.emit("data", announce);
+    },
     open() {
       device.opened = true;
     },
     close() {
       device.opened = false;
     },
-    setConfiguration: (_, done) => setImmediate(done),
+    setConfiguration: (value, done) => {
+      device.configurations++;
+      device.configured = value;
+      setImmediate(done);
+    },
     interface: () => ({
       endpoints: [
         input,
@@ -53,14 +73,16 @@ function receiver(port, frets, dpad = 0) {
         },
       ],
       isKernelDriverActive: () => false,
-      claim() {},
+      claim() {
+        if (held) throw new Error("LIBUSB_ERROR_ACCESS");
+      },
       release: (_, done) => done(),
     }),
   };
   return device;
 }
-module.exports = function fakeUsb() {
-  const devices = [receiver(1, 0x10), receiver(2, 0, 0x08)];
+module.exports = function fakeUsb(devices) {
+  devices ??= [receiver(1, 0x10), receiver(2, 0, 0x08)];
   const usb = new EventEmitter();
   return {
     getDeviceList: () => devices.filter((d) => !d.unplugged),
@@ -68,3 +90,4 @@ module.exports = function fakeUsb() {
     devices,
   };
 };
+module.exports.receiver = receiver;

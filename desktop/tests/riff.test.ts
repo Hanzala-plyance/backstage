@@ -193,17 +193,15 @@ test("Backstage reads several receivers itself and reconnects after a replug", a
     latest.map((p) => p.index),
     [16, 17],
   );
-  // Unplug receiver 2: only it disconnects.
+  // Unplug receiver 2: it leaves the list; receiver 1 keeps playing.
   usb.devices[1].unplugged = true;
   usb.usb.emit("detach", usb.devices[1]);
-  assert.ok(
-    await wait(() => latest[1] && !latest[1].connected && latest[0].connected),
-  );
+  assert.ok(await wait(() => latest.length === 1 && latest[0].connected));
   // Plug it back in: it reconnects on its own, same index.
   usb.devices[1].unplugged = false;
   usb.usb.emit("attach", usb.devices[1]);
   assert.ok(
-    await wait(() => latest[1].connected && latest[1].buttons[15] === 1),
+    await wait(() => !!latest[1]?.connected && latest[1].buttons[15] === 1),
   );
   assert.equal(latest[1].index, 17);
   await riff.disconnect();
@@ -225,10 +223,178 @@ test("a receiver another app holds is reported, not retried in a loop", async ()
   const status = await riff.connectAll();
   assert.equal(status.denied, true);
   assert.equal(latest[0].connected, false);
-  assert.match(latest[0].error ?? "", /holding this receiver/);
+  assert.equal((latest[0] as { state?: string }).state, "held");
+  assert.match(
+    (latest[0] as { reason?: string }).reason ?? "",
+    /holding this receiver/,
+  );
   assert.ok(
     await wait(() => latest[1]?.connected),
     "the other receiver still works",
   );
+  await riff.disconnect();
+});
+
+type Port = {
+  key: string;
+  index: number;
+  connected: boolean;
+  state: string;
+  guitar: string;
+  reason: string;
+  packets: Record<string, number>;
+};
+test("a receiver counts as a guitar only once the guitar talks", async () => {
+  const silent = fakeUsb.receiver(1, 0x01, 0, { guitar: false });
+  const usb = fakeUsb([silent]);
+  let latest: Port[] = [];
+  const riff = new Riffmasters((pads: Port[]) => (latest = pads), { usb });
+  await riff.connectAll();
+  assert.equal(latest[0].state, "open");
+  assert.equal(latest[0].guitar, "waiting");
+  assert.equal(latest[0].connected, false, "no phantom guitar");
+  assert.match(latest[0].reason, /Waiting for the guitar/);
+  silent.pairGuitar();
+  assert.ok(await wait(() => latest[0].connected));
+  assert.equal(latest[0].guitar, "connected");
+  assert.ok(await wait(() => (latest[0].packets["0x20"] ?? 0) > 0));
+  assert.equal(latest[0].packets["0x02"], 1);
+  await riff.disconnect();
+});
+test("an already configured receiver is not reset when opened", async () => {
+  const configured = fakeUsb.receiver(1, 0x01);
+  configured.configured = 1;
+  const fresh = fakeUsb.receiver(2, 0x02);
+  const riff = new Riffmasters(() => {}, { usb: fakeUsb([configured, fresh]) });
+  await riff.connectAll();
+  assert.equal(configured.configurations, 0, "left alone");
+  assert.equal(fresh.configurations, 1);
+  await riff.disconnect();
+});
+test("a released port stays released through replugs until connected", async () => {
+  const usb = fakeUsb();
+  let latest: Port[] = [];
+  const riff = new Riffmasters((pads: Port[]) => (latest = pads), { usb });
+  await riff.connectAll();
+  assert.ok(await wait(() => latest.every((p) => p.connected)));
+  const [first, second] = latest.map((p) => p.key);
+  await riff.release(first);
+  const port = () => latest.find((p) => p.key === first)!;
+  assert.equal(port().state, "released");
+  assert.equal(port().connected, false);
+  assert.equal(usb.devices[0].opened, false, "USB let go");
+  assert.ok(latest.find((p) => p.key === second)!.connected, "other port kept");
+  // Automatic connection and a replug both leave it alone.
+  await riff.connectAll();
+  usb.devices[0].unplugged = true;
+  usb.usb.emit("detach", usb.devices[0]);
+  usb.devices[0].unplugged = false;
+  usb.usb.emit("attach", usb.devices[0]);
+  await new Promise((r) => setTimeout(r, 900));
+  assert.equal(port().state, "released");
+  assert.equal(usb.devices[0].opened, false);
+  await riff.connect(first);
+  assert.ok(await wait(() => port().connected));
+  assert.equal(port().index, 16, "same index after release");
+  await riff.disconnect();
+});
+test("reconnect reopens one port and resends the Xbox start-up", async () => {
+  const usb = fakeUsb();
+  let latest: Port[] = [];
+  const riff = new Riffmasters((pads: Port[]) => (latest = pads), { usb });
+  await riff.connectAll();
+  assert.ok(await wait(() => latest.every((p) => p.connected)));
+  const before = usb.devices[0].sent.length;
+  await riff.reconnect(latest[0].key);
+  assert.ok(
+    await wait(() => usb.devices[0].sent.length >= before + STARTUP.length),
+  );
+  assert.ok(await wait(() => latest[0].connected));
+  const report = riff.report();
+  const events = report.ports[0].events.map((e: { text: string }) => e.text);
+  assert.ok(events.includes("Reconnecting"));
+  assert.ok(
+    events.filter((t: string) => t === "Sent Xbox start-up").length >= 2,
+  );
+  assert.deepEqual(
+    report.receivers.map((r: { key: string }) => r.key),
+    latest.map((p) => p.key),
+  );
+  await riff.disconnect();
+});
+test("guitar input never triggers a USB scan", async () => {
+  const usb = fakeUsb();
+  const list = usb.getDeviceList;
+  let scans = 0;
+  usb.getDeviceList = () => (scans++, list());
+  let reports = 0;
+  const riff = new Riffmasters(() => reports++, { usb });
+  await riff.connectAll();
+  const before = scans;
+  const seen = reports;
+  assert.ok(await wait(() => reports >= seen + 6), "input kept arriving");
+  assert.equal(scans, before, "no enumeration per report");
+  await riff.disconnect();
+});
+test("disconnect waits until every receiver has let go of USB", async () => {
+  const usb = fakeUsb();
+  // Receiver 1 takes a while to release its interface.
+  const device = usb.devices[0];
+  const iface = device.interface;
+  device.interface = (n: number) => {
+    const real = iface(n);
+    return {
+      ...real,
+      release: (_: boolean, done: () => void) => setTimeout(done, 300),
+    };
+  };
+  const riff = new Riffmasters(() => {}, { usb });
+  await riff.connectAll();
+  assert.ok(device.opened);
+  await riff.disconnect();
+  assert.equal(device.opened, false, "closed before disconnect resolved");
+  // A receiver that never lets go can't hold quitting up for long.
+  const stuck = fakeUsb();
+  stuck.devices[0].interface = (n: number) => ({
+    ...iface.call(stuck.devices[0], n),
+    release: () => {},
+  });
+  const riff2 = new Riffmasters(() => {}, { usb: stuck });
+  await riff2.connectAll();
+  const start = Date.now();
+  await riff2.disconnect(400);
+  assert.ok(Date.now() - start < 1500, "bounded wait");
+});
+test("a guitar replugged on another port keeps its number", async () => {
+  const usb = fakeUsb();
+  let latest: Port[] = [];
+  const riff = new Riffmasters((pads: Port[]) => (latest = pads), { usb });
+  await riff.connectAll();
+  assert.deepEqual(
+    latest.map((p) => p.index),
+    [16, 17],
+  );
+  // Receiver 2 is unplugged and comes back on port 3 (or macOS renumbers it).
+  const moved = usb.devices[1];
+  moved.unplugged = true;
+  usb.usb.emit("detach", moved);
+  assert.ok(await wait(() => latest.length === 1));
+  moved.portNumbers = [3];
+  moved.unplugged = false;
+  usb.usb.emit("attach", moved);
+  assert.ok(await wait(() => latest.length === 2 && latest[1].connected));
+  assert.equal(latest[1].key, "usb:9:3");
+  assert.equal(latest[1].index, 17, "Riffmaster 2 again, not 3");
+  // Replugging again and again never climbs past the number of receivers.
+  for (const port of [4, 5, 6]) {
+    moved.unplugged = true;
+    usb.usb.emit("detach", moved);
+    await wait(() => latest.length === 1);
+    moved.portNumbers = [port];
+    moved.unplugged = false;
+    usb.usb.emit("attach", moved);
+    assert.ok(await wait(() => latest.length === 2 && latest[1].connected));
+    assert.equal(latest[1].index, 17);
+  }
   await riff.disconnect();
 });

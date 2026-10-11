@@ -1,4 +1,4 @@
-import type { RiffStatus } from "./core/riff";
+import type { RiffReport, RiffStatus } from "./core/riff";
 import type { Slot } from "./core/avatars";
 export type Part = "Guitar" | "Bass" | "Rhythm" | "Drums";
 export type Level = "Easy" | "Medium" | "Hard" | "Expert";
@@ -135,6 +135,14 @@ export interface Bridge {
   riffConnect(): Promise<RiffStatus>;
   riffDisconnect(): Promise<RiffStatus>;
   riffAdmin(): Promise<RiffStatus>;
+  riffRelease(key: string): Promise<RiffStatus>;
+  riffConnectPort(key: string): Promise<RiffStatus>;
+  riffReconnect(key: string): Promise<RiffStatus>;
+  riffReport(): Promise<RiffReport>;
+  riffStopReaders(
+    pids: number[],
+  ): Promise<{ stopped: number[]; error: string | null }>;
+  copyText(text: string): Promise<void>;
 }
 declare global {
   interface Window {
