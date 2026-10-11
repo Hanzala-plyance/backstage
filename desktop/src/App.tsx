@@ -731,6 +731,8 @@ export default function App() {
       onChange={applyLineup}
       input={setupInput}
       joinable={joinable}
+      slots={band}
+      onSlot={saveSlot}
     />
   );
   if (screen === "menu")

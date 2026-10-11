@@ -1,4 +1,12 @@
-import { useEffect, useState, type MutableRefObject } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { Portrait } from "./AvatarView";
+import {
+  defaultLook,
+  presetFor,
+  presets,
+  type Look,
+  type Slot,
+} from "./core/avatars";
 import type { Profile } from "./types";
 import { readPad } from "./core/input";
 import type { MenuButton } from "./core/menu";
@@ -10,7 +18,7 @@ import {
   leavePlayer,
   type PlayerSetup,
 } from "./core/players";
-type Row = "part" | "level" | "leave" | "done";
+type Row = "avatar" | "part" | "level" | "leave" | "done";
 /** Live fret/strum test for one controller. */
 function InputTest({ device, profile }: { device: string; profile: Profile }) {
   const [state, setState] = useState(() => readPad(null, profile));
@@ -65,6 +73,8 @@ export default function PlayerBar({
   onChange,
   input,
   joinable,
+  slots,
+  onSlot,
 }: {
   players: PlayerSetup[];
   names: string[];
@@ -76,23 +86,49 @@ export default function PlayerBar({
   /** The open pop-up's handler for its owner's controller. */
   input: MutableRefObject<(b: MenuButton) => void>;
   joinable: boolean;
+  /** Player names and avatars (the Avatars section edits the same slots). */
+  slots: Slot[];
+  onSlot: (index: number, slot: Slot) => void;
 }) {
   const [row, setRow] = useState(0);
   const player = open === null ? null : players[open];
   const rows: Row[] = [
+    "avatar",
     "part",
     "level",
     ...(open ? (["leave"] as Row[]) : []),
     "done",
   ];
-  useEffect(() => setRow(0), [open]);
+  // A camera photo stays one of the choices while the pop-up is open, so
+  // cycling past it doesn't lose it.
+  const photo = useRef<Look | null>(null);
+  useEffect(() => {
+    setRow(0);
+    const look = open === null ? null : slots[open]?.look;
+    photo.current = look?.kind === "photo" ? look : null;
+  }, [open]);
+  const looks = (): Look[] => [
+    ...(photo.current ? [photo.current] : []),
+    ...presets.map((p) => ({ kind: "preset", id: p.id }) as Look),
+  ];
+  const lookOf = (i: number) => slots[i]?.look ?? defaultLook(i);
+  const same = (a: Look, b: Look) =>
+    a.kind === b.kind &&
+    (a.kind === "photo"
+      ? b.kind === "photo"
+      : b.kind === "preset" && a.id === b.id);
   // A player who left (or whose slot vanished) closes their pop-up.
   useEffect(() => {
     if (open !== null && !players[open]) setOpen(null);
   }, [players, open]);
   const act = (r: Row, step: 1 | -1 = 1) => {
     if (open === null) return;
-    if (r === "part" || r === "level")
+    if (r === "avatar") {
+      const list = looks();
+      const at = list.findIndex((l) => same(l, lookOf(open)));
+      const look = list[(at + step + list.length) % list.length];
+      onSlot(open, { ...(slots[open] ?? { name: "" }), look });
+    } else if (r === "part" || r === "level")
       onChange(cycleSetting(players, open, r, step));
     else if (r === "leave") {
       onChange(leavePlayer(players, open));
@@ -103,7 +139,7 @@ export default function PlayerBar({
     if (b === "up") setRow((r) => (r + rows.length - 1) % rows.length);
     else if (b === "down") setRow((r) => (r + 1) % rows.length);
     else if (b === "green") act(rows[row]);
-    else if (b === "yellow" && (rows[row] === "part" || rows[row] === "level"))
+    else if (b === "yellow" && rows[row] !== "leave" && rows[row] !== "done")
       act(rows[row], -1);
     else if (b === "red" || b === "start") setOpen(null);
   };
@@ -137,7 +173,19 @@ export default function PlayerBar({
                 act(r);
               }}
             >
-              {r === "part" ? (
+              {r === "avatar" ? (
+                <>
+                  <span>Avatar</span>
+                  <span className="setup-avatar">
+                    <Portrait look={lookOf(open)} className="avatar-mini" />
+                    <strong>
+                      {lookOf(open).kind === "photo"
+                        ? "Camera"
+                        : presetFor((lookOf(open) as { id: string }).id).name}
+                    </strong>
+                  </span>
+                </>
+              ) : r === "part" ? (
                 <>
                   <span>Instrument</span>
                   <strong>{player.part}</strong>

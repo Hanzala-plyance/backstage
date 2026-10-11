@@ -539,11 +539,13 @@ try {
   await expect(page.locator(".toast")).toContainText(
     "Test generic gamepad joined as Player 2",
   );
-  await hold(13, async () =>
-    ((await setup.locator(".setup-row.current").textContent()) ?? "").includes(
-      "Difficulty",
-    ),
-  );
+  const row = async () =>
+    (await setup.locator(".setup-row.current").textContent()) ?? "";
+  // The pop-up starts on the avatar: green picks the next one (Riot to Nova).
+  await expect(setup.locator(".setup-row.current")).toContainText("Riot");
+  await hold(7, async () => (await row()).includes("Nova"));
+  await hold(13, async () => (await row()).includes("Instrument"));
+  await hold(13, async () => (await row()).includes("Difficulty"));
   await hold(
     7,
     async () =>
