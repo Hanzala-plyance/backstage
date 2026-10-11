@@ -721,6 +721,16 @@ try {
   await expect(
     page.getByRole("button", { name: "Player 2 name" }),
   ).toContainText("B");
+  // After picking, Player 2's controller is on their card: strum down to the
+  // drum kit row and green changes it.
+  const p2kit = page.getByRole("button", { name: "Player 2 drum kit" });
+  await hold(
+    13,
+    async () =>
+      (await page.locator(".select-card.p2 .card-row.kit.current").count()) ===
+      1,
+  );
+  await hold(7, async () => (await p2kit.textContent()) === "Double Kick");
   // Player 2's card, then the camera tile: a photo from the fake camera.
   await page.getByLabel("Player 2 card").click({ position: { x: 8, y: 8 } });
   await page.getByRole("button", { name: "Camera avatar" }).click();

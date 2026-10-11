@@ -3933,38 +3933,6 @@ kbd {
   width: 120px;
   justify-self: center;
 }
-.name-plate {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 6px 10px;
-  background: var(--pc);
-  clip-path: var(--cut-sm);
-  color: #07060b;
-}
-.name-plate b {
-  font-family: var(--display);
-  font-style: italic;
-  font-weight: 800;
-  font-size: 20px;
-  letter-spacing: 1px;
-}
-.name-plate small {
-  font-weight: 700;
-}
-.card-gear {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.card-gear button {
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 650;
-  text-transform: capitalize;
-  background: #1f1b2b;
-  clip-path: var(--cut-sm);
-}
 .card-colors {
   display: flex;
   flex-wrap: wrap;
@@ -4265,36 +4233,6 @@ body,
 .select-grid {
   grid-template-columns: repeat(12, minmax(0, 1fr));
 }
-.card-gear {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 6px;
-}
-.card-gear button {
-  display: grid;
-  gap: 2px;
-  padding: 7px 9px;
-  text-align: left;
-  background: #1f1b2b;
-  box-shadow: inset 0 -2px 0 var(--pc);
-}
-.card-gear button small {
-  font-size: 9px;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  color: #8f89a6;
-}
-.card-gear button b {
-  overflow: hidden;
-  font-family: var(--display);
-  font-style: italic;
-  font-size: 15px;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.card-gear button:hover {
-  background: #2a2340;
-}
 .card-colors {
   align-items: center;
 }
@@ -4308,4 +4246,148 @@ body,
 .card-colors .swatch {
   width: 24px;
   height: 24px;
+}
+/* Card settings: one full-width row each, stepped through with the guitar. */
+.card-rows {
+  display: grid;
+  gap: 5px;
+}
+.card-row {
+  display: grid;
+  grid-template-columns: 74px 28px minmax(0, 1fr) 28px;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 6px 0 10px;
+  background: #1a1724;
+  clip-path: var(--cut-sm);
+}
+.card-row.current {
+  background: color-mix(in srgb, var(--pc) 30%, #1a1724);
+  box-shadow: inset 4px 0 var(--pc);
+}
+.row-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #a39dbb;
+}
+.row-arrow {
+  height: 28px;
+  font-size: 12px;
+  color: var(--pc);
+  background: none;
+}
+.row-value {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: 17px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  background: none;
+}
+.card-row.name .row-value,
+.card-row.avatar .row-value,
+.card-row.color .card-colors {
+  grid-column: 2 / span 3;
+}
+.card-row.name .row-value {
+  justify-content: space-between;
+  padding: 0 4px;
+  color: var(--pc);
+  font-size: 20px;
+  letter-spacing: 1px;
+}
+.card-row.color .card-colors {
+  gap: 4px;
+  padding: 5px 0;
+}
+.card-row.color .swatch {
+  width: 20px;
+  height: 20px;
+}
+.card-row.avatar .row-value {
+  font-size: 13px;
+  color: #a39dbb;
+}
+.card-hint {
+  font-size: 11px;
+  color: #8f89a6;
+}
+.row-value {
+  display: block;
+  text-align: center;
+  text-overflow: ellipsis;
+  font-size: clamp(13px, 1.2vw, 17px);
+}
+.card-row.name .row-value {
+  display: flex;
+}
+.card-row {
+  min-height: 32px;
+}
+.card-rows {
+  gap: 4px;
+}
+.select-card {
+  gap: 6px;
+  padding: 10px;
+}
+.card-portrait {
+  width: auto;
+  height: clamp(60px, 15vh, 130px);
+}
+.card-portrait img {
+  width: auto;
+}
+.card-row.color .card-colors {
+  flex-wrap: nowrap;
+  gap: 3px;
+}
+.card-row.color .swatch {
+  flex: 0 1 18px;
+  width: 18px;
+  height: 18px;
+  min-width: 12px;
+}
+.card-portrait {
+  height: clamp(48px, 12vh, 130px);
+}
+@media (max-height: 800px) {
+  .card-row {
+    min-height: 28px;
+  }
+  .card-hint {
+    display: none;
+  }
+  .select-card {
+    padding: 8px;
+    gap: 4px;
+  }
+}
+.card-row {
+  grid-template-columns: 56px 20px minmax(0, 1fr) 20px;
+  padding: 0 4px 0 8px;
+}
+.row-label {
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+.row-value {
+  font-size: clamp(12px, 1.05vw, 17px);
+}
+.card-row.color .swatch {
+  flex: 1 1 0;
+  width: auto;
+  max-width: 18px;
+  min-width: 0;
+  height: auto;
+  aspect-ratio: 1;
 }
