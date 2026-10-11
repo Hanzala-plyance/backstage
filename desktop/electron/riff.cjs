@@ -19,6 +19,9 @@ const {
   KEY,
 } = require("./riff/receivers.cjs");
 const { Receiver } = require("./riff/gip.cjs");
+const { macriffReaders: liveReaders } = require("./riff/holders.cjs");
+// Tests never look at (or stop) real MacRiff processes.
+const macriffReaders = () => (fake() ? [] : liveReaders());
 const fake = () => !!process.env.BACKSTAGE_RIFF_FAKE;
 // Reader scripts and the usb module live outside the asar so plain Node (the
 // app's own binary in run-as-node mode) can load them.
@@ -42,12 +45,6 @@ function receivers(usb = loadUsb()) {
   } catch {
     return [];
   }
-}
-/** MacRiff readers already holding receivers (they would block ours). */
-function macriffBusy() {
-  if (fake()) return false;
-  const ps = spawnSync("/bin/ps", ["-Ao", "command"], { encoding: "utf8" });
-  return /MacRiff\/(controller-reader|reader-group)\.js/.test(ps.stdout || "");
 }
 const writeJson = (file, value) => {
   fs.writeFileSync(file + ".tmp", JSON.stringify(value));
@@ -137,21 +134,33 @@ class AdminBridge {
   /** Current state of every connected receiver, for the renderer. */
   snapshot() {
     const now = Date.now();
-    return this.slots.map((s) => ({
-      key: s.key,
-      index: s.index,
+    return this.slots.map((s) => {
       // Reports or heartbeats within 3 s: the reader is alive.
-      connected: !!s.client && now - s.last < 3000,
-      input: s.reported,
-      buttons: s.buttons,
-      axes: s.axes,
-    }));
+      const alive = !!s.client && now - s.last < 3000;
+      return {
+        key: s.key,
+        index: s.index,
+        connected: alive && s.reported,
+        input: s.reported,
+        buttons: s.buttons,
+        axes: s.axes,
+        state: alive ? "open" : "opening",
+        guitar: alive && s.reported ? "connected" : "waiting",
+        reason: !alive
+          ? "Starting the administrator reader…"
+          : s.reported
+            ? "Guitar connected (administrator reader)."
+            : "Waiting for the guitar. Turn it on and press a button.",
+        packets: {},
+        quietFor: null,
+      };
+    });
   }
   status() {
     return {
       receivers: receivers(this.usb),
       connected: this.snapshot(),
-      busy: this.dir ? false : macriffBusy(),
+      busy: this.dir ? false : macriffActive(),
       active: !!this.dir,
     };
   }
@@ -162,7 +171,7 @@ class AdminBridge {
       throw new Error(
         "No Riffmaster receivers found. Plug in the receiver and try again.",
       );
-    if (macriffBusy())
+    if (macriffActive())
       throw new Error(
         "MacRiff is using the receivers. Stop its session (or quit MacRiff Setup) and try again.",
       );
@@ -299,51 +308,109 @@ const blank = () => ({
   tilted: false,
   input: false,
 });
-/** Riffmasters driven in-process. Connects every receiver it finds, and
- * reconnects when one is plugged back in. */
+const EVENTS = 40;
+/** Plain-language state of one receiver port, for players and staff. */
+function describe(s) {
+  if (s.state === "released")
+    return "Released. Backstage won't use this receiver until you connect it.";
+  if (s.state === "held")
+    return "Another program is holding this receiver (often a MacRiff reader left running). Quit it, or ask staff to free the port.";
+  if (s.state === "error")
+    return s.error || "The receiver could not be opened.";
+  if (s.state === "opening") return "Opening the receiver…";
+  if (s.state === "closed")
+    return "Not connected yet. Choose Connect to use this receiver.";
+  if (s.guitar === "connected") return "Guitar connected.";
+  return "Waiting for the guitar. Turn it on; if its light stays yellow, choose Reconnect.";
+}
+/** Riffmasters driven in-process, one slot per USB port. Every receiver
+ * found is opened unless a person released it; a guitar only counts as
+ * connected once it has announced itself or sent input. */
 class Riffmasters {
-  constructor(onUpdate, { usb = loadUsb(), admin } = {}) {
+  constructor(
+    onUpdate,
+    { usb = loadUsb(), admin, holders = macriffReaders } = {},
+  ) {
     this.onUpdate = onUpdate;
     this.usb = usb;
+    this.holders = holders;
     this.slots = new Map();
+    // Ports a person released: skipped by automatic connection and replugs.
+    this.released = new Set();
+    this.nextIndex = 16;
     this.auto = false;
     this.admin = admin ?? new AdminBridge(onUpdate);
     this.admin.usb = usb;
     const hotplug = usb?.usb;
     hotplug?.on?.("attach", (d) => {
-      if (this.auto && isReceiver(d)) setTimeout(() => this.connectAll(), 600);
+      if (!isReceiver(d)) return;
+      this.log(this.slot(receiverKey(d)), "Receiver plugged in");
+      if (this.auto) setTimeout(() => this.connectAll(), 600);
+      else this.push();
     });
     hotplug?.on?.("detach", (d) => {
       if (!isReceiver(d)) return;
-      this.slots.get(receiverKey(d))?.receiver?.close();
+      const s = this.slots.get(receiverKey(d));
+      if (!s) return;
+      this.log(s, "Receiver unplugged");
+      s.receiver?.close();
+      this.push();
     });
   }
   slot(key) {
     let s = this.slots.get(key);
     if (!s) {
-      // Stable indexes, out of the way of real gamepads.
+      // Each port keeps its index for the whole run, so a player's guitar
+      // keeps its name when another receiver comes or goes.
       s = {
         key,
-        index: 16 + this.slots.size,
+        index: this.nextIndex++,
         receiver: null,
+        state: this.released.has(key) ? "released" : "closed",
+        guitar: "waiting",
         error: "",
-        denied: false,
+        events: [],
         ...blank(),
       };
       this.slots.set(key, s);
     }
     return s;
   }
+  log(slot, text) {
+    slot.events.push({ at: Date.now(), text });
+    if (slot.events.length > EVENTS) slot.events.shift();
+  }
+  /** Ports with a receiver plugged in now (and ports still open). */
+  present() {
+    const plugged = new Set(receivers(this.usb));
+    // Every plugged-in receiver is listed, connected or not.
+    plugged.forEach((key) => this.slot(key));
+    return [...this.slots.values()]
+      .filter((s) => plugged.has(s.key) || s.receiver)
+      .sort((a, b) => a.index - b.index);
+  }
   snapshot() {
-    return [...this.slots.values()].map((s) => ({
-      key: s.key,
-      index: s.index,
-      connected: !!s.receiver,
-      input: s.input,
-      buttons: s.buttons,
-      axes: s.axes,
-      error: s.error,
-    }));
+    const now = Date.now();
+    return this.present().map((s) => {
+      const stats = s.receiver?.stats;
+      return {
+        key: s.key,
+        index: s.index,
+        connected: !!s.receiver && s.guitar === "connected",
+        input: s.input,
+        buttons: s.buttons,
+        axes: s.axes,
+        error: s.error,
+        state: s.state,
+        guitar: s.guitar,
+        reason: describe(s),
+        packets: stats ? { ...stats.packets } : {},
+        quietFor:
+          stats?.lastPacket && s.guitar === "connected"
+            ? now - stats.lastPacket
+            : null,
+      };
+    });
   }
   push() {
     this.onUpdate(this.admin.dir ? this.admin.snapshot() : this.snapshot());
@@ -356,49 +423,104 @@ class Riffmasters {
       connected,
       active: this.auto,
       mode: "direct",
-      denied: connected.some((s) => this.slots.get(s.key).denied),
-      busy: !connected.some((s) => s.connected) && macriffBusy(),
+      denied: connected.some((s) => s.state === "held"),
+      busy: macriffActive(this.holders),
     };
   }
-  /** Opens every receiver that isn't open yet. */
+  /** Opens one port's receiver. */
+  async open(key) {
+    const slot = this.slot(key);
+    if (slot.receiver || slot.opening) return;
+    slot.opening = true;
+    slot.state = "opening";
+    slot.guitar = "waiting";
+    this.push();
+    try {
+      const device = selectReceiver(this.usb.getDeviceList(), key);
+      const receiver = new Receiver(device, {
+        onReport: (report) => {
+          const state = decode(report, slot.tilted);
+          if (!state || state.heartbeat) return;
+          Object.assign(slot, state, { input: true });
+          this.push();
+        },
+        onGuitar: () => {
+          if (slot.receiver !== receiver) return;
+          slot.guitar = "connected";
+          this.push();
+        },
+        onEvent: (text) => this.log(slot, text),
+        onClose: (error) => {
+          if (slot.receiver !== receiver) return;
+          slot.receiver = null;
+          slot.guitar = "waiting";
+          if (slot.state === "open") {
+            slot.state = error ? "error" : "closed";
+            slot.error = error
+              ? `The receiver stopped: ${error.message ?? error}`
+              : "";
+          }
+          Object.assign(slot, blank());
+          this.push();
+        },
+      });
+      // Guitar input can arrive before open() resolves.
+      slot.receiver = receiver;
+      await receiver.open();
+      slot.state = "open";
+      slot.error = "";
+    } catch (error) {
+      slot.receiver = null;
+      slot.state = error.denied ? "held" : "error";
+      slot.error = error.message;
+      this.log(slot, error.message);
+    } finally {
+      slot.opening = false;
+    }
+    this.push();
+  }
+  /** Opens every receiver that isn't open or released. */
   async connectAll() {
     if (!this.usb || this.admin.dir) return this.status();
     this.auto = true;
-    for (const key of receivers(this.usb)) {
-      const slot = this.slot(key);
-      if (slot.receiver || slot.opening) continue;
-      slot.opening = true;
-      try {
-        const device = selectReceiver(this.usb.getDeviceList(), key);
-        const receiver = new Receiver(device, {
-          onReport: (report) => {
-            const state = decode(report, slot.tilted);
-            if (!state || state.heartbeat) return;
-            Object.assign(slot, state, { input: true });
-            this.push();
-          },
-          onClose: () => {
-            if (slot.receiver !== receiver) return;
-            slot.receiver = null;
-            Object.assign(slot, blank());
-            this.push();
-          },
-        });
-        await receiver.open();
-        slot.receiver = receiver;
-        slot.error = "";
-        slot.denied = false;
-      } catch (error) {
-        slot.denied = !!error.denied;
-        slot.error = error.denied
-          ? "macOS or another app (such as MacRiff) is holding this receiver."
-          : error.message;
-      } finally {
-        slot.opening = false;
-      }
-    }
+    for (const key of receivers(this.usb))
+      if (!this.released.has(key)) await this.open(key);
     this.push();
     return this.status();
+  }
+  /** Lets one port go: closes its receiver and keeps it closed. */
+  async release(key) {
+    this.released.add(key);
+    const slot = this.slot(key);
+    const r = slot.receiver;
+    slot.receiver = null;
+    slot.state = "released";
+    slot.guitar = "waiting";
+    slot.error = "";
+    Object.assign(slot, blank());
+    if (r) await new Promise((done) => r.close(undefined, done));
+    else this.log(slot, "Released");
+    this.push();
+    return this.status();
+  }
+  /** Takes one port back (after a release, or to retry a failed open). */
+  async connect(key) {
+    this.released.delete(key);
+    const slot = this.slot(key);
+    if (slot.state === "released") slot.state = "closed";
+    await this.open(key);
+    return this.status();
+  }
+  /** Closes and reopens one port, resending the Xbox start-up: the fix for a
+   * guitar stuck on a yellow light. */
+  async reconnect(key) {
+    const slot = this.slot(key);
+    this.log(slot, "Reconnecting");
+    const r = slot.receiver;
+    slot.receiver = null;
+    Object.assign(slot, blank());
+    if (r) await new Promise((done) => r.close(undefined, done));
+    return this.connect(key);
   }
   /** Releases every receiver; nothing reconnects until connectAll. */
   async disconnect() {
@@ -406,6 +528,8 @@ class Riffmasters {
     for (const s of this.slots.values()) {
       const r = s.receiver;
       s.receiver = null;
+      if (s.state !== "released") s.state = "closed";
+      s.guitar = "waiting";
       Object.assign(s, blank());
       r?.close();
     }
@@ -419,5 +543,67 @@ class Riffmasters {
     await this.admin.connect();
     return this.status();
   }
+  /** Everything needed to debug a controller problem, as plain data. */
+  report() {
+    let usbList = [];
+    try {
+      usbList = (this.usb?.getDeviceList() ?? [])
+        .filter(isReceiver)
+        .map((d) => {
+          let configuration = null;
+          try {
+            configuration = d.configDescriptor?.bConfigurationValue ?? null;
+          } catch {}
+          return { key: receiverKey(d), configuration };
+        });
+    } catch {}
+    let readers = [];
+    try {
+      readers = this.holders();
+    } catch {}
+    return {
+      created: new Date().toISOString(),
+      platform: `${process.platform} ${process.arch}`,
+      versions: {
+        electron: process.versions.electron,
+        node: process.versions.node,
+      },
+      mode: this.admin.dir ? "admin" : "direct",
+      auto: this.auto,
+      receivers: usbList,
+      released: [...this.released],
+      ports: [...this.slots.values()].map((s) => ({
+        key: s.key,
+        index: s.index,
+        state: s.state,
+        guitar: s.guitar,
+        reason: describe(s),
+        error: s.error,
+        packets: s.receiver ? { ...s.receiver.stats.packets } : {},
+        lastPacket: s.receiver?.stats.lastPacket
+          ? new Date(s.receiver.stats.lastPacket).toISOString()
+          : null,
+        events: s.events.map((e) => ({
+          at: new Date(e.at).toISOString(),
+          text: e.text,
+        })),
+      })),
+      macriff: readers,
+      admin: this.admin.dir ? this.admin.snapshot() : null,
+    };
+  }
 }
-module.exports = { Riffmasters, AdminBridge, receivers, macriffBusy };
+/** A MacRiff session that is still in use (not ended, owner alive). */
+function macriffActive(list = macriffReaders) {
+  try {
+    return list().some((r) => !r.stale);
+  } catch {
+    return false;
+  }
+}
+module.exports = {
+  Riffmasters,
+  AdminBridge,
+  receivers,
+  macriffActive,
+};

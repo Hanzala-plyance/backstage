@@ -10,6 +10,7 @@ const {
   Menu,
   nativeImage,
   systemPreferences,
+  clipboard,
 } = require("electron");
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
@@ -22,7 +23,9 @@ const { PreparationService, validVideo } = require("./service.cjs");
 const covers = require("./covers.cjs");
 const { Scores } = require("./scores.cjs");
 const { Band } = require("./band.cjs");
-const { Riffmasters, macriffBusy } = require("./riff.cjs");
+const { Riffmasters, macriffActive } = require("./riff.cjs");
+const { KEY: RIFF_PORT } = require("./riff/receivers.cjs");
+const { stopStaleReaders } = require("./riff/holders.cjs");
 app.setName("Backstage");
 if (process.env.BACKSTAGE_TEST_DATA)
   app.setPath("userData", process.env.BACKSTAGE_TEST_DATA);
@@ -446,16 +449,45 @@ app.whenReady().then(async () => {
   // Camera avatars: macOS asks the person once; tests use Chromium's fake
   // camera and never touch the real one.
   // Riffmaster guitars, read by Backstage itself (see riff.cjs). They connect
-  // on their own unless MacRiff is already using them; tests connect by hand.
+  // on their own unless a MacRiff session is in use (ended sessions don't
+  // count); tests connect by hand.
   riff = new Riffmasters((pads) => {
     if (win && !win.isDestroyed()) win.webContents.send("backstage:riff", pads);
   });
-  if (!process.env.BACKSTAGE_RIFF_FAKE && !macriffBusy())
+  if (!process.env.BACKSTAGE_RIFF_FAKE && !macriffActive())
     void riff.connectAll();
+  const port = (key) => {
+    if (typeof key !== "string" || !RIFF_PORT.test(key))
+      throw Error("Invalid receiver port.");
+    return key;
+  };
   handle("riffStatus", () => riff.status());
   handle("riffConnect", () => riff.connectAll());
   handle("riffDisconnect", () => riff.disconnect());
   handle("riffAdmin", () => riff.useAdmin());
+  handle("riffRelease", (key) => riff.release(port(key)));
+  handle("riffConnectPort", (key) => riff.connect(port(key)));
+  handle("riffReconnect", (key) => riff.reconnect(port(key)));
+  handle("riffReport", () => riff.report());
+  // Debug reports go on the system clipboard from here: the page's clipboard
+  // API isn't reliable in Electron.
+  handle("copyText", (value) => {
+    if (typeof value !== "string" || value.length > 200000)
+      throw Error("Invalid text.");
+    // Tests keep the person's clipboard untouched.
+    if (process.env.BACKSTAGE_TEST_DATA) globalThis.backstageCopied = value;
+    else clipboard.writeText(value);
+  });
+  // Staff tools: stop MacRiff readers whose sessions have ended (one macOS
+  // administrator prompt). Tests never reach real processes.
+  handle("riffStopReaders", async (pids) => {
+    if (!Array.isArray(pids) || pids.length > 16) throw Error("Invalid list.");
+    if (process.env.BACKSTAGE_RIFF_FAKE)
+      return { stopped: [], error: "Not available in tests." };
+    const result = await stopStaleReaders(pids);
+    if (result.stopped.length) setTimeout(() => void riff.connectAll(), 1500);
+    return result;
+  });
   handle("cameraAccess", async () =>
     process.platform === "darwin" && !process.env.BACKSTAGE_TEST_DATA
       ? systemPreferences.askForMediaAccess("camera")

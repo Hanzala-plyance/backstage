@@ -32,6 +32,12 @@ contextBridge.exposeInMainWorld(
       "riffConnect",
       "riffDisconnect",
       "riffAdmin",
+      "riffRelease",
+      "riffConnectPort",
+      "riffReconnect",
+      "riffReport",
+      "riffStopReaders",
+      "copyText",
     ].map((name) => [name, invoke(name)]),
   ),
 );

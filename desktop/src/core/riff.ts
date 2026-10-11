@@ -10,6 +10,50 @@ export type RiffPad = {
   axes: number[];
   /** Why this receiver couldn't be opened, if it couldn't. */
   error?: string;
+  /** The receiver: being opened, open, released by a person, held by another
+   * program, or failed. */
+  state?: "closed" | "opening" | "open" | "released" | "held" | "error";
+  /** Whether the guitar on this receiver has announced itself or played. */
+  guitar?: "waiting" | "connected";
+  /** What is going on, in plain words. */
+  reason?: string;
+  /** GIP packets received, by command ("0x20" input, "0x02" announce…). */
+  packets?: Record<string, number>;
+  /** Milliseconds since the connected guitar last sent anything. */
+  quietFor?: number | null;
+};
+/** A MacRiff process that may be holding a receiver (staff tools). */
+export type MacRiffReader = {
+  pid: number;
+  user: string;
+  started: string;
+  kind: "supervisor" | "reader";
+  device: string | null;
+  session: string;
+  phase: string;
+  stale: boolean;
+  reason: string;
+};
+/** Debug report from the main process (Controller tools). */
+export type RiffReport = {
+  created: string;
+  platform: string;
+  mode: "direct" | "admin";
+  receivers: { key: string; configuration: number | null }[];
+  released: string[];
+  ports: {
+    key: string;
+    index: number;
+    state: string;
+    guitar: string;
+    reason: string;
+    error: string;
+    packets: Record<string, number>;
+    lastPacket: string | null;
+    events: { at: string; text: string }[];
+  }[];
+  macriff: MacRiffReader[];
+  [more: string]: unknown;
 };
 export type RiffStatus = {
   receivers: string[];
@@ -22,12 +66,16 @@ export type RiffStatus = {
   denied?: boolean;
 };
 export const riffName = (n: number) => `PDP Riffmaster ${n} (Xbox)`;
+/** Riffmasters are numbered by their port's index (from 16), which stays the
+ * same while Backstage runs, so a guitar keeps its name (and its player)
+ * when another receiver comes or goes. */
+export const riffNumber = (p: { index: number }) => p.index - 15;
 let pads: RiffPad[] = [];
 const listeners = new Set<(pads: RiffPad[]) => void>();
 /** A Gamepad-shaped snapshot of one Riffmaster. */
-export function asGamepad(p: RiffPad, n: number): Gamepad {
+export function asGamepad(p: RiffPad): Gamepad {
   return {
-    id: `${riffName(n)} [${p.key}]`,
+    id: `${riffName(riffNumber(p))} [${p.key}]`,
     index: p.index,
     connected: p.connected,
     mapping: "standard",
@@ -56,9 +104,9 @@ export function installRiff() {
     configurable: true,
     value: () => {
       const list: (Gamepad | null)[] = Array.from(native());
-      pads.forEach((p, i) => {
+      pads.forEach((p) => {
         while (list.length < p.index) list.push(null);
-        list[p.index] = asGamepad(p, i + 1);
+        list[p.index] = asGamepad(p);
       });
       return list;
     },

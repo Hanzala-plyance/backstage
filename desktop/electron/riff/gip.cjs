@@ -26,12 +26,20 @@ const STARTUP = [
   ], // rumble init
 ];
 class Receiver {
-  constructor(device, { onReport, onClose }) {
+  constructor(device, { onReport, onClose, onEvent, onGuitar }) {
     this.device = device;
     this.onReport = onReport;
     this.onClose = onClose;
+    this.onEvent = onEvent;
+    this.onGuitar = onGuitar;
     this.closed = false;
     this.sequence = 0;
+    // What the receiver has sent, for diagnostics and guitar presence: a
+    // receiver with no guitar paired and on sends nothing.
+    this.stats = { packets: {}, lastPacket: 0, announced: false, input: false };
+  }
+  event(text) {
+    this.onEvent?.(text);
   }
   /** Resolves once input is streaming; rejects with a readable reason. */
   open() {
@@ -55,7 +63,15 @@ class Receiver {
       } catch (error) {
         return fail("Could not open the receiver", error);
       }
-      this.device.setConfiguration(1, (error) => {
+      // Reconfiguring a receiver resets it, which would also cut off another
+      // program reading it; skip it when configuration 1 is already active.
+      let configured = false;
+      try {
+        configured = this.device.configDescriptor?.bConfigurationValue === 1;
+      } catch {}
+      const configure = (done) =>
+        configured ? done() : this.device.setConfiguration(1, done);
+      configure((error) => {
         if (error) return fail("Could not configure the receiver", error);
         try {
           this.iface = this.device.interface(0);
@@ -78,6 +94,7 @@ class Receiver {
           if (!this.closed) this.close(e);
         });
         this.in.startPoll(1, this.in.descriptor.wMaxPacketSize);
+        this.event("Receiver opened");
         this.handshake();
         resolve();
       });
@@ -85,14 +102,32 @@ class Receiver {
   }
   packet(data) {
     if (data.length < 4) return;
-    if (data[0] === 0x02) return this.handshake(); // guitar (re)announced
+    const cmd = "0x" + data[0].toString(16).padStart(2, "0");
+    const stats = this.stats;
+    stats.packets[cmd] = (stats.packets[cmd] ?? 0) + 1;
+    stats.lastPacket = Date.now();
+    if (data[0] === 0x02) {
+      // The guitar (re)announced itself: it is on and paired.
+      this.event("Guitar announced itself");
+      if (!stats.announced) {
+        stats.announced = true;
+        this.onGuitar?.();
+      }
+      return this.handshake();
+    }
     if (data[0] !== 0x20) return;
+    if (!stats.input) {
+      stats.input = true;
+      this.event("First guitar input");
+      this.onGuitar?.();
+    }
     const report = encodeReport(data);
     if (report) this.onReport(report);
   }
   handshake() {
     if (!this.out || this.closed || this.shaking) return;
     this.shaking = true;
+    this.event("Sent Xbox start-up");
     let i = 0;
     const next = () => {
       if (this.closed || i >= STARTUP.length)
@@ -101,6 +136,7 @@ class Receiver {
       this.out.transfer(Buffer.from(STARTUP[i++](this.sequence)), (error) => {
         if (error) {
           this.shaking = false;
+          this.event(`Start-up failed: ${error.message ?? error}`);
           return this.close(error);
         }
         setTimeout(next, 20);
@@ -108,15 +144,18 @@ class Receiver {
     };
     next();
   }
-  /** Stops polling and releases the receiver for other apps. */
-  close(error) {
-    if (this.closed) return;
+  /** Stops polling and releases the receiver for other apps; `then` runs
+   * once USB has let go. */
+  close(error, then) {
+    if (this.closed) return void then?.();
     this.closed = true;
+    this.event(error ? `Closed: ${error.message ?? error}` : "Released");
     const done = () => {
       try {
         this.device.close();
       } catch {}
       this.onClose?.(error);
+      then?.();
     };
     const release = () => {
       if (!this.iface) return done();

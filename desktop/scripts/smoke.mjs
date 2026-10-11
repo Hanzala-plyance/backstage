@@ -511,10 +511,18 @@ try {
   await page.getByRole("button", { name: /Keyboard Always ready/ }).click();
   const riff = page.getByLabel("Riffmaster guitars");
   await expect(riff).toContainText("2 receivers plugged in");
-  await riff.getByRole("button", { name: "Connect Riffmasters" }).click();
+  // Controller tools: a pull-out drawer that connects every receiver.
+  await riff.getByRole("button", { name: "Controller tools" }).click();
+  const tools = page.getByRole("dialog", { name: "Controller tools" });
+  await tools.getByRole("button", { name: "Connect all receivers" }).click();
   await expect(riff.locator(".riff-row i.on")).toHaveCount(2, {
     timeout: 10000,
   });
+  await expect(tools.locator(".tools-light.on")).toHaveCount(3); // + test pad
+  await expect(tools.getByRole("region", { name: "Staff tools" })).toHaveCount(
+    0,
+  );
+  await tools.getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".toast")).toContainText(
     "PDP Riffmaster 1 is now Player 1",
   );
@@ -601,8 +609,57 @@ try {
   const leave = page.getByRole("button", { name: "← Library" });
   if (await leave.count()) await leave.click();
   await page.getByRole("button", { name: "Controllers", exact: true }).click();
-  await riff.getByRole("button", { name: "Disconnect Riffmasters" }).click();
-  await expect(riff.locator(".riff-row")).toHaveCount(0);
+  // Release one receiver: only its controller goes away, and it says why.
+  await riff.getByRole("button", { name: "Controller tools" }).click();
+  const port = (n, key) =>
+    tools.getByRole("article", {
+      name: `PDP Riffmaster ${n} (Xbox) on ${key}`,
+    });
+  await port(2, "USB 9:2").getByRole("button", { name: "Release" }).click();
+  await expect(port(2, "USB 9:2")).toContainText("Released.");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        [16, 17].map((i) => navigator.getGamepads()[i]?.connected),
+      ),
+    )
+    .toEqual([true, false]);
+  // Reconnect resends the start-up; the guitar comes back.
+  await port(1, "USB 9:1").getByRole("button", { name: "Reconnect" }).click();
+  await expect(port(1, "USB 9:1")).toContainText("Guitar connected.", {
+    timeout: 10000,
+  });
+  await port(2, "USB 9:2").getByRole("button", { name: "Connect" }).click();
+  await expect(port(2, "USB 9:2")).toContainText("Guitar connected.", {
+    timeout: 10000,
+  });
+  // The debug report has every port and its events.
+  await tools.getByRole("button", { name: "Copy debug report" }).click();
+  const report = tools.getByRole("textbox", { name: "Debug report" });
+  await expect(report).toContainText('"key": "usb:9:2"');
+  await expect(report).toContainText("Reconnecting");
+  await expect(tools.getByRole("status")).toContainText("Debug report copied");
+  expect(await app.evaluate(() => globalThis.backstageCopied)).toContain(
+    '"key": "usb:9:1"',
+  );
+  // Staff tools only after a deliberate unlock; tests never stop processes.
+  await tools.getByRole("heading", { name: "Controller tools" }).click({
+    modifiers: ["Shift"],
+  });
+  const staff = tools.getByRole("region", { name: "Staff tools" });
+  await expect(staff).toContainText("No MacRiff readers are running.");
+  await page.screenshot({
+    path: "/tmp/backstage-desktop-controller-tools.png",
+  });
+  // Release both so the fake guitars stay out of the rest of the run.
+  for (const [n, key] of [
+    [1, "USB 9:1"],
+    [2, "USB 9:2"],
+  ])
+    await port(n, key).getByRole("button", { name: "Release" }).click();
+  await expect(riff.locator(".riff-row i.on")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(tools).toHaveCount(0);
   // Soundcheck: demo-first lessons in their own section. Lessons follow the
   // Controllers selection, so play this one on the keyboard.
   await page.getByRole("button", { name: "Controllers", exact: true }).click();
@@ -894,7 +951,7 @@ try {
   }
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel, Soundcheck lessons (demo, graded turn, progress), player names and premade/camera avatars on stage, Riffmaster receivers as separate controllers.",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel, Soundcheck lessons (demo, graded turn, progress), player names and premade/camera avatars on stage, Riffmaster receivers as separate controllers, Controller tools (release, reconnect, debug report, hidden staff tools).",
   );
 } catch (error) {
   if (page && !page.isClosed()) {

@@ -158,3 +158,23 @@ export const toggleStrum = (
   current: boolean,
 ): PlayerSetup[] =>
   players.map((p, i) => (i === index ? { ...p, strum: !current } : p));
+/** A pad that comes back at another index (unplugged and replugged, or after
+ * sleep) keeps its player: when a player's pad is gone and exactly one
+ * unassigned pad with the same id is connected, the player moves to it. */
+export function rematch(
+  players: readonly PlayerSetup[],
+  pads: readonly { index: number; id: string }[],
+): PlayerSetup[] {
+  const present = new Set(pads.map((p) => `pad:${p.index}:${p.id}`));
+  const taken = new Set(players.map((p) => p.device));
+  return players.map((p) => {
+    if (!isPad(p.device) || present.has(p.device)) return p;
+    const id = p.device.split(":").slice(2).join(":");
+    const matches = pads
+      .map((pad) => `pad:${pad.index}:${pad.id}`)
+      .filter((d) => d.split(":").slice(2).join(":") === id && !taken.has(d));
+    if (matches.length !== 1) return p;
+    taken.add(matches[0]);
+    return { ...p, device: matches[0] };
+  });
+}

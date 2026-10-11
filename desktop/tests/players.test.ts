@@ -5,6 +5,7 @@ import {
   cycleSetting,
   joinPlayer,
   leavePlayer,
+  rematch,
   toggleStrum,
   cycleDevice,
   cycleLevel,
@@ -117,4 +118,37 @@ test("each player can turn strumming on or off", () => {
   assert.equal(off[1].strum, false);
   assert.equal(off[0].strum, undefined, "others keep following Settings");
   assert.equal(toggleStrum(off, 1, false)[1].strum, true);
+});
+test("a pad back at a new index keeps its player", () => {
+  const players = [
+    { device: "keyboard", part: "Guitar", level: "Easy" },
+    { device: "pad:0:Xbox Pad", part: "Guitar", level: "Hard" },
+  ] as const;
+  // Same id at index 2: Player 2 follows it, keeping their settings.
+  const moved = rematch([...players], [{ index: 2, id: "Xbox Pad" }]);
+  assert.equal(moved[1].device, "pad:2:Xbox Pad");
+  assert.equal(moved[1].level, "Hard");
+  assert.equal(moved[0].device, "keyboard");
+  // Still there: nothing changes.
+  assert.deepEqual(rematch([...players], [{ index: 0, id: "Xbox Pad" }]), [
+    ...players,
+  ]);
+  // Two identical pads: ambiguous, so the player waits for their own.
+  const twins = rematch(
+    [...players],
+    [
+      { index: 2, id: "Xbox Pad" },
+      { index: 3, id: "Xbox Pad" },
+    ],
+  );
+  assert.equal(twins[1].device, "pad:0:Xbox Pad");
+  // A pad another player holds is never taken.
+  const held = rematch(
+    [
+      { device: "pad:2:Xbox Pad", part: "Guitar", level: "Easy" },
+      { device: "pad:0:Xbox Pad", part: "Bass", level: "Easy" },
+    ],
+    [{ index: 2, id: "Xbox Pad" }],
+  );
+  assert.equal(held[1].device, "pad:0:Xbox Pad");
 });
