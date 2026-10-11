@@ -339,17 +339,20 @@ class Riffmasters {
     this.released = new Set();
     this.nextIndex = 16;
     this.auto = false;
+    this.rescan();
     this.admin = admin ?? new AdminBridge(onUpdate);
     this.admin.usb = usb;
     const hotplug = usb?.usb;
     hotplug?.on?.("attach", (d) => {
       if (!isReceiver(d)) return;
+      this.rescan();
       this.log(this.slot(receiverKey(d)), "Receiver plugged in");
       if (this.auto) setTimeout(() => this.connectAll(), 600);
       else this.push();
     });
     hotplug?.on?.("detach", (d) => {
       if (!isReceiver(d)) return;
+      this.rescan();
       const s = this.slots.get(receiverKey(d));
       if (!s) return;
       this.log(s, "Receiver unplugged");
@@ -380,9 +383,15 @@ class Riffmasters {
     slot.events.push({ at: Date.now(), text });
     if (slot.events.length > EVENTS) slot.events.shift();
   }
+  /** Lists plugged-in receivers. Enumerating USB is slow, so this runs on
+   * plug, unplug, connect and status requests, never per guitar report. */
+  rescan() {
+    this.plugged = receivers(this.usb);
+    return this.plugged;
+  }
   /** Ports with a receiver plugged in now (and ports still open). */
   present() {
-    const plugged = new Set(receivers(this.usb));
+    const plugged = new Set(this.plugged);
     // Every plugged-in receiver is listed, connected or not.
     plugged.forEach((key) => this.slot(key));
     return [...this.slots.values()]
@@ -417,9 +426,10 @@ class Riffmasters {
   }
   status() {
     if (this.admin.dir) return { ...this.admin.status(), mode: "admin" };
+    this.rescan();
     const connected = this.snapshot();
     return {
-      receivers: receivers(this.usb),
+      receivers: this.plugged,
       connected,
       active: this.auto,
       mode: "direct",
@@ -483,7 +493,7 @@ class Riffmasters {
   async connectAll() {
     if (!this.usb || this.admin.dir) return this.status();
     this.auto = true;
-    for (const key of receivers(this.usb))
+    for (const key of this.rescan())
       if (!this.released.has(key)) await this.open(key);
     this.push();
     return this.status();

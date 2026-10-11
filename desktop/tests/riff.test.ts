@@ -322,3 +322,17 @@ test("reconnect reopens one port and resends the Xbox start-up", async () => {
   );
   await riff.disconnect();
 });
+test("guitar input never triggers a USB scan", async () => {
+  const usb = fakeUsb();
+  const list = usb.getDeviceList;
+  let scans = 0;
+  usb.getDeviceList = () => (scans++, list());
+  let reports = 0;
+  const riff = new Riffmasters(() => reports++, { usb });
+  await riff.connectAll();
+  const before = scans;
+  const seen = reports;
+  assert.ok(await wait(() => reports >= seen + 6), "input kept arriving");
+  assert.equal(scans, before, "no enumeration per report");
+  await riff.disconnect();
+});
