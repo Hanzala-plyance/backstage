@@ -974,6 +974,14 @@ try {
             visible: document.visibilityState,
             focused: document.hasFocus(),
             dialogs: document.querySelectorAll("[role=dialog]").length,
+            players: [...document.querySelectorAll(".player-slot")].map(
+              (b) => b.getAttribute("aria-label") ?? b.textContent,
+            ),
+            mappings: Object.fromEntries(
+              Object.keys(localStorage)
+                .filter((k) => k.startsWith("backstage:pad:"))
+                .map((k) => [k, localStorage.getItem(k)]),
+            ),
           }),
         )
         .catch((e) => String(e)),
