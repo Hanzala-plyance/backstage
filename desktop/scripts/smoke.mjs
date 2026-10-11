@@ -7,6 +7,9 @@ import midiPackage from "@tonejs/midi";
 import { execFileSync } from "node:child_process";
 const temp = await mkdtemp(path.join(os.tmpdir(), "backstage-smoke-"));
 let app, page;
+// Page and console errors, printed when the smoke fails.
+const errors = [];
+const consoleErrors = [];
 try {
   await mkdir(path.join(temp, "songs"));
   const fixtureFolder = path.join(temp, "songs", "fixture");
@@ -99,10 +102,7 @@ try {
     },
   });
   page = await app.firstWindow();
-  const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  // Console errors are only printed when the smoke fails.
-  const consoleErrors = [];
   page.on(
     "console",
     (m) => m.type() === "error" && consoleErrors.push(m.text()),
@@ -809,9 +809,12 @@ try {
   await page.getByRole("button", { name: "← Library" }).click();
   // Multiplayer Soundcheck: the band maps, checks controllers and takes a
   // lesson together, each player on their own instrument. Player 2 left for
-  // the solo song, so Start joins them again, then opens their pop-up.
-  const p2slot = page.getByRole("button", { name: /^Player 2:/ });
-  await hold(9, async () => (await p2slot.count()) === 1);
+  // the solo song; Start joins them again and opens their pop-up. Menus
+  // ignore a button already held when they start, so wait until the library
+  // is back before pressing.
+  await expect(page.getByText("Press START to join").first()).toBeVisible();
+  await frames();
+  await frames();
   await hold(9, () => setup.isVisible());
   await hold(13, async () => (await row()).includes("Instrument"));
   for (const part of ["Bass", "Rhythm", "Drums"])
