@@ -802,7 +802,10 @@ try {
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "← Library" }).click();
   // Multiplayer Soundcheck: the band maps, checks controllers and takes a
-  // lesson together, each player on their own instrument.
+  // lesson together, each player on their own instrument. Player 2 left for
+  // the solo song, so Start joins them again, then opens their pop-up.
+  const p2slot = page.getByRole("button", { name: /^Player 2:/ });
+  await hold(9, async () => (await p2slot.count()) === 1);
   await hold(9, () => setup.isVisible());
   await hold(13, async () => (await row()).includes("Instrument"));
   for (const part of ["Bass", "Rhythm", "Drums"])
