@@ -888,6 +888,11 @@ try {
   await page.getByRole("button", { name: "Soundcheck", exact: true }).click();
   await page.getByRole("button", { name: /Controller check/ }).click();
   await expect(page.locator(".check-panel")).toHaveCount(2);
+  // The check ignores buttons already held when it first reads the pads; on
+  // slow (software-rendered) frames, let that first reading happen before
+  // Player 2 presses anything.
+  await frames();
+  await frames();
   for (const key of ["a", "s", "d", "f", "g", "Space", "Shift", "w"])
     await page.keyboard.press(key);
   await expect(page.locator(".check-panel").first()).toHaveClass(/passed/);
