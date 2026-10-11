@@ -28,6 +28,17 @@ contextBridge.exposeInMainWorld(
       "band",
       "saveSlot",
       "cameraAccess",
+      "riffStatus",
+      "riffConnect",
+      "riffDisconnect",
     ].map((name) => [name, invoke(name)]),
   ),
 );
+// Riffmaster input arrives as events, not replies.
+contextBridge.exposeInMainWorld("backstageRiff", {
+  subscribe(listener) {
+    const handler = (_event, pads) => listener(pads);
+    ipcRenderer.on("backstage:riff", handler);
+    return () => ipcRenderer.removeListener("backstage:riff", handler);
+  },
+});

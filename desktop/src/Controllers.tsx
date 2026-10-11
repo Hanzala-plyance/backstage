@@ -1,3 +1,4 @@
+import { onRiff, riffName, type RiffPad, type RiffStatus } from "./core/riff";
 import { useEffect, useRef, useState } from "react";
 import type { Action, Profile } from "./types";
 import {
@@ -230,6 +231,8 @@ export default function Controllers({
               </div>
             </button>
           ))}
+          <div className="divider" />
+          <RiffPanel />
           {error && <p className="error-text">{error}</p>}
         </section>
         <section className="panel mapping-panel">
@@ -371,8 +374,107 @@ export default function Controllers({
       <p className="footnote">
         Xbox, PlayStation, Switch-style and generic controllers can be mapped
         when Chromium exposes their inputs. Detection does not certify a model.
-        The existing Xbox Riffmaster USB bridge is not part of this build.
+        PDP Riffmaster guitars for Xbox connect through the MacRiff reader
+        above; tested with the receivers on this computer, not every model.
       </p>
     </>
+  );
+}
+
+/** PDP Riffmaster for Xbox: macOS has no driver for its receiver, so the
+ * MacRiff reader claims it (one administrator prompt) and Backstage shows each
+ * receiver as its own controller. */
+function RiffPanel() {
+  const [status, setStatus] = useState<RiffStatus | null>(null),
+    [pads, setPads] = useState<RiffPad[]>([]),
+    [working, setWorking] = useState(false),
+    [problem, setProblem] = useState("");
+  const refresh = () =>
+    window.backstage
+      .riffStatus()
+      .then(setStatus)
+      .catch(() => {});
+  useEffect(() => {
+    void refresh();
+    const timer = setInterval(refresh, 3000);
+    const stop = onRiff(setPads);
+    return () => {
+      clearInterval(timer);
+      stop();
+    };
+  }, []);
+  const run = async (action: () => Promise<RiffStatus>) => {
+    setWorking(true);
+    setProblem("");
+    try {
+      setStatus(await action());
+    } catch (e) {
+      setProblem(
+        String((e as Error).message || e).replace(
+          /^Error invoking remote method '[^']+': (Error: )?/,
+          "",
+        ),
+      );
+    } finally {
+      setWorking(false);
+    }
+  };
+  const found = status?.receivers.length ?? 0;
+  return (
+    <div className="riff-panel" aria-label="Riffmaster guitars">
+      <strong>PDP Riffmaster (Xbox)</strong>
+      <small>
+        {found
+          ? `${found} receiver${found === 1 ? "" : "s"} plugged in`
+          : "No receivers found. Plug in the guitar’s USB receiver."}
+      </small>
+      {status?.active ? (
+        <>
+          {pads.map((p, i) => (
+            <div key={p.key} className="riff-row">
+              <i className={p.connected ? (p.input ? "on" : "wait") : "off"} />
+              <span>
+                {riffName(i + 1)}
+                <small>
+                  {!p.connected
+                    ? "Reconnecting… keep the receiver in the same USB port"
+                    : p.input
+                      ? "Connected · choose it above to map or test"
+                      : "Receiver ready · turn on the guitar and press a fret"}
+                </small>
+              </span>
+            </div>
+          ))}
+          <button
+            className="secondary wide"
+            disabled={working}
+            onClick={() => run(() => window.backstage.riffDisconnect())}
+          >
+            Disconnect Riffmasters
+          </button>
+        </>
+      ) : (
+        <>
+          {status?.busy && (
+            <p className="error-text">
+              MacRiff is using the receivers. Stop its session or quit MacRiff
+              Setup first.
+            </p>
+          )}
+          <button
+            className="secondary wide"
+            disabled={working || !found}
+            onClick={() => run(() => window.backstage.riffConnect())}
+          >
+            {working ? "Waiting for approval…" : "Connect Riffmasters"}
+          </button>
+          <small>
+            macOS asks for your administrator password once to open the USB
+            receivers. Backstage releases them when you disconnect or quit.
+          </small>
+        </>
+      )}
+      {problem && <p className="error-text">{problem}</p>}
+    </div>
   );
 }

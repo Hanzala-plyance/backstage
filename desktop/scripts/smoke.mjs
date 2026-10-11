@@ -89,6 +89,9 @@ try {
     env: {
       ...process.env,
       BACKSTAGE_TEST_DATA: path.join(temp, "data"),
+      // Two fake Riffmaster receivers: same supervisor and socket protocol,
+      // no USB and no administrator prompt.
+      BACKSTAGE_RIFF_FAKE: "1",
       BACKSTAGE_SONGS_DIR: path.join(temp, "songs"),
       BACKSTAGE_PYTHON: process.env.BACKSTAGE_TEST_SERVICE
         ? process.env.BACKSTAGE_PYTHON
@@ -268,10 +271,6 @@ try {
       })),
       axes: [0, 0],
     };
-    Object.defineProperty(navigator, "getGamepads", {
-      configurable: true,
-      value: () => (window.__pad ? [window.__pad] : []),
-    });
   });
   await page.getByRole("button", { name: /Test generic gamepad/ }).click();
   await page.locator(".mapping-row").first().getByRole("button").click();
@@ -496,6 +495,30 @@ try {
       "PASS: packaged app starts optional service and renders live song search results.",
     );
   }
+  // Riffmaster guitars through the MacRiff reader: each receiver is its own
+  // controller (fake receivers here).
+  await page.getByRole("button", { name: "Controllers", exact: true }).click();
+  const riff = page.getByLabel("Riffmaster guitars");
+  await expect(riff).toContainText("2 receivers plugged in");
+  await riff.getByRole("button", { name: "Connect Riffmasters" }).click();
+  await expect(riff.locator(".riff-row i.on")).toHaveCount(2, {
+    timeout: 10000,
+  });
+  await page.getByRole("button", { name: /PDP Riffmaster 1 \(Xbox\)/ }).click();
+  // Receiver 1 keeps pressing orange: live input shows button 4.
+  await expect(page.locator(".button-meter span").nth(4)).toHaveClass(
+    /pressed/,
+    { timeout: 5000 },
+  );
+  await expect(
+    page.getByRole("button", { name: /PDP Riffmaster 2 \(Xbox\)/ }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "/tmp/backstage-desktop-riffmaster.png",
+    fullPage: true,
+  });
+  await riff.getByRole("button", { name: "Disconnect Riffmasters" }).click();
+  await expect(riff.locator(".riff-row")).toHaveCount(0);
   // Soundcheck: demo-first lessons in their own section. Lessons follow the
   // Controllers selection, so play this one on the keyboard.
   await page.getByRole("button", { name: "Controllers", exact: true }).click();
@@ -644,7 +667,7 @@ try {
   await page.getByRole("button", { name: "← Library" }).click();
   expect(errors).toEqual([]);
   console.log(
-    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel, Soundcheck lessons (demo, graded turn, progress), player names and premade/camera avatars on stage.",
+    "PASS: Electron isolation, opening flow, offline library, real practice audio, keyboard score, pause timing, custom mapping, menu navigation, device disconnect pause, two-player input routing, song preview, confirmed song removal, readable folder renaming, album covers, saved best scores with stars, the song details panel, Soundcheck lessons (demo, graded turn, progress), player names and premade/camera avatars on stage, Riffmaster receivers as separate controllers.",
   );
 } catch (error) {
   if (page && !page.isClosed()) {

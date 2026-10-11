@@ -1,3 +1,4 @@
+import type { RiffStatus } from "./core/riff";
 import type { Slot } from "./core/avatars";
 export type Part = "Guitar" | "Bass" | "Rhythm" | "Drums";
 export type Level = "Easy" | "Medium" | "Hard" | "Expert";
@@ -130,6 +131,9 @@ export interface Bridge {
   band(): Promise<Slot[]>;
   saveSlot(slot: number, value: Slot): Promise<Slot[]>;
   cameraAccess(): Promise<boolean>;
+  riffStatus(): Promise<RiffStatus>;
+  riffConnect(): Promise<RiffStatus>;
+  riffDisconnect(): Promise<RiffStatus>;
 }
 declare global {
   interface Window {
