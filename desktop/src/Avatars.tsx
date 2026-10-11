@@ -1,7 +1,17 @@
-import { useEffect, useRef, useState } from "react";
-import { Portrait, StagePreview } from "./AvatarView";
 import {
-  cleanName,
+  createRef,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+} from "react";
+import { Portrait } from "./AvatarView";
+import NamePad from "./NamePad";
+import type { MenuButton } from "./core/menu";
+import { isPad, type PlayerSetup } from "./core/players";
+import {
+  defaultLook,
   drumKits,
   finishes,
   gearOf,
@@ -10,9 +20,7 @@ import {
   handZones,
   motion,
   presets,
-  slotName,
   stylize,
-  type Instrument,
   type Look,
   type Slot,
 } from "./core/avatars";
@@ -231,222 +239,375 @@ function Camera({ onUse }: { onUse: (image: string) => void }) {
     </div>
   );
 }
-/** Avatars: a name and look for each of the four player slots. */
+type Tile = { kind: "preset"; id: string; name: string } | { kind: "camera" };
+const CARD_ROWS = ["name", "guitar", "kit", "side", "color", "avatar"] as const;
+type CardRow = (typeof CARD_ROWS)[number];
+const TILES: Tile[] = [
+  ...presets.map((p) => ({ kind: "preset" as const, id: p.id, name: p.name })),
+  { kind: "camera" },
+];
+const cycle = <T,>(list: readonly T[], value: T, step = 1) =>
+  list[(list.indexOf(value) + step + list.length) % list.length];
+/** Smash-style character select: every joined player moves their own token
+ * over the avatars with their own controller and picks at the same time.
+ * Cards along the bottom hold each player's name, gear and stage side. */
 export default function Avatars({
   band,
   onSave,
+  players,
+  joinable,
+  input,
 }: {
   band: Slot[];
   onSave: (slot: number, value: Slot) => void;
+  players: PlayerSetup[];
+  joinable: boolean;
+  /** App routes each joined player's controller presses here; returns
+   * whether the press was used. */
+  input: MutableRefObject<((slot: number, b: MenuButton) => boolean) | null>;
 }) {
-  const [slot, setSlot] = useState(0);
-  const [instrument, setInstrument] = useState<Instrument>("guitar");
-  const current = band[slot];
-  const [mode, setMode] = useState<"preset" | "camera">(
-    current?.look.kind === "photo" ? "camera" : "preset",
-  );
-  useEffect(() => {
-    setMode(band[slot]?.look.kind === "photo" ? "camera" : "preset");
-  }, [slot]);
-  if (!current) return null;
-  const save = (value: Partial<Slot>) => onSave(slot, { ...current, ...value });
-  const gear = gearOf(slot, current);
-  const setGear = (value: Partial<Gear>) =>
-    save({ gear: { ...gear, ...value } });
+  const tileOf = (look: Look) =>
+    Math.max(
+      0,
+      look.kind === "photo"
+        ? TILES.length - 1
+        : TILES.findIndex((t) => t.kind === "preset" && t.id === look.id),
+    );
+  const [cursors, setCursors] = useState(() => band.map((s) => tileOf(s.look)));
+  const [naming, setNaming] = useState<boolean[]>([false, false, false, false]);
+  const [camera, setCamera] = useState<number | null>(null);
+  // Each player's controller is either on the avatar grid or on a row of
+  // their own card.
+  const [zones, setZones] = useState<("grid" | number)[]>([
+    "grid",
+    "grid",
+    "grid",
+    "grid",
+  ]);
+  const setZone = (i: number, zone: "grid" | number) =>
+    setZones((z) => z.map((v, k) => (k === i ? zone : v)));
+  const [mouse, setMouse] = useState(0);
+  const nameInputs = useMemo(
+    () => [0, 1, 2, 3].map(() => createRef<(b: MenuButton) => void>()),
+    [],
+  ) as MutableRefObject<((b: MenuButton) => void) | null>[];
+  const slot = (i: number): Slot =>
+    band[i] ?? { name: "", look: defaultLook(i) };
+  const save = (i: number, value: Partial<Slot>) =>
+    onSave(i, { ...slot(i), ...value });
+  const setGear = (i: number, value: Partial<Gear>) =>
+    save(i, { gear: { ...gearOf(i, slot(i)), ...value } });
+  const nameMode = (i: number, on: boolean) =>
+    setNaming((n) => n.map((v, k) => (k === i ? on : v)));
+  const change = (i: number, row: CardRow, step: 1 | -1) => {
+    const g = gearOf(i, slot(i));
+    if (row === "name") nameMode(i, true);
+    else if (row === "guitar")
+      setGear(i, {
+        guitar: cycle(
+          guitarStyles.map((x) => x.id),
+          g.guitar,
+          step,
+        ),
+      });
+    else if (row === "kit")
+      setGear(i, {
+        kit: cycle(
+          drumKits.map((x) => x.id),
+          g.kit,
+          step,
+        ),
+      });
+    else if (row === "side")
+      setGear(i, { side: g.side === "left" ? "right" : "left" });
+    else if (row === "color")
+      setGear(i, { finish: cycle(finishes, g.finish, step) });
+    else setZone(i, "grid");
+  };
+  const pick = (i: number, tile: number) => {
+    const t = TILES[tile];
+    // The player's token follows their pick (mouse picks too).
+    setCursors((c) => c.map((v, k) => (k === i ? tile : v)));
+    if (t.kind === "camera") setCamera(i);
+    else save(i, { look: { kind: "preset", id: t.id } });
+  };
+  input.current = (i, b) => {
+    if (naming[i]) {
+      nameInputs[i].current?.(b);
+      return true;
+    }
+    if (camera === i) {
+      if (b === "green")
+        document
+          .querySelector<HTMLElement>(".camera-overlay [data-menu-default]")
+          ?.click();
+      else if (b === "red") setCamera(null);
+      return b !== "start";
+    }
+    const move = (step: number) =>
+      setCursors((c) =>
+        c.map((v, k) =>
+          k === i ? (v + step + TILES.length) % TILES.length : v,
+        ),
+      );
+    const zone = zones[i];
+    if (zone !== "grid") {
+      // On the card: strum moves between rows, green/yellow change the row.
+      const rows = CARD_ROWS.length;
+      if (b === "up") setZone(i, (zone + rows - 1) % rows);
+      else if (b === "down") setZone(i, (zone + 1) % rows);
+      else if (b === "green") change(i, CARD_ROWS[zone], 1);
+      else if (b === "yellow") change(i, CARD_ROWS[zone], -1);
+      else if (b === "red") setZone(i, "grid");
+      else if (b === "orange") nameMode(i, true);
+      else return false;
+      return true;
+    }
+    if (b === "up") move(-1);
+    else if (b === "down") move(1);
+    else if (b === "green") {
+      pick(i, cursors[i]);
+      // Like Smash: after picking, the cursor drops onto your card.
+      if (TILES[cursors[i]].kind !== "camera") setZone(i, 1);
+    } else if (b === "yellow")
+      setGear(i, { finish: cycle(finishes, gearOf(i, slot(i)).finish) });
+    else if (b === "blue")
+      setGear(i, {
+        guitar: cycle(
+          guitarStyles.map((g) => g.id),
+          gearOf(i, slot(i)).guitar,
+        ),
+      });
+    else if (b === "orange") nameMode(i, true);
+    else return false; // red goes back, Start opens the player's pop-up
+    return true;
+  };
   return (
-    <div className="avatars-page">
+    <div className="avatars-page select-screen">
       <div className="page-heading">
         <div>
           <span className="eyebrow">YOUR BAND</span>
           <h1>Who’s on stage?</h1>
           <p>
-            Pick a name and an avatar for each player. Avatars play your
-            instrument and react to every note you hit or miss.
+            Every player picks at once with their own controller: strum to move
+            your token, green to pick, then set up your card row by row. With a
+            mouse, choose a card, then an avatar.
           </p>
         </div>
       </div>
-      <div className="slot-tabs" role="tablist" aria-label="Players">
-        {band.map((s, i) => (
-          <button
-            key={i}
-            role="tab"
-            aria-selected={i === slot}
-            className={"slot-tab" + (i === slot ? " active" : "")}
-            data-menu-default={i === slot ? "" : undefined}
-            onClick={() => setSlot(i)}
-          >
-            <Portrait look={s.look} className="avatar-mini" />
-            <span>
-              <small>PLAYER {i + 1}</small>
-              <strong>{slotName(i, s)}</strong>
-            </span>
-          </button>
-        ))}
-      </div>
-      <div className="avatar-editor">
-        <section className="avatar-stage">
-          <StagePreview
-            look={current.look}
-            instrument={instrument}
-            gear={gear}
-          />
-          <div className="avatar-stage-name">{slotName(slot, current)}</div>
-          <div
-            className="segmented"
-            role="group"
-            aria-label="Preview instrument"
-          >
-            {(["guitar", "bass", "drums"] as Instrument[]).map((i) => (
-              <button
-                key={i}
-                aria-pressed={i === instrument}
-                className={i === instrument ? "selected" : ""}
-                onClick={() => setInstrument(i)}
-              >
-                {i}
-              </button>
-            ))}
-          </div>
-        </section>
-        <section className="avatar-options">
-          <label className="name-field">
-            <span>Player name</span>
-            <input
-              aria-label="Player name"
-              value={current.name}
-              placeholder={`P${slot + 1}`}
-              maxLength={8}
-              spellCheck={false}
-              onChange={(e) => save({ name: cleanName(e.target.value) })}
-            />
-            <small>
-              Up to 8 letters or numbers. Shown instead of P{slot + 1}.
-            </small>
-          </label>
-          <div className="segmented wide" role="group" aria-label="Avatar type">
+      <div className="select-grid" role="group" aria-label="Avatars">
+        {TILES.map((t, k) => {
+          const here = players.map((_, i) => i).filter((i) => cursors[i] === k);
+          const chosenBy = players
+            .map((_, i) => i)
+            .filter((i) => {
+              const look = slot(i).look;
+              return t.kind === "camera"
+                ? look.kind === "photo"
+                : look.kind === "preset" && look.id === t.id;
+            });
+          return (
             <button
-              aria-pressed={mode === "preset"}
-              className={mode === "preset" ? "selected" : ""}
-              onClick={() => setMode("preset")}
+              key={t.kind === "camera" ? "camera" : t.id}
+              className={"select-tile" + (chosenBy.length ? " chosen" : "")}
+              aria-label={t.kind === "camera" ? "Camera avatar" : t.name}
+              onClick={() => pick(mouse, k)}
             >
-              Choose an avatar
-            </button>
-            <button
-              aria-pressed={mode === "camera"}
-              className={mode === "camera" ? "selected" : ""}
-              onClick={() => setMode("camera")}
-            >
-              Use my camera
-            </button>
-          </div>
-          {mode === "preset" ? (
-            <div
-              className="preset-grid"
-              role="group"
-              aria-label="Premade avatars"
-            >
-              {presets.map((p) => {
-                const chosen =
-                  current.look.kind === "preset" && current.look.id === p.id;
-                return (
-                  <button
-                    key={p.id}
-                    aria-pressed={chosen}
-                    className={"preset" + (chosen ? " chosen" : "")}
-                    onClick={() => save({ look: { kind: "preset", id: p.id } })}
-                  >
-                    <Portrait
-                      look={{ kind: "preset", id: p.id }}
-                      className="avatar-mini"
-                    />
-                    <span>{p.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <>
-              {current.look.kind === "photo" && (
-                <p className="camera-current">
-                  This player uses a camera avatar. Retake it any time, or
-                  choose a premade avatar instead.
-                </p>
-              )}
-              <Camera
-                onUse={(image) => save({ look: { kind: "photo", image } })}
-              />
-            </>
-          )}
-          <section className="gear" aria-label="Gear">
-            <h3>Gear</h3>
-            <div className="gear-row" role="group" aria-label="Guitar style">
-              <span>Guitar</span>
-              {guitarStyles.map((g) => (
-                <button
-                  key={g.id}
-                  title={g.hint}
-                  aria-pressed={gear.guitar === g.id}
-                  className={"chip" + (gear.guitar === g.id ? " chosen" : "")}
-                  onClick={() => {
-                    setGear({ guitar: g.id });
-                    if (instrument === "drums") setInstrument("guitar");
-                  }}
-                >
-                  {g.name}
-                </button>
-              ))}
-            </div>
-            <div className="gear-row" role="group" aria-label="Guitar finish">
-              <span>Finish</span>
-              {finishes.map((f, i) => (
-                <button
-                  key={f}
-                  aria-label={FINISH_NAMES[i]}
-                  aria-pressed={gear.finish === f}
-                  className={"swatch" + (gear.finish === f ? " chosen" : "")}
-                  style={{ background: f }}
-                  onClick={() => {
-                    setGear({ finish: f });
-                    if (instrument === "drums") setInstrument("guitar");
-                  }}
+              {t.kind === "camera" ? (
+                <span className="camera-tile">📷</span>
+              ) : (
+                <Portrait
+                  look={{ kind: "preset", id: t.id }}
+                  className="tile-portrait"
                 />
-              ))}
-            </div>
-            <div className="gear-row" role="group" aria-label="Drum kit">
-              <span>Drums</span>
-              {drumKits.map((k) => (
-                <button
-                  key={k.id}
-                  title={k.hint}
-                  aria-pressed={gear.kit === k.id}
-                  className={"chip" + (gear.kit === k.id ? " chosen" : "")}
-                  onClick={() => {
-                    setGear({ kit: k.id });
-                    setInstrument("drums");
-                  }}
-                >
-                  {k.name}
-                </button>
-              ))}
-            </div>
-            <div className="gear-row" role="group" aria-label="Stage side">
-              <span>Stands</span>
-              {(["left", "right"] as const).map((side) => (
-                <button
-                  key={side}
-                  aria-pressed={gear.side === side}
-                  className={"chip" + (gear.side === side ? " chosen" : "")}
-                  onClick={() => setGear({ side })}
-                >
-                  {side === "left"
-                    ? "Left of the highway"
-                    : "Right of the highway"}
-                </button>
-              ))}
-            </div>
-          </section>
-        </section>
+              )}
+              <span className="tile-name">
+                {t.kind === "camera" ? "Camera" : t.name}
+              </span>
+              <span className="tokens">
+                {here.map((i) => (
+                  <b key={i} className={`token p${i + 1}`}>
+                    P{i + 1}
+                  </b>
+                ))}
+              </span>
+            </button>
+          );
+        })}
       </div>
+      <div className="select-cards">
+        {[0, 1, 2, 3].map((i) => {
+          if (!players[i])
+            return (
+              <div key={i} className={`select-card empty p${i + 1}`}>
+                <b>P{i + 1}</b>
+                <small>
+                  {i === players.length && joinable
+                    ? "Press START to join"
+                    : "Open"}
+                </small>
+              </div>
+            );
+          const s = slot(i),
+            gear = gearOf(i, s),
+            style = guitarStyles.find((g) => g.id === gear.guitar)!,
+            kit = drumKits.find((k) => k.id === gear.kit)!;
+          return (
+            <div
+              key={i}
+              className={
+                `select-card p${i + 1}` +
+                (mouse === i ? " mouse" : "") +
+                (naming[i] ? " naming" : "")
+              }
+              aria-label={`Player ${i + 1} card`}
+              onClick={() => setMouse(i)}
+            >
+              <Portrait look={s.look} gear={gear} className="card-portrait" />
+              {naming[i] ? (
+                <NamePad
+                  label={`Player ${i + 1}`}
+                  value={s.name}
+                  onChange={(name) => save(i, { name })}
+                  onDone={() => nameMode(i, false)}
+                  input={nameInputs[i]}
+                />
+              ) : (
+                <div className="card-rows">
+                  {CARD_ROWS.map((r, k) => {
+                    const here = zones[i] === k;
+                    const value =
+                      r === "name"
+                        ? s.name || `P${i + 1}`
+                        : r === "guitar"
+                          ? style.name
+                          : r === "kit"
+                            ? kit.name
+                            : r === "side"
+                              ? gear.side === "left"
+                                ? "Left"
+                                : "Right"
+                              : "";
+                    const label = {
+                      name: "Name",
+                      guitar: "Guitar",
+                      kit: "Drum kit",
+                      side: "Stage",
+                      color: "Color",
+                      avatar: "Avatar",
+                    }[r];
+                    const aria = {
+                      name: "name",
+                      guitar: "guitar style",
+                      kit: "drum kit",
+                      side: "stage side",
+                      color: "finish",
+                      avatar: "avatar",
+                    }[r];
+                    return (
+                      <div
+                        key={r}
+                        className={`card-row ${r}` + (here ? " current" : "")}
+                      >
+                        <span className="row-label">{label}</span>
+                        {r === "color" ? (
+                          <div
+                            className="card-colors"
+                            role="group"
+                            aria-label={`Player ${i + 1} finish`}
+                          >
+                            {finishes.map((f, n) => (
+                              <button
+                                key={f}
+                                aria-label={FINISH_NAMES[n]}
+                                aria-pressed={gear.finish === f}
+                                className={
+                                  "swatch" +
+                                  (gear.finish === f ? " chosen" : "")
+                                }
+                                style={{ background: f }}
+                                onClick={() => setGear(i, { finish: f })}
+                              />
+                            ))}
+                          </div>
+                        ) : r === "avatar" ? (
+                          <button
+                            className="row-value"
+                            onClick={() => setZone(i, "grid")}
+                          >
+                            ▲ Pick another
+                          </button>
+                        ) : (
+                          <>
+                            {r !== "name" && (
+                              <button
+                                className="row-arrow"
+                                aria-label={`Player ${i + 1} previous ${aria}`}
+                                onClick={() => change(i, r, -1)}
+                              >
+                                ◀
+                              </button>
+                            )}
+                            <button
+                              className="row-value"
+                              aria-label={`Player ${i + 1} ${aria}`}
+                              title={
+                                r === "guitar"
+                                  ? style.hint
+                                  : r === "kit"
+                                    ? kit.hint
+                                    : undefined
+                              }
+                              onClick={() => change(i, r, 1)}
+                            >
+                              {r === "name" ? <b>{value}</b> : value}
+                              {r === "name" && <small>✎</small>}
+                            </button>
+                            {r !== "name" && (
+                              <button
+                                className="row-arrow"
+                                aria-label={`Player ${i + 1} next ${aria}`}
+                                onClick={() => change(i, r, 1)}
+                              >
+                                ▶
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {players[i] && isPad(players[i].device) && (
+                    <small className="card-hint">
+                      {zones[i] === "grid"
+                        ? "Strum to choose · green to pick"
+                        : "Strum to move · green changes · red: avatars"}
+                    </small>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {camera !== null && (
+        <div
+          className="camera-overlay"
+          role="dialog"
+          aria-label={`Player ${camera + 1} camera`}
+        >
+          <h3>Player {camera + 1} · camera avatar</h3>
+          <Camera
+            onUse={(image) => {
+              save(camera, { look: { kind: "photo", image } });
+              setCamera(null);
+            }}
+          />
+          <button className="secondary" onClick={() => setCamera(null)}>
+            Close
+          </button>
+        </div>
+      )}
     </div>
   );
 }

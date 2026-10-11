@@ -30,13 +30,15 @@ test("names keep up to 8 capital letters and digits", () => {
     "ACE",
   );
 });
-test("ten distinct premade avatars, matching the store", () => {
-  assert.equal(presets.length, 10);
+test("23 distinct premade avatars, matching the store", () => {
+  assert.equal(presets.length, 23);
+  assert.equal(new Set(presets.map((p) => p.id)).size, 23);
+  assert.equal(presets.filter((p) => p.build === "slim").length, 8);
   assert.deepEqual(
     presets.map((p) => p.id),
     PRESETS,
   );
-  assert.equal(new Set(presets.map((p) => p.style)).size, 10);
+  assert.ok(new Set(presets.map((p) => p.style)).size >= 19, "varied hair");
 });
 test("photos are restyled onto the stage palette with contrast stretch", () => {
   // A dim gradient still spans the palette after stretching.

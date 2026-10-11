@@ -1,5 +1,6 @@
-// Player names and avatars: ten premade performers in the game's neon style,
-// or a camera photo restyled to match.
+// Player names and avatars: premade performers in the game's neon style (some
+// nodding to rock legends' face paint and fashion), or a camera photo
+// restyled to match.
 export type Look =
   { kind: "preset"; id: string } | { kind: "photo"; image: string };
 /** Instrument styles and where the performer stands in single player. */
@@ -68,8 +69,36 @@ export type Hair =
   | "bun"
   | "cap"
   | "pony"
-  | "swoop";
-export type Extra = "shades" | "visor" | "headphones" | "bandana" | "none";
+  | "swoop"
+  | "waves"
+  | "curtain"
+  | "sidecut"
+  | "puffs"
+  | "braids"
+  | "pigtails"
+  | "highpony"
+  | "mullet"
+  | "curls"
+  | "teased";
+export type Extra =
+  | "shades"
+  | "visor"
+  | "headphones"
+  | "bandana"
+  | "choker"
+  | "hoops"
+  | "tophat"
+  | "headband"
+  | "nosering"
+  | "none";
+/** Makeup and face paint drawn on the face. */
+export type FaceStyle = {
+  lashes?: boolean;
+  lips?: string;
+  /** Bat-wing paint around the eyes, a star or lightning bolt over one eye,
+   * or a goth tear under one. */
+  paint?: "bat" | "star" | "bolt" | "tear";
+};
 export type Preset = {
   id: string;
   name: string;
@@ -79,6 +108,10 @@ export type Preset = {
   outfit: string;
   accent: string;
   extra: Extra;
+  /** An open jacket over the outfit. */
+  jacket?: string;
+  build?: "slim";
+  face?: FaceStyle;
 };
 export const presets: Preset[] = [
   {
@@ -180,6 +213,163 @@ export const presets: Preset[] = [
     outfit: "#0f1d33",
     accent: "#38e8ff",
     extra: "bandana",
+  },
+  // Long-haired rockers.
+  {
+    id: "siren",
+    name: "Siren",
+    skin: "#f3d1bd",
+    hair: "#c2185b",
+    style: "waves",
+    outfit: "#1a0d16",
+    accent: "#ff2e88",
+    extra: "choker",
+    build: "slim",
+    face: { lashes: true, lips: "#c2185b" },
+  },
+  {
+    id: "raven",
+    name: "Raven",
+    skin: "#e9c9b4",
+    hair: "#14121c",
+    style: "curtain",
+    outfit: "#0e0b14",
+    accent: "#c04bff",
+    extra: "choker",
+    build: "slim",
+    jacket: "#1c1626",
+    face: { lashes: true, lips: "#4a1650", paint: "tear" },
+  },
+  {
+    id: "halo",
+    name: "Halo",
+    skin: "#f6dcc8",
+    hair: "#f3ead0",
+    style: "waves",
+    outfit: "#181a2e",
+    accent: "#38e8ff",
+    extra: "headband",
+    build: "slim",
+    face: { lashes: true, lips: "#ff7aa8", paint: "star" },
+  },
+  {
+    id: "viper",
+    name: "Viper",
+    skin: "#c48a64",
+    hair: "#a020f0",
+    style: "sidecut",
+    outfit: "#14101e",
+    accent: "#3dff6e",
+    extra: "nosering",
+    build: "slim",
+    jacket: "#232032",
+    face: { lashes: true, lips: "#7a2a5a" },
+  },
+  {
+    id: "juno",
+    name: "Juno",
+    skin: "#6b4129",
+    hair: "#2a1810",
+    style: "puffs",
+    outfit: "#2a1430",
+    accent: "#ffe03a",
+    extra: "hoops",
+    build: "slim",
+    face: { lashes: true, lips: "#b0405a" },
+  },
+  {
+    id: "lyric",
+    name: "Lyric",
+    skin: "#8d5a3b",
+    hair: "#1c1210",
+    style: "braids",
+    outfit: "#10233a",
+    accent: "#ff8a1f",
+    extra: "headband",
+    build: "slim",
+    face: { lashes: true, lips: "#9c3a4a" },
+  },
+  {
+    id: "starla",
+    name: "Starla",
+    skin: "#f4d9c4",
+    hair: "#ff7ac0",
+    style: "pigtails",
+    outfit: "#2a0f2a",
+    accent: "#ff2e88",
+    extra: "none",
+    build: "slim",
+    face: { lashes: true, lips: "#ff2e88", paint: "star" },
+  },
+  {
+    id: "rogue",
+    name: "Rogue",
+    skin: "#dca582",
+    hair: "#2f8cff",
+    style: "highpony",
+    outfit: "#0f1a30",
+    accent: "#ffe03a",
+    extra: "choker",
+    build: "slim",
+    jacket: "#1d2a44",
+    face: { lashes: true, lips: "#c03050", paint: "bolt" },
+  },
+  {
+    id: "axel",
+    name: "Axel",
+    skin: "#e8b896",
+    hair: "#d9b46a",
+    style: "mullet",
+    outfit: "#22140c",
+    accent: "#ff8a1f",
+    extra: "bandana",
+    jacket: "#3a2a1c",
+  },
+  {
+    id: "duke",
+    name: "Duke",
+    skin: "#7a4a2e",
+    hair: "#14121c",
+    style: "curls",
+    outfit: "#1b1530",
+    accent: "#c04bff",
+    extra: "tophat",
+    jacket: "#2a1f3a",
+  },
+  {
+    id: "gunner",
+    name: "Gunner",
+    skin: "#f1c7a8",
+    hair: "#3a2a20",
+    style: "waves",
+    outfit: "#101014",
+    accent: "#e8312f",
+    extra: "shades",
+    jacket: "#18181c",
+  },
+  // Rock-legend tributes: demon face paint, and a psychedelic guitar hero.
+  {
+    id: "demon",
+    name: "Demon",
+    skin: "#f2f0f5",
+    hair: "#0b0a10",
+    style: "teased",
+    outfit: "#0b0a10",
+    accent: "#c9c4d6",
+    extra: "none",
+    jacket: "#1a1a20",
+    face: { paint: "bat", lips: "#0b0a10" },
+  },
+  {
+    id: "voodoo",
+    name: "Voodoo",
+    skin: "#6e442c",
+    hair: "#1a120c",
+    style: "afro",
+    outfit: "#5a1f6a",
+    accent: "#ffe03a",
+    extra: "headband",
+    jacket: "#e07a1a",
   },
 ];
 export const defaultLook = (slot: number): Look => ({

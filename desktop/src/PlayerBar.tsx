@@ -2,11 +2,16 @@ import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import { Portrait } from "./AvatarView";
 import {
   defaultLook,
-  presetFor,
-  presets,
-  type Look,
+  drumKits,
+  finishes,
+  gearOf,
+  guitarStyles,
+  type Gear,
   type Slot,
 } from "./core/avatars";
+import NamePad from "./NamePad";
+const cycle = <T,>(list: readonly T[], value: T, step = 1) =>
+  list[(list.indexOf(value) + step + list.length) % list.length];
 import type { Profile } from "./types";
 import { readPad } from "./core/input";
 import type { MenuButton } from "./core/menu";
@@ -19,7 +24,16 @@ import {
   toggleStrum,
   type PlayerSetup,
 } from "./core/players";
-type Row = "avatar" | "part" | "level" | "strum" | "leave" | "done";
+type Row =
+  | "name"
+  | "part"
+  | "level"
+  | "strum"
+  | "guitar"
+  | "finish"
+  | "kit"
+  | "leave"
+  | "done";
 /** Live fret/strum test for one controller. */
 function InputTest({ device, profile }: { device: string; profile: Profile }) {
   const [state, setState] = useState(() => readPad(null, profile));
@@ -96,45 +110,58 @@ export default function PlayerBar({
 }) {
   const [row, setRow] = useState(0);
   const player = open === null ? null : players[open];
+  const drums = player?.part === "Drums";
   const rows: Row[] = [
-    "avatar",
+    "name",
     "part",
     "level",
-    // Drums don't strum.
-    ...(player && player.part !== "Drums" ? (["strum"] as Row[]) : []),
+    // Drums don't strum; drummers pick a kit instead of a guitar.
+    ...((drums ? ["kit"] : ["strum", "guitar", "finish"]) as Row[]),
     ...(open ? (["leave"] as Row[]) : []),
     "done",
   ];
-  // A camera photo stays one of the choices while the pop-up is open, so
-  // cycling past it doesn't lose it.
-  const photo = useRef<Look | null>(null);
+  const [naming, setNaming] = useState(false);
+  const nameInput = useRef<((b: MenuButton) => void) | null>(null);
   useEffect(() => {
     setRow(0);
-    const look = open === null ? null : slots[open]?.look;
-    photo.current = look?.kind === "photo" ? look : null;
+    setNaming(false);
   }, [open]);
-  const looks = (): Look[] => [
-    ...(photo.current ? [photo.current] : []),
-    ...presets.map((p) => ({ kind: "preset", id: p.id }) as Look),
-  ];
-  const lookOf = (i: number) => slots[i]?.look ?? defaultLook(i);
-  const same = (a: Look, b: Look) =>
-    a.kind === b.kind &&
-    (a.kind === "photo"
-      ? b.kind === "photo"
-      : b.kind === "preset" && a.id === b.id);
+  const slotOf = (i: number): Slot =>
+    slots[i] ?? { name: "", look: defaultLook(i) };
+  const gear = open === null ? null : gearOf(open, slotOf(open));
+  const setGear = (value: Partial<Gear>) =>
+    open !== null &&
+    onSlot(open, {
+      ...slotOf(open),
+      gear: { ...gearOf(open, slotOf(open)), ...value },
+    });
   // A player who left (or whose slot vanished) closes their pop-up.
   useEffect(() => {
     if (open !== null && !players[open]) setOpen(null);
   }, [players, open]);
   const act = (r: Row, step: 1 | -1 = 1) => {
     if (open === null) return;
-    if (r === "avatar") {
-      const list = looks();
-      const at = list.findIndex((l) => same(l, lookOf(open)));
-      const look = list[(at + step + list.length) % list.length];
-      onSlot(open, { ...(slots[open] ?? { name: "" }), look });
-    } else if (r === "strum")
+    const g = gearOf(open, slotOf(open));
+    if (r === "name") setNaming(true);
+    else if (r === "guitar")
+      setGear({
+        guitar: cycle(
+          guitarStyles.map((x) => x.id),
+          g.guitar,
+          step,
+        ),
+      });
+    else if (r === "finish")
+      setGear({ finish: cycle(finishes, g.finish, step) });
+    else if (r === "kit")
+      setGear({
+        kit: cycle(
+          drumKits.map((x) => x.id),
+          g.kit,
+          step,
+        ),
+      });
+    else if (r === "strum")
       onChange(toggleStrum(players, open, players[open].strum ?? defaultStrum));
     else if (r === "part" || r === "level")
       onChange(cycleSetting(players, open, r, step));
@@ -144,6 +171,7 @@ export default function PlayerBar({
     } else setOpen(null);
   };
   input.current = (b) => {
+    if (naming) return nameInput.current?.(b);
     if (b === "up") setRow((r) => (r + rows.length - 1) % rows.length);
     else if (b === "down") setRow((r) => (r + 1) % rows.length);
     else if (b === "green") act(rows[row]);
@@ -168,57 +196,89 @@ export default function PlayerBar({
             device={player.device}
             profile={profileOf(player.device)}
           />
-          {rows.map((r, i) => (
-            <button
-              key={r}
-              className={
-                "setup-row" +
-                (i === row ? " current" : "") +
-                (r === "leave" ? " leave" : "")
-              }
-              onClick={() => {
-                setRow(i);
-                act(r);
-              }}
-            >
-              {r === "avatar" ? (
-                <>
-                  <span>Avatar</span>
-                  <span className="setup-avatar">
-                    <Portrait look={lookOf(open)} className="avatar-mini" />
+          {naming && (
+            <NamePad
+              label={`Player ${open + 1}`}
+              value={slotOf(open).name}
+              onChange={(name) => onSlot(open, { ...slotOf(open), name })}
+              onDone={() => setNaming(false)}
+              input={nameInput}
+            />
+          )}
+          {!naming &&
+            rows.map((r, i) => (
+              <button
+                key={r}
+                className={
+                  "setup-row" +
+                  (i === row ? " current" : "") +
+                  (r === "leave" ? " leave" : "")
+                }
+                onClick={() => {
+                  setRow(i);
+                  act(r);
+                }}
+              >
+                {r === "name" ? (
+                  <>
+                    <span>Name</span>
+                    <span className="setup-avatar">
+                      <Portrait
+                        look={slotOf(open).look}
+                        gear={gear!}
+                        className="avatar-mini"
+                      />
+                      <strong>{slotOf(open).name || `P${open + 1}`}</strong>
+                    </span>
+                  </>
+                ) : r === "guitar" ? (
+                  <>
+                    <span>Guitar</span>
                     <strong>
-                      {lookOf(open).kind === "photo"
-                        ? "Camera"
-                        : presetFor((lookOf(open) as { id: string }).id).name}
+                      {guitarStyles.find((x) => x.id === gear!.guitar)?.name}
                     </strong>
-                  </span>
-                </>
-              ) : r === "part" ? (
-                <>
-                  <span>Instrument</span>
-                  <strong>{player.part}</strong>
-                </>
-              ) : r === "level" ? (
-                <>
-                  <span>Difficulty</span>
-                  <strong>{player.level}</strong>
-                </>
-              ) : r === "strum" ? (
-                <>
-                  <span>Strumming</span>
-                  <strong>
-                    {(player.strum ?? defaultStrum)
-                      ? "On · strum to hit"
-                      : "Off · frets only"}
-                  </strong>
-                </>
-              ) : r === "leave" ? (
-                <span>Leave</span>
-              ) : (
-                <span>Done</span>
-              )}
-            </button>
-          ))}
+                  </>
+                ) : r === "finish" ? (
+                  <>
+                    <span>Color</span>
+                    <i
+                      className="setup-swatch"
+                      style={{ background: gear!.finish }}
+                    />
+                  </>
+                ) : r === "kit" ? (
+                  <>
+                    <span>Drum kit</span>
+                    <strong>
+                      {drumKits.find((x) => x.id === gear!.kit)?.name}
+                    </strong>
+                  </>
+                ) : r === "part" ? (
+                  <>
+                    <span>Instrument</span>
+                    <strong>{player.part}</strong>
+                  </>
+                ) : r === "level" ? (
+                  <>
+                    <span>Difficulty</span>
+                    <strong>{player.level}</strong>
+                  </>
+                ) : r === "strum" ? (
+                  <>
+                    <span>Strumming</span>
+                    <strong>
+                      {(player.strum ?? defaultStrum)
+                        ? "On · strum to hit"
+                        : "Off · frets only"}
+                    </strong>
+                  </>
+                ) : r === "leave" ? (
+                  <span>Leave</span>
+                ) : (
+                  <span>Done</span>
+                )}
+              </button>
+            ))}
           <small className="setup-hint">
             {isPad(player.device)
               ? "Strum to move · green to change · red or Start to close"

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import {
+  type FaceStyle,
   defaultGear,
   moodFor,
   presetFor,
@@ -117,7 +118,74 @@ const cylinder = (rt: number, rb: number, h: number) =>
 // Faces are drawn on a canvas and wrapped on the front of the head, one texture
 // per expression, so changing mood only swaps a texture.
 type Face = Mood | "blink";
-function drawFace(face: Face, photo?: HTMLImageElement) {
+/** Face paint under the eyes: bat wings, a star, a lightning bolt or a tear. */
+function paint(g: CanvasRenderingContext2D, kind?: FaceStyle["paint"]) {
+  if (!kind) return;
+  g.save();
+  g.lineJoin = "round";
+  if (kind === "bat") {
+    // Demon-style wings flaring out around each eye and down the cheeks.
+    g.fillStyle = "#0b0a10";
+    for (const side of [-1, 1]) {
+      const x = 128 + side * 38;
+      g.beginPath();
+      g.moveTo(x - side * 20, 90);
+      g.lineTo(x - side * 18, 46);
+      g.lineTo(x + side * 2, 52);
+      g.lineTo(x + side * 10, 30);
+      g.lineTo(x + side * 20, 48);
+      g.lineTo(x + side * 44, 36);
+      g.lineTo(x + side * 38, 70);
+      g.lineTo(x + side * 50, 96);
+      g.quadraticCurveTo(x + side * 10, 116, x - side * 20, 90);
+      g.fill();
+    }
+  } else if (kind === "star") {
+    // A star around the right eye.
+    g.strokeStyle = "#0b0a10";
+    g.fillStyle = "#38e8ff55";
+    g.lineWidth = 5;
+    g.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 ? 18 : 44,
+        a = -Math.PI / 2 + (i * Math.PI) / 5;
+      g.lineTo(166 + Math.cos(a) * r, 64 + Math.sin(a) * r);
+    }
+    g.closePath();
+    g.fill();
+    g.stroke();
+  } else if (kind === "bolt") {
+    // A glam lightning bolt across the left eye.
+    g.fillStyle = "#e8312f";
+    g.strokeStyle = "#2f8cff";
+    g.lineWidth = 4;
+    g.beginPath();
+    for (const [x, y] of [
+      [96, 4],
+      [70, 66],
+      [90, 64],
+      [62, 128],
+      [118, 52],
+      [96, 54],
+      [116, 4],
+    ] as const)
+      g.lineTo(x, y);
+    g.closePath();
+    g.fill();
+    g.stroke();
+  } else if (kind === "tear") {
+    g.fillStyle = "#0b0a10";
+    g.beginPath();
+    g.moveTo(90, 86);
+    g.lineTo(96, 100);
+    g.lineTo(90, 112);
+    g.lineTo(84, 100);
+    g.closePath();
+    g.fill();
+  }
+  g.restore();
+}
+function drawFace(face: Face, photo?: HTMLImageElement, style: FaceStyle = {}) {
   const c = document.createElement("canvas");
   c.width = 256;
   c.height = 160;
@@ -206,9 +274,32 @@ function drawFace(face: Face, photo?: HTMLImageElement) {
       g.lineWidth = 9;
     }
   };
+  if (!photo) paint(g, style.paint);
   eye(90);
   eye(166);
   if (!photo) {
+    // Brows set the mood; lashes for the long-haired looks.
+    g.strokeStyle = ink;
+    g.lineWidth = 7;
+    for (const side of [-1, 1]) {
+      const x = 128 + side * 38;
+      const lift = face === "hyped" ? -8 : face === "power" ? 4 : 0;
+      const inner = face === "miss" ? -10 : face === "power" ? 10 : 0;
+      g.beginPath();
+      g.moveTo(x - side * 18, 30 + lift + inner);
+      g.quadraticCurveTo(x, 22 + lift, x + side * 20, 30 + lift);
+      g.stroke();
+      if (style.lashes && face !== "miss") {
+        g.lineWidth = 4;
+        for (const k of [0, 1, 2]) {
+          g.beginPath();
+          g.moveTo(x + side * (10 + k * 5), 46 - k * 2);
+          g.lineTo(x + side * (16 + k * 6), 38 - k * 4);
+          g.stroke();
+        }
+        g.lineWidth = 7;
+      }
+    }
     // Blush.
     g.fillStyle = "#ff7aa877";
     g.beginPath();
@@ -243,7 +334,21 @@ function drawFace(face: Face, photo?: HTMLImageElement) {
     } else {
       g.moveTo(108, 104);
       g.quadraticCurveTo(128, 120, 148, 104);
-      g.lineWidth = 7;
+      g.lineWidth = style.lips ? 10 : 7;
+      if (style.lips) g.strokeStyle = style.lips;
+      g.stroke();
+    }
+    if (style.lips && (face === "hyped" || face === "power")) {
+      // Lipstick outline on an open mouth.
+      g.strokeStyle = style.lips;
+      g.lineWidth = 5;
+      g.beginPath();
+      if (face === "power") g.ellipse(128, 112, 24, 28, 0, 0, Math.PI * 2);
+      else {
+        g.moveTo(94, 100);
+        g.quadraticCurveTo(128, 148, 162, 100);
+        g.closePath();
+      }
       g.stroke();
     }
   } else {
@@ -354,6 +459,101 @@ function hair(mats: Mats, p: Preset) {
       s.rotation.z = 1.2;
       break;
     }
+    case "waves":
+    case "curtain": {
+      // Long hair: crown, a long back fall and locks framing the face.
+      add(part(mats, sphere(0.8), c), 0, 0.12, -0.1).scale.set(1.04, 0.86, 1);
+      add(part(mats, capsule(0.6, 1.0), c), 0, -0.6, -0.32).scale.set(
+        1.12,
+        1,
+        0.55,
+      );
+      for (const x of [-1, 1]) {
+        const lock = add(
+          part(mats, capsule(0.2, 0.9), c),
+          x * 0.64,
+          -0.42,
+          0.12,
+        );
+        lock.rotation.z = x * (p.style === "waves" ? 0.12 : 0.04);
+      }
+      if (p.style === "waves")
+        for (let i = 0; i < 6; i++)
+          add(part(mats, sphere(0.2), c, false), -0.55 + i * 0.22, -1.18, -0.3);
+      else {
+        // Blunt bangs over the forehead.
+        const bangs = add(part(mats, sphere(0.78), c), 0, 0.36, 0.08);
+        bangs.scale.set(1.02, 0.5, 0.98);
+      }
+      break;
+    }
+    case "sidecut": {
+      // Shaved on one side, a long sweep falling over the other.
+      add(part(mats, sphere(0.77), c), 0.1, 0.2, -0.06).scale.set(0.9, 0.68, 1);
+      const sweep = add(part(mats, capsule(0.28, 1.0), c), -0.5, -0.1, 0.2);
+      sweep.rotation.z = -0.25;
+      break;
+    }
+    case "puffs":
+      add(part(mats, sphere(0.77), c), 0, 0.16, -0.06).scale.set(1, 0.7, 1);
+      for (const x of [-1, 1])
+        add(part(mats, sphere(0.42), c), x * 0.62, 0.62, -0.12);
+      break;
+    case "braids":
+      add(part(mats, sphere(0.78), c), 0, 0.14, -0.08).scale.set(1, 0.76, 1);
+      for (const x of [-1, 1])
+        for (let i = 0; i < 6; i++)
+          add(
+            part(mats, sphere(0.15), c),
+            x * 0.52,
+            -0.25 - i * 0.24,
+            0.05 - i * 0.03,
+          );
+      break;
+    case "pigtails":
+      add(part(mats, sphere(0.78), c), 0, 0.16, -0.06).scale.set(1, 0.72, 1);
+      for (const x of [-1, 1]) {
+        const tail = add(
+          part(mats, capsule(0.22, 0.75), c),
+          x * 0.92,
+          0.0,
+          -0.1,
+        );
+        tail.rotation.z = x * 0.7;
+      }
+      break;
+    case "highpony": {
+      add(part(mats, sphere(0.77), c), 0, 0.18, -0.06).scale.set(1, 0.7, 1);
+      const pony = add(part(mats, capsule(0.24, 1.0), c), 0, 0.55, -0.85);
+      pony.rotation.x = -0.9;
+      break;
+    }
+    case "mullet":
+      add(part(mats, sphere(0.77), c), 0, 0.2, -0.04).scale.set(1, 0.62, 1);
+      add(part(mats, capsule(0.42, 0.6), c), 0, -0.5, -0.48).scale.set(
+        1.15,
+        1,
+        0.6,
+      );
+      break;
+    case "curls":
+      add(part(mats, sphere(0.78), c), 0, 0.2, -0.08).scale.set(1, 0.72, 1);
+      for (let i = 0; i < 12; i++) {
+        const a = (i / 12) * Math.PI * 2;
+        add(
+          part(mats, sphere(0.24), c),
+          Math.cos(a) * 0.72,
+          0.15 + Math.sin(a) * 0.45,
+          -0.3 + Math.abs(Math.sin(a)) * 0.1,
+        );
+      }
+      break;
+    case "teased":
+      // Big glam-metal hair.
+      add(part(mats, sphere(1.02), c), 0, 0.5, -0.42).scale.set(1.2, 1, 1);
+      for (const x of [-1, 1])
+        add(part(mats, sphere(0.55), c), x * 0.8, -0.3, -0.25);
+      break;
   }
   return g;
 }
@@ -398,6 +598,47 @@ function extra(mats: Mats, p: Preset) {
     b.rotation.x = Math.PI / 2 - 0.25;
     b.position.y = 0.3;
     g.add(b);
+  } else if (p.extra === "headband") {
+    const b = part(mats, new THREE.TorusGeometry(0.77, 0.07, 6, 28), p.accent);
+    b.rotation.x = Math.PI / 2 - 0.1;
+    b.position.y = 0.22;
+    g.add(b);
+  } else if (p.extra === "choker") {
+    const b = part(mats, new THREE.TorusGeometry(0.22, 0.05, 6, 20), "#0b0a10");
+    b.rotation.x = Math.PI / 2;
+    b.position.y = -0.8;
+    const gem = part(mats, sphere(0.06), p.accent, false);
+    gem.position.set(0, -0.82, 0.23);
+    g.add(b, gem);
+  } else if (p.extra === "hoops") {
+    for (const x of [-1, 1]) {
+      const hoop = part(
+        mats,
+        new THREE.TorusGeometry(0.12, 0.025, 6, 18),
+        p.accent,
+        false,
+      );
+      hoop.position.set(x * 0.76, -0.25, 0.05);
+      hoop.rotation.y = Math.PI / 2;
+      g.add(hoop);
+    }
+  } else if (p.extra === "tophat") {
+    const brim = part(mats, cylinder(0.75, 0.75, 0.06), "#0b0a10");
+    brim.position.y = 0.55;
+    const crown = part(mats, cylinder(0.48, 0.5, 0.75), "#0b0a10");
+    crown.position.y = 0.92;
+    const band = part(mats, cylinder(0.51, 0.51, 0.12), p.accent, false);
+    band.position.y = 0.66;
+    g.add(brim, crown, band);
+  } else if (p.extra === "nosering") {
+    const ring = part(
+      mats,
+      new THREE.TorusGeometry(0.05, 0.015, 6, 14),
+      "#e8e5f2",
+      false,
+    );
+    ring.position.set(0.05, -0.16, 0.8);
+    g.add(ring);
   }
   return g;
 }
@@ -812,8 +1053,43 @@ function performer(
     if (x < 0) footR = shoe;
     root.add(leg, shoe);
   }
-  const torso = part(mats, capsule(0.46, 0.5), outfit);
+  const slim = !photo && p.build === "slim";
+  const torso = part(mats, capsule(slim ? 0.42 : 0.46, 0.5), outfit);
   torso.position.y = 1.2;
+  // Neck, belt with buckle, and an open jacket when the look has one.
+  const neck = part(mats, cylinder(0.17, 0.2, 0.32), skin, false);
+  neck.position.y = 1.72;
+  const belt = part(
+    mats,
+    new THREE.TorusGeometry(slim ? 0.42 : 0.46, 0.06, 6, 24),
+    "#0b0a10",
+    false,
+  );
+  belt.rotation.x = Math.PI / 2;
+  belt.position.y = 0.86;
+  const buckle = part(
+    mats,
+    new THREE.BoxGeometry(0.16, 0.11, 0.05),
+    "#c9c4d6",
+    false,
+  );
+  buckle.position.set(0, 0.86, slim ? 0.44 : 0.48);
+  body.add(neck, belt, buckle);
+  if (!photo && p.jacket)
+    for (const side of [-1, 1]) {
+      const panel = part(mats, capsule(0.24, 0.5), p.jacket);
+      panel.scale.set(1, 1, 0.55);
+      panel.position.set(side * 0.27, 1.22, 0.26);
+      panel.rotation.z = side * 0.08;
+      const lapel = part(
+        mats,
+        new THREE.BoxGeometry(0.1, 0.34, 0.06),
+        p.jacket,
+      );
+      lapel.position.set(side * 0.16, 1.5, 0.42);
+      lapel.rotation.z = side * -0.35;
+      body.add(panel, lapel);
+    }
   const stripe = part(
     mats,
     new THREE.TorusGeometry(0.47, 0.05, 6, 24),
@@ -827,9 +1103,21 @@ function performer(
   head.position.y = 2.3;
   body.add(head);
   head.add(part(mats, sphere(0.75), skin));
+  // Ears and a nose give the head some shape.
+  for (const x of [-1, 1]) {
+    const ear = part(mats, sphere(0.15), skin);
+    ear.scale.set(0.6, 1, 0.8);
+    ear.position.set(x * 0.74, -0.04, 0);
+    head.add(ear);
+  }
+  if (!photo) {
+    const nose = part(mats, sphere(0.08), skin, false);
+    nose.position.set(0, -0.12, 0.76);
+    head.add(nose);
+  }
   const faces = {} as Record<Face, THREE.Texture>;
   for (const f of ["groove", "hyped", "miss", "power", "blink"] as Face[])
-    faces[f] = drawFace(f, photo);
+    faces[f] = drawFace(f, photo, photo ? {} : p.face);
   const face = new THREE.Mesh(
     new THREE.SphereGeometry(0.76, 24, 16, Math.PI / 2 - 0.95, 1.9, 0.95, 1.05),
     new THREE.MeshBasicMaterial({ map: faces.groove, transparent: true }),

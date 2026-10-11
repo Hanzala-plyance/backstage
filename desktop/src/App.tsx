@@ -189,6 +189,10 @@ export default function App() {
   // Player 1's own strum choice (other players keep theirs in the lineup).
   const [strum1, setStrum1] = useState<boolean | undefined>(undefined);
   const setupInput = useRef<(b: MenuButton) => void>(() => {});
+  // The Avatars screen takes each joined player's own controller presses.
+  const avatarsInput = useRef<
+    ((slot: number, b: MenuButton) => boolean) | null
+  >(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const later = (fn: () => void) => setTimeout(fn, 40);
   const back = () => {
@@ -237,6 +241,14 @@ export default function App() {
     const players = lineupAll();
     const owner = source ? players.findIndex((p) => p.device === source) : -1;
     if (setupSlot !== null && owner === setupSlot) return setupInput.current(b);
+    if (
+      page === "avatars" &&
+      screen === "app" &&
+      owner >= 0 &&
+      !selected &&
+      avatarsInput.current?.(owner, b)
+    )
+      return;
     // Start on a controller: its player's setup, or join as the next player.
     if (b === "start" && source) {
       if (owner >= 0) return setSetupSlot(owner);
@@ -995,7 +1007,15 @@ export default function App() {
             </p>
           </>
         )}
-        {page === "avatars" && <Avatars band={band} onSave={saveSlot} />}
+        {page === "avatars" && (
+          <Avatars
+            band={band}
+            onSave={saveSlot}
+            players={players}
+            joinable={joinable}
+            input={avatarsInput}
+          />
+        )}
         {page === "soundcheck" && (
           <Soundcheck
             done={lessonsDone}
@@ -1248,122 +1268,125 @@ export default function App() {
                 <p>A few small adjustments for a better set.</p>
               </div>
             </div>
-            <section className="panel settings-panel">
-              <h3>Playing style</h3>
-              <div className="setting-row">
-                <div>
-                  <strong>How you hit notes</strong>
-                  <p>
-                    Tap for gamepads and keyboards. Strum for guitar-style
-                    controls.
-                  </p>
-                </div>
-                <select
-                  value={mode}
-                  onChange={(e) => {
-                    const value = e.target.value as "tap" | "strum";
-                    setMode(value);
-                    localStorage.setItem("backstage:mode", value);
-                  }}
-                >
-                  <option value="tap">Tap assist / drums</option>
-                  <option value="strum">Fret + strum</option>
-                </select>
-              </div>
-              <div className="setting-row">
-                <div>
-                  <strong>Timing offset</strong>
-                  <p>
-                    Positive values move the hit window later. Adjust for your
-                    screen and audio.
-                  </p>
-                </div>
-                <label className="number-input">
-                  <input
-                    aria-label="Timing offset"
-                    type="number"
-                    min="-500"
-                    max="500"
-                    step="5"
-                    value={offset}
+            <div className="settings-grid">
+              <section className="panel settings-panel">
+                <h3>Playing style</h3>
+                <div className="setting-row">
+                  <div>
+                    <strong>How you hit notes</strong>
+                    <p>
+                      Tap for gamepads and keyboards. Strum for guitar-style
+                      controls.
+                    </p>
+                  </div>
+                  <select
+                    value={mode}
                     onChange={(e) => {
-                      const v = Math.max(
-                        -500,
-                        Math.min(500, Number(e.target.value)),
-                      );
-                      setOffset(v);
-                      localStorage.setItem("backstage:offset", String(v));
+                      const value = e.target.value as "tap" | "strum";
+                      setMode(value);
+                      localStorage.setItem("backstage:mode", value);
                     }}
-                  />
-                  ms
-                </label>
-              </div>
-            </section>
-            <section className="panel settings-panel">
-              <h3>Song library</h3>
-              <p className="path">{settings?.songsRoot || root}</p>
-              <div className="inline-actions">
-                <button
-                  className="secondary"
-                  onClick={() =>
-                    void action("folder", async () => {
-                      const changed = await window.backstage.chooseLibrary();
-                      if (changed) {
-                        await refresh();
+                  >
+                    <option value="tap">Tap assist / drums</option>
+                    <option value="strum">Fret + strum</option>
+                  </select>
+                </div>
+                <div className="setting-row">
+                  <div>
+                    <strong>Timing offset</strong>
+                    <p>
+                      Positive values move the hit window later. Adjust for your
+                      screen and audio.
+                    </p>
+                  </div>
+                  <label className="number-input">
+                    <input
+                      aria-label="Timing offset"
+                      type="number"
+                      min="-500"
+                      max="500"
+                      step="5"
+                      value={offset}
+                      onChange={(e) => {
+                        const v = Math.max(
+                          -500,
+                          Math.min(500, Number(e.target.value)),
+                        );
+                        setOffset(v);
+                        localStorage.setItem("backstage:offset", String(v));
+                      }}
+                    />
+                    ms
+                  </label>
+                </div>
+              </section>
+              <section className="panel settings-panel">
+                <h3>Song library</h3>
+                <p className="path">{settings?.songsRoot || root}</p>
+                <div className="inline-actions">
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      void action("folder", async () => {
+                        const changed = await window.backstage.chooseLibrary();
+                        if (changed) {
+                          await refresh();
+                          setSettings(await window.backstage.settings());
+                        }
+                      })
+                    }
+                  >
+                    Choose folder
+                  </button>
+                  <button
+                    className="quiet"
+                    onClick={() =>
+                      void action("show", () => window.backstage.showSongs())
+                    }
+                  >
+                    Show in Finder ↗
+                  </button>
+                </div>
+              </section>
+              <section className="panel settings-panel">
+                <div className="section-heading">
+                  <h3>Song preparation</h3>
+                  <span className="status-tag">
+                    {settings?.serviceAvailable
+                      ? "Environment found"
+                      : "Setup needed"}
+                  </span>
+                </div>
+                <p className="muted">
+                  Search and conversion use the existing local Python
+                  environment and FFmpeg. Local songs and practice work
+                  independently.
+                </p>
+                <div className="inline-actions">
+                  <button
+                    className="secondary"
+                    onClick={() =>
+                      void action("python", async () => {
+                        await window.backstage.configurePython();
                         setSettings(await window.backstage.settings());
-                      }
-                    })
-                  }
-                >
-                  Choose folder
-                </button>
-                <button
-                  className="quiet"
-                  onClick={() =>
-                    void action("show", () => window.backstage.showSongs())
-                  }
-                >
-                  Show in Finder ↗
-                </button>
-              </div>
-            </section>
-            <section className="panel settings-panel">
-              <div className="section-heading">
-                <h3>Song preparation</h3>
-                <span className="status-tag">
-                  {settings?.serviceAvailable
-                    ? "Environment found"
-                    : "Setup needed"}
-                </span>
-              </div>
-              <p className="muted">
-                Search and conversion use the existing local Python environment
-                and FFmpeg. Local songs and practice work independently.
-              </p>
-              <div className="inline-actions">
-                <button
-                  className="secondary"
-                  onClick={() =>
-                    void action("python", async () => {
-                      await window.backstage.configurePython();
-                      setSettings(await window.backstage.settings());
-                    })
-                  }
-                >
-                  Choose Python environment
-                </button>
-                <button
-                  className="quiet"
-                  onClick={() =>
-                    void action("prepare", () =>
-                      window.backstage.openPreparation(),
-                    )
-                  }
-                >
-                  Open advanced preparation ↗
-                </button>
-              </div>
-            </section>
+                      })
+                    }
+                  >
+                    Choose Python environment
+                  </button>
+                  <button
+                    className="quiet"
+                    onClick={() =>
+                      void action("prepare", () =>
+                        window.backstage.openPreparation(),
+                      )
+                    }
+                  >
+                    Open advanced preparation ↗
+                  </button>
+                </div>
+              </section>
+            </div>
             <p className="footnote">
               Development build · Five-fret guitar with HOPOs, taps, sustains
               and Star Power. Tap assist and MIDI drum input are available.
