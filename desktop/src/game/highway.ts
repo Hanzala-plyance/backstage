@@ -22,6 +22,8 @@ export type HighwayEffects = {
   lanes: number[];
   tailActive: (index: number, lane: number) => boolean;
   streak?: number;
+  /** Star Power meter, 0..1: drawn as the strip just below the frets. */
+  meter?: number;
 };
 function canvasTexture(
   width: number,
@@ -199,6 +201,38 @@ export function createHighway(
     halo.scale.set(1, 1, 1);
     return { rail, halo };
   });
+
+  // Star Power meter: a strip just below the frets that fills with blue.
+  const METER_Z = 0.72,
+    METER_W = WIDTH - 0.5;
+  const meterTrack = mesh(
+    new THREE.BoxGeometry(METER_W, 0.02, 0.24),
+    new THREE.MeshBasicMaterial({
+      color: 0x6f6890,
+      transparent: true,
+      opacity: 0.55,
+    }),
+  );
+  meterTrack.position.set(0, 0.03, METER_Z);
+  // Grows from the left edge: geometry starts at x = 0.
+  const meterFill = mesh(
+    new THREE.BoxGeometry(METER_W, 0.03, 0.26).translate(METER_W / 2, 0, 0),
+    new THREE.MeshBasicMaterial({ color: POWER }),
+  );
+  meterFill.position.set(-METER_W / 2, 0.04, METER_Z);
+  meterFill.scale.x = 0.0001;
+  const meterGlow = mesh(
+    new THREE.PlaneGeometry(METER_W + 0.8, 0.9),
+    glowMaterial(radial, POWER, 0),
+  );
+  meterGlow.rotation.x = -Math.PI / 2;
+  meterGlow.position.set(0, 0.02, METER_Z);
+  // Half full: enough to ignite.
+  const meterMark = mesh(
+    new THREE.BoxGeometry(0.05, 0.05, 0.34),
+    new THREE.MeshBasicMaterial({ color: 0xece0d0 }),
+  );
+  meterMark.position.set(0, 0.05, METER_Z);
 
   // Strikeline and fret receptors.
   const strike = mesh(
@@ -466,9 +500,26 @@ export function createHighway(
       (strikeGlow.material as THREE.MeshBasicMaterial).color.setHex(
         fx.power ? POWER : 0xff2e88,
       );
+      // Star Power meter: fills with blue; glows once it can ignite and
+      // pulses while it's live.
+      const level = Math.max(0, Math.min(1, fx.meter ?? 0));
+      meterFill.scale.x = Math.max(0.0001, level);
+      const fill = meterFill.material as THREE.MeshBasicMaterial;
+      fill.color.setHex(POWER);
+      if (fx.power)
+        fill.color.lerp(
+          color.setHex(0xffffff),
+          0.35 + 0.35 * Math.sin(seconds * 9),
+        );
+      (meterGlow.material as THREE.MeshBasicMaterial).opacity = fx.power
+        ? 0.55 + 0.25 * Math.sin(seconds * 9)
+        : level >= 0.5
+          ? 0.35
+          : level * 0.3;
 
       // Tempo grid.
-      while (firstBeat < beats.length && beats[firstBeat].time < time - 0.3)
+      // Beat lines stop at the strike line, leaving the meter strip clear.
+      while (firstBeat < beats.length && beats[firstBeat].time < time - 0.03)
         firstBeat++;
       let lineCount = 0;
       for (

@@ -9,6 +9,8 @@ type Sustain = {
   from: number;
   released?: number;
   extended: boolean;
+  /** Hit by a strum: with `holdStrum`, the strum bar must stay held too. */
+  strum: boolean;
 };
 export function matches(note: Note, held: boolean[]) {
   if (note.open) return !held.some(Boolean);
@@ -36,11 +38,19 @@ export class Judgment {
   power = 0;
   powerActive = false;
   soloBonus = 0;
+  /** For presentation: perfect hits, chords hit, and sustains held to their
+   * end (with the lanes of the latest one). */
+  perfects = 0;
+  chords = 0;
+  sustained = 0;
+  sustainedLanes: number[] = [];
   private points = 0;
   private cursor = 0;
   private time = 0;
   private held = [false, false, false, false, false];
   private whammy = false;
+  private strumHeld = false;
+  private readonly holdStrum: boolean;
   private sustains: Sustain[] = [];
   private failedPhrases = new Set<number>();
   private awardedPhrases = new Set<number>();
@@ -53,7 +63,10 @@ export class Judgment {
     readonly notes: Note[],
     readonly window = 0.14,
     readonly chart?: Chart,
+    /** Strummed sustains need the strum bar held through the tail. */
+    options: { holdStrum?: boolean } = {},
   ) {
+    this.holdStrum = !!options.holdStrum;
     this.state = notes.map(() => "pending");
     this.timeline = new Timeline(chart?.tempos, chart?.signatures);
     notes.forEach((n, i) => {
@@ -104,11 +117,19 @@ export class Judgment {
     this.last = "Star Power";
     return true;
   }
-  /** Advance before mutating input so intervals use the previous held state. */
-  update(time: number, held: boolean[], whammy = false, resolveStrum = true) {
+  /** Advance before mutating input so intervals use the previous held state.
+   * `strumHeld` (when given) is whether the strum bar is held down now. */
+  update(
+    time: number,
+    held: boolean[],
+    whammy = false,
+    resolveStrum = true,
+    strumHeld?: boolean,
+  ) {
     this.advance(time);
     this.held = [...held];
     this.whammy = whammy;
+    if (strumHeld !== undefined) this.strumHeld = strumHeld;
     for (const s of this.sustains) {
       if (this.sustainHeld(s)) s.released = undefined;
       else s.released ??= time;
@@ -122,6 +143,7 @@ export class Judgment {
     return null;
   }
   private sustainHeld(s: Sustain) {
+    if (s.strum && this.holdStrum && !this.strumHeld) return false;
     const n = this.notes[s.index];
     if (n.open) return !this.held.some(Boolean);
     if (s.extended) return s.lanes.every((l) => this.held[l]);
@@ -136,7 +158,15 @@ export class Judgment {
           s.end,
           s.released === undefined ? Infinity : s.released + 0.06,
         );
-      this.sustains = this.sustains.filter((s) => expires(s) > start + 1e-10);
+      this.sustains = this.sustains.filter((s) => {
+        if (expires(s) > start + 1e-10) return true;
+        // Held all the way to the end of its tail.
+        if (s.released === undefined || s.released + 0.06 >= s.end) {
+          this.sustained++;
+          this.sustainedLanes = this.notes[s.index].open ? [] : s.lanes;
+        }
+        return false;
+      });
       let stop = Math.min(end, rates.next);
       for (const s of this.sustains) {
         stop = Math.min(stop, expires(s));
@@ -230,7 +260,8 @@ export class Judgment {
       this.failedPhrases.add(n.phrase);
   }
   strike(time: number, held: boolean[], strumMode: boolean): Result | null {
-    this.update(time, held, this.whammy, false);
+    // A strum means the bar is down right now.
+    this.update(time, held, this.whammy, false, strumMode || undefined);
     if (!strumMode) return this.tryHit(time, "assist");
     if (time <= this.hopoStrumUntil) {
       this.hopoStrumUntil = -Infinity;
@@ -308,6 +339,7 @@ export class Judgment {
           lanes,
           end,
           from: Math.max(note.time, time),
+          strum: kind === "strum",
           extended:
             groups.size > 1 || (this.notes[index + 1]?.time ?? Infinity) < end,
         });
@@ -322,6 +354,8 @@ export class Judgment {
       this.awardedPhrases.add(note.phrase);
     }
     const perfect = Math.abs(note.time - time) <= 0.055;
+    if (perfect) this.perfects++;
+    if (note.lanes.length > 1) this.chords++;
     this.last = perfect ? "Perfect" : "Good";
     return perfect ? "perfect" : "good";
   }

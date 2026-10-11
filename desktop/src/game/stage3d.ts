@@ -1221,7 +1221,19 @@ const ease = (x: number) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
 export async function createStage(
   canvas: HTMLCanvasElement,
   cast: PerformerInit[],
-  options: { pixelRatio?: number; portrait?: boolean } = {},
+  options: {
+    pixelRatio?: number;
+    portrait?: boolean;
+    /** Where each performer stands, as a fraction of the canvas width (the
+     * outer side of their player's highway). Without it the band stands
+     * together in the middle. */
+    slots?: number[];
+    /** How much of the canvas height a performer fills (with `slots`). */
+    fill?: number;
+    /** Raises performers by this fraction of the canvas height (with
+     * `slots`), into the open space above the lower highway. */
+    lift?: number;
+  } = {},
 ) {
   const renderer = new THREE.WebGLRenderer({
     canvas,
@@ -1245,6 +1257,7 @@ export async function createStage(
     ),
   );
   const spacing = 3.6;
+  const lights: THREE.Object3D[][] = [];
   const rigs = cast.map((c, i) => {
     const rig = performer(
       mats,
@@ -1286,6 +1299,7 @@ export async function createStage(
       pool.rotation.x = -Math.PI / 2;
       pool.position.set(rig.root.position.x, 0.01, 0);
       scene.add(cone, pool);
+      lights[i] = [cone, pool];
     }
     return rig;
   });
@@ -1303,6 +1317,23 @@ export async function createStage(
     if (options.portrait) {
       camera.position.set(0, 2.25, 6.2);
       camera.lookAt(0, 1.85, 0);
+    } else if (options.slots) {
+      // Each performer beside their highway, scaled to the canvas height.
+      const tan = Math.tan((camera.fov * Math.PI) / 360);
+      const height = 4.2 / Math.max(0.2, Math.min(1, options.fill ?? 0.7));
+      const z = height / (2 * tan);
+      const width = 2 * tan * z * camera.aspect;
+      rigs.forEach((r, i) => {
+        const x = ((options.slots![i] ?? 0.5) - 0.5) * width;
+        r.root.position.x = x;
+        // Turned toward the middle of the screen.
+        r.root.rotation.y = -Math.sign(x) * 0.28;
+        for (const light of lights[i] ?? []) light.position.x = x;
+      });
+      // Feet just above the bottom edge (the highway covers them anyway).
+      const centre = height / 2 - 0.15 - (options.lift ?? 0) * height;
+      camera.position.set(0, centre, z);
+      camera.lookAt(0, centre, 0);
     } else {
       // Fit the whole band, whatever the canvas shape.
       const width = cast.length * spacing + 1;

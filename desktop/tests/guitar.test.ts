@@ -298,11 +298,78 @@ test("enhanced-open and Phase Shift tap/open MIDI markers survive normalization"
   assert.equal(c.notes[1].type, "tap");
 });
 
-test('song.ini HOPO and sustain thresholds are chart ticks and honor legacy options',()=>{
- const m=new Midi();const t=m.addTrack();t.name='PART GUITAR';
- t.addNote({midi:96,ticks:0,durationTicks:150});t.addNote({midi:97,ticks:200,durationTicks:160});
- const bytes=m.toArray();const defaults=parseMidi(bytes)[0];assert.equal(defaults.notes[0].duration,0);assert.ok(defaults.notes[1].duration>0);assert.equal(defaults.notes[1].type,'strum');
- assert.equal(parseMidi(bytes,{eighthnote_hopo:'true'})[0].notes[1].type,'hopo');
- assert.equal(parseMidi(bytes,{hopofreq:'3'})[0].notes[1].type,'hopo');
- const custom=parseMidi(bytes,{hopo_frequency:'199',sustain_cutoff_threshold:'0'})[0];assert.equal(custom.notes[1].type,'strum');assert.ok(custom.notes[0].duration>0);
+test("song.ini HOPO and sustain thresholds are chart ticks and honor legacy options", () => {
+  const m = new Midi();
+  const t = m.addTrack();
+  t.name = "PART GUITAR";
+  t.addNote({ midi: 96, ticks: 0, durationTicks: 150 });
+  t.addNote({ midi: 97, ticks: 200, durationTicks: 160 });
+  const bytes = m.toArray();
+  const defaults = parseMidi(bytes)[0];
+  assert.equal(defaults.notes[0].duration, 0);
+  assert.ok(defaults.notes[1].duration > 0);
+  assert.equal(defaults.notes[1].type, "strum");
+  assert.equal(
+    parseMidi(bytes, { eighthnote_hopo: "true" })[0].notes[1].type,
+    "hopo",
+  );
+  assert.equal(parseMidi(bytes, { hopofreq: "3" })[0].notes[1].type, "hopo");
+  const custom = parseMidi(bytes, {
+    hopo_frequency: "199",
+    sustain_cutoff_threshold: "0",
+  })[0];
+  assert.equal(custom.notes[1].type, "strum");
+  assert.ok(custom.notes[0].duration > 0);
+});
+test("strummed sustains need the strum bar held when holdStrum is on", () => {
+  const notes = [note(1, [0], { duration: 2 })];
+  const score = (holdStrum: boolean, releaseStrumAt: number | null) => {
+    const j = new Judgment(notes, 0.14, undefined, { holdStrum });
+    j.strike(1, held(0), true);
+    for (let t = 1.1; t <= 3.2; t += 0.1)
+      j.update(
+        t,
+        held(0),
+        false,
+        true,
+        releaseStrumAt === null || t < releaseStrumAt,
+      );
+    return j;
+  };
+  const full = score(true, null);
+  const dropped = score(true, 1.5);
+  const classic = score(false, 1.5);
+  assert.equal(full.sustained, 1, "held to the end");
+  assert.equal(dropped.sustained, 0, "strum let go early");
+  assert.ok(dropped.score < full.score, "the tail stops scoring");
+  assert.equal(classic.score, full.score, "without the rule, frets suffice");
+  assert.equal(classic.sustained, 1);
+  // A short release (under the grace) still counts as held.
+  const blip = new Judgment(notes, 0.14, undefined, { holdStrum: true });
+  blip.strike(1, held(0), true);
+  blip.update(1.5, held(0), false, true, false);
+  blip.update(1.53, held(0), false, true, true);
+  blip.update(3.2, held(0), false, true, true);
+  assert.equal(blip.sustained, 1);
+});
+test("tap and HOPO sustains hit by fretting need only the frets", () => {
+  const j = new Judgment(
+    [note(1, [0]), note(1.2, [1], { type: "hopo", duration: 1.5 })],
+    0.14,
+    undefined,
+    { holdStrum: true },
+  );
+  j.strike(1, held(0), true);
+  j.update(1.05, held(0), false, true, false);
+  j.fret(1.2, held(1));
+  for (let t = 1.3; t <= 3; t += 0.1) j.update(t, held(1), false, true, false);
+  assert.equal(j.sustained, 1);
+});
+test("perfect hits and chords are counted for celebrations", () => {
+  const j = new Judgment([note(1, [0]), note(2, [0, 1]), note(3, [2])]);
+  j.strike(1, held(0), true);
+  j.strike(2.1, held(0, 1), true);
+  j.strike(3.01, held(2), true);
+  assert.equal(j.perfects, 2);
+  assert.equal(j.chords, 1);
 });

@@ -75,6 +75,13 @@ function controls(p: LessonPlayer) {
           : "press Space to strum",
     pads: "",
     power: pad ? "the Star Power button (or tilt)" : "Shift",
+    // Strummed sustains need the strum held through the tail.
+    hold:
+      p.mode === "tap"
+        ? "keep the fret held"
+        : pad
+          ? "keep the fret and the strum bar held"
+          : "keep the key and Space held",
   };
 }
 const fill = (text: string, p: LessonPlayer) => {
@@ -83,7 +90,8 @@ const fill = (text: string, p: LessonPlayer) => {
     .replace("{frets}", w.frets)
     .replace("{strum}", w.strum)
     .replace("{pads}", w.pads)
-    .replace("{power}", w.power);
+    .replace("{power}", w.power)
+    .replace("{hold}", w.hold ?? "keep the fret held");
 };
 /** A Soundcheck lesson for the whole band: an explanation for each
  * instrument, a demo the game plays itself on every player's highway, then
