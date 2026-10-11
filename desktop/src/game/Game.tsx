@@ -269,6 +269,9 @@ export default function Game({
           slots: performerSlots(players.length, players[0].gear?.side),
           fill:
             players.length === 1 ? 0.82 : players.length === 2 ? 0.72 : 0.58,
+          // With a band, the highways cover more of the bottom: stand
+          // higher, where the highways are narrow.
+          lift: players.length === 1 ? 0 : 0.14,
         },
       )
         .then((s) => {

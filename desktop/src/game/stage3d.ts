@@ -1230,6 +1230,9 @@ export async function createStage(
     slots?: number[];
     /** How much of the canvas height a performer fills (with `slots`). */
     fill?: number;
+    /** Raises performers by this fraction of the canvas height (with
+     * `slots`), into the open space above the lower highway. */
+    lift?: number;
   } = {},
 ) {
   const renderer = new THREE.WebGLRenderer({
@@ -1328,7 +1331,7 @@ export async function createStage(
         for (const light of lights[i] ?? []) light.position.x = x;
       });
       // Feet just above the bottom edge (the highway covers them anyway).
-      const centre = height / 2 - 0.15;
+      const centre = height / 2 - 0.15 - (options.lift ?? 0) * height;
       camera.position.set(0, centre, z);
       camera.lookAt(0, centre, 0);
     } else {
