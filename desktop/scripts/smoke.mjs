@@ -101,6 +101,12 @@ try {
   page = await app.firstWindow();
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
+  // Console errors are only printed when the smoke fails.
+  const consoleErrors = [];
+  page.on(
+    "console",
+    (m) => m.type() === "error" && consoleErrors.push(m.text()),
+  );
   const openFullTrack = async () => {
     await page.getByRole("button", { name: "Soundcheck", exact: true }).click();
     await page.getByRole("button", { name: /Full Soundcheck track/ }).click();
@@ -912,6 +918,7 @@ try {
         )
         .catch((e) => String(e)),
     );
+    console.error("Smoke page errors:", errors, consoleErrors.slice(-20));
     await mkdir("test-results", { recursive: true });
     await page
       .screenshot({ path: "test-results/smoke-failure.png" })
