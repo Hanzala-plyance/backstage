@@ -4677,123 +4677,131 @@ body,
 /* Gameplay readability: every player's numbers in a bar under their
    highway, performers beside the highways, and celebrations. */
 .game-screen {
-  --hud-solo: 200px; /* bottom of the solo highway (HUD + footer) */
-  --hud-lane: 122px; /* bottom of each multiplayer highway */
+  --hud-solo: 58px; /* the footer under the highway */
+  --hud-lane: 0px;
 }
-.game-hud {
+/* Solo: numbers in the empty space beside the bottom of the highway. */
+.side-stats {
   position: absolute;
-  left: 50%;
-  bottom: 62px;
-  transform: translateX(-50%);
-  width: min(1180px, calc(100% - 48px));
-  display: grid;
-  grid-template-columns: 1.3fr auto 1.2fr;
-  align-items: center;
-  gap: 28px;
-  padding: 12px 26px;
-  background: linear-gradient(180deg, #0d0b16e8, #07060bf5);
-  border: 1px solid #ffffff1c;
-  clip-path: var(--cut-sm);
+  bottom: 74px;
   z-index: 3;
+  width: min(300px, 24vw);
+  pointer-events: none;
 }
-.game-hud .game-metrics {
+.side-stats button {
+  pointer-events: auto;
+}
+.side-stats.left {
+  left: 40px;
+}
+.side-stats.right {
+  right: 40px;
+  text-align: right;
+}
+.side-stats .game-metrics {
   position: static;
   transform: none;
-  flex-direction: row;
-  justify-content: space-between;
-  gap: 24px;
+  display: grid;
+  gap: 14px;
   text-align: left;
 }
-.game-hud .game-metrics small {
+.side-stats .game-metrics small {
   font-size: 13px;
   letter-spacing: 2px;
 }
-.game-hud .game-metrics b {
-  margin-top: 2px;
-  font-size: 46px;
+.side-stats .game-metrics b {
+  margin-top: 0;
+  font-size: 44px;
+  line-height: 1;
 }
-.game-hud .game-metrics em {
+.side-stats .game-metrics div:first-child b {
+  font-size: 56px;
+}
+.side-stats .game-metrics em {
   font-size: 22px;
 }
-.game-hud .amplifier {
+.side-stats .amplifier {
   position: static;
   width: auto;
   display: grid;
-  justify-items: center;
+  justify-items: end;
   gap: 2px;
-  text-align: center;
 }
-.game-hud .amplifier .eyebrow {
-  font-size: 12px;
-}
-.game-hud .amplifier > strong {
-  font-size: 84px;
-  line-height: 0.95;
-}
-.game-hud .amplifier > strong i {
-  font-size: 38px;
-}
-.game-hud .amplifier > span:last-of-type {
+.side-stats .amplifier .eyebrow {
   font-size: 13px;
 }
-.game-hud .streak-pips {
-  margin: 4px 0;
+.side-stats .amplifier > strong {
+  font-size: 96px;
+  line-height: 0.95;
 }
-.game-hud .streak-pips span {
+.side-stats .amplifier > strong i {
+  font-size: 42px;
+}
+.side-stats .amplifier > span:last-of-type {
+  font-size: 13px;
+}
+.side-stats .streak-pips span {
   width: 18px;
   height: 8px;
 }
-.game-hud .power-meter {
-  margin: 0;
+.side-stats .power-meter {
+  margin: 14px 0 0;
   padding: 0;
   border: 0;
 }
-.power-meter label {
-  align-items: baseline;
-}
-.game-hud .power-meter label {
+.side-stats .power-meter label {
+  justify-content: flex-end;
+  gap: 10px;
   font-family: var(--display);
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: 1px;
   color: #bfe9ff;
 }
-.game-hud .power-meter label b {
-  font-size: 24px;
-}
-.game-hud .power-meter [role="meter"],
-.player-hud .power-meter [role="meter"] {
-  height: 26px;
-  margin: 8px 0 6px;
-  background: #101824;
-  border: 2px solid #4b8fb8;
-}
-.game-hud .power-meter [role="meter"] span,
-.player-hud .power-meter [role="meter"] span {
-  background: linear-gradient(90deg, #3aa8ff, #9beaff);
-  box-shadow: 0 0 14px #5cc8ff;
-}
-.game-hud .power-meter button {
-  padding: 2px 0;
-  font-size: 13px;
-}
-.game-screen:not(.multi):not(.lesson-screen) .highway {
-  inset: 92px 0 auto;
-  height: calc(100% - 92px - var(--hud-solo));
-}
-.game-screen:not(.multi):not(.lesson-screen) > .hit-label {
-  bottom: calc(var(--hud-solo) + 10%);
+.side-stats .power-meter label b {
   font-size: 26px;
 }
-/* Multiplayer: the HUD sits at the bottom of each lane, the highway above. */
+.side-stats .power-meter button {
+  padding: 2px 0;
+  font-size: 13px;
+  text-align: right;
+}
+/* The on-screen meter is the strip in the highway; this one is for screen
+   readers. */
+.side-stats .power-meter [role="meter"],
+.player-hud .power-meter [role="meter"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+/* Multiplayer: numbers in the bottom corners of each lane, over the space
+   beside the highway; the highway keeps the whole lane. */
 .player-hud {
   top: auto;
-  bottom: 8px;
-  left: 10px;
-  right: 10px;
+  bottom: 14px;
+  left: 12px;
+  right: 12px;
+  grid-template-columns: 1fr auto;
+  grid-template-areas:
+    "score mult"
+    "score power";
   align-items: end;
-  padding: 8px 10px;
-  background: #07060bd9;
-  border: 1px solid #ffffff14;
+  text-shadow:
+    0 2px 6px #000,
+    0 0 14px #000;
+  pointer-events: none;
+}
+.player-hud .player-score {
+  grid-area: score;
+}
+.player-hud .player-mult {
+  grid-area: mult;
+  justify-self: end;
+}
+.player-hud .power-meter.mini {
+  grid-area: power;
+  justify-self: end;
 }
 .player-score b {
   font-size: 34px;
@@ -4807,15 +4815,7 @@ body,
 .player-mult i {
   font-size: 26px;
 }
-.player-hud .power-meter.mini [role="meter"] {
-  height: 18px;
-  margin: 2px 0 0;
-}
-.game-screen:not(.lesson-screen) .highway-mp {
-  height: calc(100% - var(--hud-lane));
-}
 .game-screen:not(.lesson-screen) .player-lane .hit-label {
-  bottom: calc(var(--hud-lane) + 14%);
   font-size: 22px;
 }
 .player-tag {
@@ -4851,7 +4851,7 @@ body,
 .hit-burst {
   position: absolute;
   left: 50%;
-  bottom: calc(var(--hud-solo) - 10px);
+  bottom: 7%;
   width: min(720px, 70%);
   height: 170px;
   border-radius: 50%;
@@ -4861,7 +4861,7 @@ body,
   animation: hit-burst 0.85s ease-out forwards;
 }
 .player-lane .hit-burst {
-  bottom: calc(var(--hud-lane) - 20px);
+  bottom: 3%;
   width: 90%;
   height: 130px;
 }
@@ -4967,4 +4967,57 @@ body,
 }
 .player-hud .power-meter.mini label b {
   font-size: 16px;
+}
+/* Keep the numbers off the performer: solo stacks both groups on the free
+   side; lanes put theirs in the corner away from their performer. */
+.perf-right .side-stats.right {
+  left: 290px;
+  right: auto;
+  text-align: left;
+}
+.perf-right .side-stats .amplifier {
+  justify-items: start;
+}
+.perf-right .side-stats .power-meter label {
+  justify-content: flex-start;
+}
+.perf-right .side-stats .power-meter button {
+  text-align: left;
+}
+.perf-left .side-stats.left {
+  left: auto;
+  right: 290px;
+}
+.perf-left .side-stats.left .game-metrics {
+  text-align: right;
+}
+/* Lanes: the highway fills the bottom of the lane, so the numbers stack in
+   the space beside it, on the side away from the performer. */
+.game-screen:not(.lesson-screen) .player-lane .player-hud {
+  bottom: 24%;
+  grid-template-columns: auto;
+  grid-template-areas:
+    "score"
+    "mult"
+    "power";
+  row-gap: 4px;
+}
+.player-lane.perf-left .player-hud {
+  left: auto;
+  right: 14px;
+  justify-items: end;
+  text-align: right;
+}
+.player-lane.perf-right .player-hud {
+  right: auto;
+  left: 14px;
+  justify-items: start;
+  text-align: left;
+}
+.player-lane.perf-right .player-hud .player-mult,
+.player-lane.perf-right .player-hud .power-meter.mini {
+  justify-self: start;
+}
+.player-hud .power-meter.mini label {
+  gap: 6px;
 }

@@ -255,11 +255,11 @@ try {
       await page.keyboard.press("Shift");
       await expect(page.locator(".game-screen")).toHaveClass(/power-active/);
       await expect(page.locator(".amplifier > strong")).toHaveText("2×");
-      // The numbers sit in one bar under the highway; stars fall during
-      // Star Power.
+      // Numbers sit beside the highway (the meter itself is the strip under
+      // the frets); stars fall during Star Power.
       await expect(
-        page.locator(".game-hud .power-meter [role=meter]"),
-      ).toBeVisible();
+        page.locator(".side-stats .power-meter label"),
+      ).toContainText(/\d+%/);
       await expect(page.locator(".star-rain i").first()).toBeVisible();
       // Star Power must not change the song's speed.
       expect(await page.evaluate(() => window.__testAudio.playbackRate)).toBe(

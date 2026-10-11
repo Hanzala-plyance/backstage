@@ -499,6 +499,7 @@ export default function Game({
     };
   }, []);
   const solo = stats[0];
+  const slots = performerSlots(players.length, players[0].gear?.side);
   // Solo performers stand beside the highway, on the side they chose.
   const soloSide = multi
     ? ""
@@ -564,7 +565,9 @@ export default function Game({
       className={
         "game-screen" +
         (multi ? " multi players-" + players.length : "") +
-        (!multi && solo.powerActive ? " power-active" : "")
+        (!multi && solo.powerActive ? " power-active" : "") +
+        // Numbers go on the side away from the performer.
+        (!multi ? ` perf-${players[0].gear?.side ?? "right"}` : "")
       }
     >
       {stats.some((s) => s.powerActive) && (
@@ -615,7 +618,12 @@ export default function Game({
               <section
                 key={i}
                 className={
-                  "player-lane" + (s.powerActive ? " power-active" : "")
+                  "player-lane" +
+                  (s.powerActive ? " power-active" : "") +
+                  // Which side of the lane the performer stands on.
+                  (slots[i] < (i + 0.5) / players.length
+                    ? " perf-left"
+                    : " perf-right")
                 }
                 aria-label={p.label}
               >
@@ -679,9 +687,9 @@ export default function Game({
         </div>
       ) : (
         <>
-          {/* Everything a player reads mid-song, in one bar under the
-              highway. */}
-          <div className="game-hud" data-tier={tier(solo.combo)}>
+          {/* Numbers live in the empty space beside the bottom of the
+              highway; the Star Power meter is the strip under the frets. */}
+          <div className="side-stats left">
             <div className="game-metrics">
               <div>
                 <small>SCORE</small>
@@ -702,6 +710,8 @@ export default function Game({
                 </b>
               </div>
             </div>
+          </div>
+          <div className="side-stats right" data-tier={tier(solo.combo)}>
             <aside
               className="amplifier"
               aria-label="Guitar scoring"

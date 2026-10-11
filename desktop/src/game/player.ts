@@ -230,6 +230,7 @@ export class PlayerRuntime {
       lanes: j.lastLanes,
       tailActive: (index, lane) => j.sustainActive(index, lane),
       streak: j.combo,
+      meter: j.power,
     });
   }
   stats(finished: boolean) {
