@@ -5181,3 +5181,48 @@ body,
 .game-screen .player-grid {
   bottom: var(--footer);
 }
+
+/* Count-in before a song and the count-down after a resume. */
+.count-in {
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  z-index: 30;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  font-family: var(--display);
+  font-style: italic;
+  font-weight: 800;
+  font-size: clamp(96px, 16vh, 168px);
+  line-height: 1;
+  letter-spacing: 0.04em;
+  paint-order: stroke fill;
+  color: #ffe03a;
+  -webkit-text-stroke: 4px #160d1c;
+  text-shadow:
+    6px 6px 0 #ff2e88,
+    0 0 40px rgba(255, 224, 58, 0.45);
+  animation: count-pop 1s ease-out both;
+}
+@keyframes count-pop {
+  0% {
+    transform: translate(-50%, -50%) scale(1.5);
+    opacity: 1;
+  }
+  18% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(0.92);
+    opacity: 0.2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .count-in {
+    animation: none;
+  }
+}

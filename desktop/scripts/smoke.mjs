@@ -223,6 +223,26 @@ try {
     ),
   ).toBeLessThan(0.03);
   await page.screenshot({ path: "/tmp/backstage-desktop-game.png" });
+  // Resuming rewinds two seconds and counts down to the pause point.
+  await page.getByRole("button", { name: /Resume song/ }).click();
+  await expect(page.locator(".count-in")).toBeVisible();
+  expect(
+    await page.evaluate(() => window.__testAudio.currentTime),
+  ).toBeLessThan(before - 1.5);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "Paused." })).toBeVisible();
+  // A restart counts in again and draws the notes from the start (they once
+  // stayed hidden while misses still counted).
+  await page.getByRole("button", { name: "Restart song" }).click();
+  await expect(page.locator(".count-in")).toBeVisible();
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: "/tmp/backstage-desktop-count-in.png" });
+  await expect
+    .poll(async () =>
+      Number(await page.locator("canvas.highway").getAttribute("data-notes")),
+    )
+    .toBeGreaterThan(0);
+  await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "← Soundcheck" }).click();
   await page.getByRole("button", { name: "Song library", exact: true }).click();
   // Earn and deploy real phrase-based Star Power through the rendered game.

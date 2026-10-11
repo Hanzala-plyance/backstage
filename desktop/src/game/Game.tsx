@@ -10,6 +10,7 @@ import Stars from "../Stars";
 import { defaultLook, instrumentFor, slotName } from "../core/avatars";
 import { createStage, type Stage } from "./stage3d";
 import { baseScore, starsFor } from "../core/stars";
+import { countLabel, runFrom } from "../core/countin";
 import {
   PlayerRuntime,
   drumNotes,
@@ -88,12 +89,25 @@ export default function Game({
   const volumeRef = useRef(0.65);
   const status = useRef("ready");
   const missing = useRef<string | null>(null);
+  // The song clock runs ahead of the audio during a count-in (`leadUntil`, a
+  // performance.now() time); nothing is judged before `guard` (song time).
+  const leadUntil = useRef(0);
+  const guard = useRef(0);
+  const pausedAt = useRef<number | null>(null);
+  const songTime = () =>
+    leadUntil.current
+      ? -(leadUntil.current - performance.now()) / 1000 - offset / 1000
+      : (audio.current?.time ?? 0) - offset / 1000;
+  /** Whether input counts: playing, and past the run-up. */
+  const judging = () =>
+    status.current === "playing" && songTime() >= guard.current;
   const [phase, setPhase] = useState("ready"),
     [message, setMessage] = useState(""),
     [stats, setStats] = useState<PlayerStats[]>(() => players.map(emptyStats)),
     [time, setTime] = useState(0),
     [results, setResults] = useState<{ stars: number; best: boolean }[]>([]),
     [volume, setVolume] = useState(0.65),
+    [count, setCount] = useState<string | null>(null),
     [bursts, setBursts] = useState<
       { id: number; player: number; kind: "chord" | "sustain" }[]
     >([]),
@@ -148,6 +162,8 @@ export default function Game({
   };
   const pause = (reason = "") => {
     if (status.current === "playing") {
+      pausedAt.current = songTime();
+      leadUntil.current = 0;
       audio.current?.pause();
       runtimes.current.forEach((r) => r.release());
       setState("paused");
@@ -170,7 +186,16 @@ export default function Game({
     if (!music) return;
     starting.current = true;
     try {
-      await music.play();
+      // Count in before a song; rewind a little when resuming.
+      const run = runFrom(
+        status.current === "paused" ? pausedAt.current : null,
+        offset / 1000,
+      );
+      music.element.currentTime = run.audioAt;
+      guard.current = run.guard;
+      if (run.lead > 0) leadUntil.current = performance.now() + run.lead * 1000;
+      else await music.play();
+      pausedAt.current = null;
       setMessage("");
       setState("playing");
     } catch (error) {
@@ -214,6 +239,8 @@ export default function Game({
     if (!music) return;
     music.pause();
     music.element.currentTime = 0;
+    leadUntil.current = 0;
+    pausedAt.current = null;
     runtimes.current.forEach((r) => r.reset());
     feedback.current?.gain.reset();
     shown.current = players.map(emptyStats);
@@ -293,7 +320,17 @@ export default function Game({
     // Judge counters last frame, to hear what changed this frame.
     let counts = all.map(() => ({ bad: 0, perfects: 0, power: false }));
     let lastFrame = performance.now();
-    const clock = () => music.time - offset / 1000;
+    const clock = songTime;
+    // The count-in is over: start the music.
+    const lead = (now: number) => {
+      if (!leadUntil.current || now < leadUntil.current) return;
+      leadUntil.current = 0;
+      music.play().catch((error) => {
+        console.error("Backstage audio start failed", error);
+        pause();
+        setMessage(audioMessages[music.failure(error)]);
+      });
+    };
     const keys = all[keyboardPlayer];
     const drums = all.find((r) => r.device === "midi");
     let frame = 0,
@@ -353,10 +390,12 @@ export default function Game({
         moveFocus(event.code === "ArrowUp" ? -1 : 1);
         return;
       }
-      if (status.current === "playing") keys?.keyDown(event.code, clock());
+      if (judging()) keys?.keyDown(event.code, clock());
+      // Frets held through the run-up count as held once judging starts.
+      else if (status.current === "playing") keys?.keys.add(event.code);
     };
     const keyup = (event: KeyboardEvent) => {
-      if (status.current === "playing") keys?.keyUp(event.code, clock());
+      if (judging()) keys?.keyUp(event.code, clock());
       else keys?.keys.delete(event.code);
     };
     const blur = () => pause("Paused while Backstage was in the background.");
@@ -365,7 +404,7 @@ export default function Game({
     };
     const midiMessage = (event: MIDIMessageEvent) => {
       const data = event.data;
-      if (!data || !drums || status.current !== "playing") return;
+      if (!data || !drums || !judging()) return;
       if ((data[0] & 0xf0) !== 0x90 || data[2] === 0) return;
       let map = drumNotes;
       try {
@@ -396,11 +435,14 @@ export default function Game({
     };
     music.element.addEventListener("error", failed);
     const tick = (now: number) => {
+      if (status.current === "playing") lead(now);
       const t = clock();
+      // During the run-up, the highway moves but nothing is judged.
+      const judged = status.current === "playing" && t >= guard.current;
       let lost: string | null = null,
         lostMidi = false;
       for (const r of all) {
-        const edges = r.poll(t, status.current === "playing");
+        const edges = r.poll(t, judged);
         if (!edges.connected) lost ??= r.init.label;
         if (edges.start) {
           if (status.current === "playing") pause();
@@ -426,7 +468,7 @@ export default function Game({
               ? "MIDI device disconnected. Reconnect it to continue."
               : "Controller disconnected. Reconnect it to continue.",
         );
-      for (const r of all) r.frame(t, status.current === "playing", now);
+      for (const r of all) r.frame(t, judged, now);
       if (status.current === "playing") {
         all.forEach((r, i) => {
           const j = r.judge,
@@ -470,6 +512,9 @@ export default function Game({
       if (now - lastUI > 80) {
         show(snapshot());
         setTime(music.time);
+        setCount(
+          status.current === "playing" ? countLabel(t, guard.current) : null,
+        );
         lastUI = now;
       }
       frame = requestAnimationFrame(tick);
@@ -735,9 +780,7 @@ export default function Game({
                     phase !== "playing" || solo.power < 0.5 || solo.powerActive
                   }
                   onClick={() =>
-                    runtimes.current[0]?.judge.activate(
-                      (audio.current?.time ?? 0) - offset / 1000,
-                    )
+                    runtimes.current[0]?.judge.activate(songTime())
                   }
                 >
                   {solo.powerActive
@@ -795,6 +838,11 @@ export default function Game({
             ))}
         </>
       )}
+      {phase === "playing" && count && (
+        <div className="count-in" aria-live="polite" key={count}>
+          {count}
+        </div>
+      )}
       {phase !== "playing" && (
         <div className="game-overlay">
           <div
@@ -832,7 +880,7 @@ export default function Game({
                         chart.part !== "Drums"
                       ? "Strum solid gems. White caps are HOPOs; hollow caps are taps. Hold long notes and complete glowing phrases to earn Star Power."
                       : "Tap the matching controls as notes cross the line."
-                  : "Your song and score are right where you left them.")}
+                  : "Your score is safe. The song picks up two seconds back, with a count-down to where you left off.")}
             </p>
             {keyboardPlayer >= 0 && phase !== "finished" && (
               <div className="key-row">
