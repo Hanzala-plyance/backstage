@@ -73,6 +73,8 @@ try {
   app = await electron.launch({
     args: [
       ...(process.env.BACKSTAGE_APP_BINARY ? [] : ["."]),
+      // Tests are silent: the person's speakers stay theirs.
+      "--mute-audio",
       // Chromium's synthetic camera: avatar tests never use a real camera.
       "--use-fake-device-for-media-stream",
       "--use-fake-ui-for-media-stream",
@@ -102,6 +104,13 @@ try {
     },
   });
   page = await app.firstWindow();
+  // The window never takes focus; emulate it so the game doesn't pause as
+  // if Backstage were in the background while someone works in another app.
+  await (
+    await page.context().newCDPSession(page)
+  )
+    .send("Emulation.setFocusEmulationEnabled", { enabled: true })
+    .catch(() => {});
   page.on("pageerror", (e) => errors.push(e.message));
   page.on(
     "console",
@@ -246,6 +255,12 @@ try {
       await page.keyboard.press("Shift");
       await expect(page.locator(".game-screen")).toHaveClass(/power-active/);
       await expect(page.locator(".amplifier > strong")).toHaveText("2×");
+      // The numbers sit in one bar under the highway; stars fall during
+      // Star Power.
+      await expect(
+        page.locator(".game-hud .power-meter [role=meter]"),
+      ).toBeVisible();
+      await expect(page.locator(".star-rain i").first()).toBeVisible();
       // Star Power must not change the song's speed.
       expect(await page.evaluate(() => window.__testAudio.playbackRate)).toBe(
         0.5,
@@ -415,6 +430,19 @@ try {
     window.__pad.buttons[13].pressed = false;
   });
   await expect.poll(scores).toEqual([50, 50]);
+  // Each performer stands at the outer side of their own highway.
+  await expect(page.locator(".performer-tag")).toHaveCount(2);
+  const [p1x, p2x] = await Promise.all(
+    [1, 2].map(async (n) => {
+      const box = await page.locator(`.performer-tag.p${n}`).boundingBox();
+      const { width } = await page.evaluate(() => ({
+        width: window.innerWidth,
+      }));
+      return (box.x + box.width / 2) / width;
+    }),
+  );
+  expect(p1x).toBeLessThan(0.3);
+  expect(p2x).toBeGreaterThan(0.7);
   await page.evaluate(() => (window.__testAudio.playbackRate = 1));
   await page.screenshot({ path: "/tmp/backstage-desktop-multiplayer.png" });
   await page.keyboard.press("Escape");
@@ -863,6 +891,10 @@ try {
     "data-hits",
     "1",
   );
+  // A perfect hit nudges the song a little above the chosen volume (0.65).
+  await expect
+    .poll(() => page.evaluate(() => window.__testAudio.volume))
+    .toBeGreaterThan(0.66);
   await page.screenshot({ path: "/tmp/backstage-desktop-avatar-stage.png" });
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "← Library" }).click();

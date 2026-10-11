@@ -4673,3 +4673,298 @@ body,
 .tools-reader small {
   color: #a39dbb;
 }
+
+/* Gameplay readability: every player's numbers in a bar under their
+   highway, performers beside the highways, and celebrations. */
+.game-screen {
+  --hud-solo: 200px; /* bottom of the solo highway (HUD + footer) */
+  --hud-lane: 122px; /* bottom of each multiplayer highway */
+}
+.game-hud {
+  position: absolute;
+  left: 50%;
+  bottom: 62px;
+  transform: translateX(-50%);
+  width: min(1180px, calc(100% - 48px));
+  display: grid;
+  grid-template-columns: 1.3fr auto 1.2fr;
+  align-items: center;
+  gap: 28px;
+  padding: 12px 26px;
+  background: linear-gradient(180deg, #0d0b16e8, #07060bf5);
+  border: 1px solid #ffffff1c;
+  clip-path: var(--cut-sm);
+  z-index: 3;
+}
+.game-hud .game-metrics {
+  position: static;
+  transform: none;
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 24px;
+  text-align: left;
+}
+.game-hud .game-metrics small {
+  font-size: 13px;
+  letter-spacing: 2px;
+}
+.game-hud .game-metrics b {
+  margin-top: 2px;
+  font-size: 46px;
+}
+.game-hud .game-metrics em {
+  font-size: 22px;
+}
+.game-hud .amplifier {
+  position: static;
+  width: auto;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  text-align: center;
+}
+.game-hud .amplifier .eyebrow {
+  font-size: 12px;
+}
+.game-hud .amplifier > strong {
+  font-size: 84px;
+  line-height: 0.95;
+}
+.game-hud .amplifier > strong i {
+  font-size: 38px;
+}
+.game-hud .amplifier > span:last-of-type {
+  font-size: 13px;
+}
+.game-hud .streak-pips {
+  margin: 4px 0;
+}
+.game-hud .streak-pips span {
+  width: 18px;
+  height: 8px;
+}
+.game-hud .power-meter {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.power-meter label {
+  align-items: baseline;
+}
+.game-hud .power-meter label {
+  font-family: var(--display);
+  font-size: 15px;
+  letter-spacing: 1px;
+  color: #bfe9ff;
+}
+.game-hud .power-meter label b {
+  font-size: 24px;
+}
+.game-hud .power-meter [role="meter"],
+.player-hud .power-meter [role="meter"] {
+  height: 26px;
+  margin: 8px 0 6px;
+  background: #101824;
+  border: 2px solid #4b8fb8;
+}
+.game-hud .power-meter [role="meter"] span,
+.player-hud .power-meter [role="meter"] span {
+  background: linear-gradient(90deg, #3aa8ff, #9beaff);
+  box-shadow: 0 0 14px #5cc8ff;
+}
+.game-hud .power-meter button {
+  padding: 2px 0;
+  font-size: 13px;
+}
+.game-screen:not(.multi):not(.lesson-screen) .highway {
+  inset: 92px 0 auto;
+  height: calc(100% - 92px - var(--hud-solo));
+}
+.game-screen:not(.multi):not(.lesson-screen) > .hit-label {
+  bottom: calc(var(--hud-solo) + 10%);
+  font-size: 26px;
+}
+/* Multiplayer: the HUD sits at the bottom of each lane, the highway above. */
+.player-hud {
+  top: auto;
+  bottom: 8px;
+  left: 10px;
+  right: 10px;
+  align-items: end;
+  padding: 8px 10px;
+  background: #07060bd9;
+  border: 1px solid #ffffff14;
+}
+.player-score b {
+  font-size: 34px;
+}
+.player-score small {
+  font-size: 13px;
+}
+.player-mult {
+  font-size: 54px;
+}
+.player-mult i {
+  font-size: 26px;
+}
+.player-hud .power-meter.mini [role="meter"] {
+  height: 18px;
+  margin: 2px 0 0;
+}
+.game-screen:not(.lesson-screen) .highway-mp {
+  height: calc(100% - var(--hud-lane));
+}
+.game-screen:not(.lesson-screen) .player-lane .hit-label {
+  bottom: calc(var(--hud-lane) + 14%);
+  font-size: 22px;
+}
+.player-tag {
+  font-size: 15px;
+}
+.players-4 .player-score b {
+  font-size: 26px;
+}
+.players-4 .player-mult {
+  font-size: 40px;
+}
+.players-4 .player-score small {
+  font-size: 12px;
+}
+/* The band fills the play area; each performer stands beside their highway
+   (see performerSlots) and the highways cover their feet. */
+.game-screen:not(.lesson-screen) .band-stage,
+.game-screen:not(.lesson-screen) .band-tags {
+  top: 88px;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: calc(100% - 88px - var(--hud-solo));
+}
+.game-screen.multi:not(.lesson-screen) .band-stage,
+.game-screen.multi:not(.lesson-screen) .band-tags {
+  height: calc(100% - 88px - 58px - var(--hud-lane));
+}
+.game-screen .player-lane {
+  background: #07060b40;
+}
+/* Celebrations in the hit zone. */
+.hit-burst {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--hud-solo) - 10px);
+  width: min(720px, 70%);
+  height: 170px;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 2;
+  transform: translateX(-50%);
+  animation: hit-burst 0.85s ease-out forwards;
+}
+.player-lane .hit-burst {
+  bottom: calc(var(--hud-lane) - 20px);
+  width: 90%;
+  height: 130px;
+}
+.hit-burst.chord {
+  background: radial-gradient(
+    ellipse at center,
+    #ffffffaa 0,
+    #ff2e8877 28%,
+    transparent 70%
+  );
+}
+.hit-burst.sustain {
+  background: radial-gradient(
+    ellipse at center,
+    #d6f6ffaa 0,
+    #38e8ff66 32%,
+    transparent 70%
+  );
+}
+@keyframes hit-burst {
+  from {
+    opacity: 1;
+    transform: translateX(-50%) scale(0.4);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-50%) scale(1.7);
+  }
+}
+.hit-label.chord {
+  color: #fff;
+  text-shadow:
+    0 0 18px #ff2e88,
+    0 0 36px #c04bff;
+  animation: chord-pop 0.6s ease-out;
+}
+@keyframes chord-pop {
+  from {
+    transform: translateX(-50%) scale(1.9);
+  }
+  to {
+    transform: translateX(-50%) scale(1);
+  }
+}
+/* Star Power: stars fall behind the stage. */
+.star-rain {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.star-rain i {
+  position: absolute;
+  top: -40px;
+  font-style: normal;
+  color: #c9f3ff;
+  opacity: 0.85;
+  text-shadow:
+    0 0 10px #5cc8ff,
+    0 0 22px #c04bff;
+  animation: star-fall linear infinite;
+}
+@keyframes star-fall {
+  from {
+    transform: translateY(0) rotate(0deg);
+  }
+  to {
+    transform: translateY(110vh) rotate(320deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .star-rain,
+  .hit-burst {
+    display: none;
+  }
+}
+/* Larger type for things read mid-song. */
+.game-header small {
+  font-size: 13px;
+}
+.game-footer {
+  font-size: 13px;
+}
+.game-dialog p {
+  font-size: 15px;
+}
+.key-row kbd {
+  font-size: 12px;
+}
+.results small {
+  font-size: 13px;
+}
+.comic-caption {
+  font-size: 22px;
+}
+.player-hud .power-meter.mini label {
+  margin-top: 4px;
+  font-family: var(--display);
+  font-size: 13px;
+  letter-spacing: 1px;
+  color: #bfe9ff;
+}
+.player-hud .power-meter.mini label b {
+  font-size: 16px;
+}

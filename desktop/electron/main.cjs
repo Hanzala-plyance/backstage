@@ -115,9 +115,18 @@ async function createWindow() {
   win.webContents.on("will-navigate", (event, url) => {
     if (!trusted(url)) event.preventDefault();
   });
-  win.once("ready-to-show", () => win.show());
+  // Automated tests show the window without taking focus from whoever is
+  // using the computer.
+  win.once("ready-to-show", () =>
+    process.env.BACKSTAGE_TEST_DATA ? win.showInactive() : win.show(),
+  );
   await win.loadURL(devURL || origin + "/index.html");
 }
+// Tests run as a background app on macOS (no Dock icon, never activated).
+if (process.env.BACKSTAGE_TEST_DATA && process.platform === "darwin")
+  try {
+    app.setActivationPolicy("accessory");
+  } catch {}
 app.whenReady().then(async () => {
   const root = path.resolve(__dirname, "../..");
   let saved = {};

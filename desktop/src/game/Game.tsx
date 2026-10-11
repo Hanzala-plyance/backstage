@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { LoadedSong } from "../types";
 import { SongAudio } from "../core/audio";
+import { Feedback, SongGain } from "../core/feedback";
 import { keyboardLanes } from "../core/input";
 import { activateFocused, focusFirst, moveFocus } from "../core/menu";
 import { deviceLabel, isPad } from "../core/players";
@@ -33,8 +34,30 @@ const emptyStats = (): PlayerStats => ({
   multiplier: 1,
   power: 0,
   powerActive: false,
+  perfects: 0,
+  chords: 0,
+  sustained: 0,
+  overstrums: 0,
 });
 const tier = (combo: number) => Math.min(3, Math.floor(combo / 10));
+/** Where each performer stands, as a fraction of the screen width: at the
+ * outer side of their player's highway (solo: the side they chose). */
+export function performerSlots(count: number, soloSide = "right") {
+  if (count === 1) return [soloSide === "left" ? 0.2 : 0.8];
+  return Array.from({ length: count }, (_, i) => {
+    const left = i / count,
+      width = 1 / count;
+    const outer = left + width / 2 > 0.5 ? left + width : left;
+    return outer === left ? left + width * 0.2 : outer - width * 0.2;
+  });
+}
+// Falling stars while Star Power is on: fixed positions so renders match.
+const STARS = Array.from({ length: 28 }, (_, i) => ({
+  left: (i * 37) % 100,
+  delay: ((i * 0.53) % 3).toFixed(2),
+  duration: (2.4 + ((i * 0.71) % 2.2)).toFixed(2),
+  size: 10 + ((i * 7) % 16),
+}));
 export default function Game({
   song,
   players,
@@ -59,6 +82,10 @@ export default function Game({
   const canvases = useRef<(HTMLCanvasElement | null)[]>([]);
   const runtimes = useRef<PlayerRuntime[]>([]);
   const audio = useRef<SongAudio | null>(null);
+  // Sounds and the song's reacting volume; `volumeRef` is the player's
+  // chosen volume.
+  const feedback = useRef<{ fx: Feedback; gain: SongGain } | null>(null);
+  const volumeRef = useRef(0.65);
   const status = useRef("ready");
   const missing = useRef<string | null>(null);
   const [phase, setPhase] = useState("ready"),
@@ -67,6 +94,9 @@ export default function Game({
     [time, setTime] = useState(0),
     [results, setResults] = useState<{ stars: number; best: boolean }[]>([]),
     [volume, setVolume] = useState(0.65),
+    [bursts, setBursts] = useState<
+      { id: number; player: number; kind: "chord" | "sustain" }[]
+    >([]),
     [hint, setHint] = useState("");
   // The band on stage, and comic captions that pop up over each performer.
   const stageCanvas = useRef<HTMLCanvasElement | null>(null);
@@ -81,10 +111,18 @@ export default function Game({
     setCaptions((c) => [...c.slice(-5), { id, player, text, kind }]);
     setTimeout(() => setCaptions((c) => c.filter((x) => x.id !== id)), 1100);
   };
+  // Big celebrations in the hit zone: a clean chord, a sustain held out.
+  const burst = (player: number, kind: "chord" | "sustain") => {
+    const id = ++captionId.current;
+    setBursts((b) => [...b.slice(-6), { id, player, kind }]);
+    setTimeout(() => setBursts((b) => b.filter((x) => x.id !== id)), 900);
+  };
   const shown = useRef<PlayerStats[]>(players.map(emptyStats));
   const show = (next: PlayerStats[]) => {
     next.forEach((s, i) => {
       const before = shown.current[i];
+      if (s.chords > before.chords) burst(i, "chord");
+      if (s.sustained > before.sustained) burst(i, "sustain");
       if (s.powerActive && !before.powerActive)
         caption(i, "SUPER STAR!", "power");
       else if (s.misses > before.misses)
@@ -177,6 +215,7 @@ export default function Game({
     music.pause();
     music.element.currentTime = 0;
     runtimes.current.forEach((r) => r.reset());
+    feedback.current?.gain.reset();
     shown.current = players.map(emptyStats);
     setStats(players.map(emptyStats));
     setResults([]);
@@ -225,7 +264,12 @@ export default function Game({
           instrument: instrumentFor(p.chart.part),
           gear: p.gear,
         })),
-        { pixelRatio: 1 },
+        {
+          pixelRatio: 1,
+          slots: performerSlots(players.length, players[0].gear?.side),
+          fill:
+            players.length === 1 ? 0.82 : players.length === 2 ? 0.72 : 0.58,
+        },
       )
         .then((s) => {
           if (!alive) return s.dispose();
@@ -240,6 +284,12 @@ export default function Game({
     window.addEventListener("resize", resized);
     const music = new SongAudio(song.audioUrl);
     audio.current = music;
+    const fx = new Feedback(volumeRef.current),
+      gain = new SongGain();
+    feedback.current = { fx, gain };
+    // Judge counters last frame, to hear what changed this frame.
+    let counts = all.map(() => ({ bad: 0, perfects: 0, sustained: 0 }));
+    let lastFrame = performance.now();
     const clock = () => music.time - offset / 1000;
     const keys = all[keyboardPlayer];
     const drums = all.find((r) => r.device === "midi");
@@ -374,6 +424,36 @@ export default function Game({
               : "Controller disconnected. Reconnect it to continue.",
         );
       for (const r of all) r.frame(t, status.current === "playing", now);
+      if (status.current === "playing") {
+        all.forEach((r, i) => {
+          const j = r.judge,
+            c = counts[i];
+          // A restart starts the counters again.
+          if (j.misses + j.overstrums < c.bad || j.perfects < c.perfects)
+            counts[i] = { bad: 0, perfects: 0, sustained: 0 };
+          const bad = j.misses + j.overstrums - counts[i].bad,
+            good = j.perfects - counts[i].perfects,
+            held = j.sustained - counts[i].sustained;
+          if (bad > 0) {
+            fx.miss();
+            gain.miss(bad);
+          }
+          if (good > 0) gain.perfect(good);
+          if (held > 0) fx.sustain(j.sustainedLanes);
+          counts[i] = {
+            bad: j.misses + j.overstrums,
+            perfects: j.perfects,
+            sustained: j.sustained,
+          };
+        });
+        music.volume(gain.step((now - lastFrame) / 1000, volumeRef.current));
+      } else
+        counts = all.map((r) => ({
+          bad: r.judge.misses + r.judge.overstrums,
+          perfects: r.judge.perfects,
+          sustained: r.judge.sustained,
+        }));
+      lastFrame = now;
       unassigned(now);
       const live = status.current === "playing";
       stage.current?.frame(
@@ -403,6 +483,8 @@ export default function Game({
     return () => {
       cancelAnimationFrame(frame);
       alive = false;
+      fx.dispose();
+      feedback.current = null;
       stage.current?.dispose();
       stage.current = null;
       window.removeEventListener("resize", resized);
@@ -485,6 +567,23 @@ export default function Game({
         (!multi && solo.powerActive ? " power-active" : "")
       }
     >
+      {stats.some((s) => s.powerActive) && (
+        <div className="star-rain" aria-hidden="true">
+          {STARS.map((st, i) => (
+            <i
+              key={i}
+              style={{
+                left: `${st.left}%`,
+                fontSize: `${st.size}px`,
+                animationDelay: `${st.delay}s`,
+                animationDuration: `${st.duration}s`,
+              }}
+            >
+              ★
+            </i>
+          ))}
+        </div>
+      )}
       {band}
       {hint && (
         <div className="game-hint" role="status">
@@ -548,63 +647,87 @@ export default function Game({
                       "power-meter mini" + (s.power >= 0.5 ? " charged" : "")
                     }
                   >
+                    <label>
+                      ϟ STAR POWER <b>{Math.round(s.power * 100)}%</b>
+                    </label>
                     {meter(s)}
                   </div>
                 </div>
-                <div className={"hit-label " + s.last.toLowerCase()}>
+                <div
+                  className={
+                    "hit-label " +
+                    s.last.toLowerCase() +
+                    (bursts.some((b) => b.player === i && b.kind === "chord")
+                      ? " chord"
+                      : "")
+                  }
+                >
                   {phase === "playing" ? s.last : ""}
                 </div>
+                {bursts
+                  .filter((b) => b.player === i)
+                  .map((b) => (
+                    <i
+                      key={b.id}
+                      className={"hit-burst " + b.kind}
+                      aria-hidden
+                    />
+                  ))}
               </section>
             );
           })}
         </div>
       ) : (
         <>
-          <div className="game-metrics">
-            <div>
-              <small>SCORE</small>
-              <b>{solo.score.toLocaleString()}</b>
+          {/* Everything a player reads mid-song, in one bar under the
+              highway. */}
+          <div className="game-hud" data-tier={tier(solo.combo)}>
+            <div className="game-metrics">
+              <div>
+                <small>SCORE</small>
+                <b>{solo.score.toLocaleString()}</b>
+              </div>
+              <div>
+                <small>STREAK</small>
+                <b>
+                  {solo.combo}
+                  <em>×</em>
+                </b>
+              </div>
+              <div>
+                <small>ACCURACY</small>
+                <b>
+                  {solo.accuracy}
+                  <em>%</em>
+                </b>
+              </div>
             </div>
-            <div>
-              <small>STREAK</small>
-              <b>
-                {solo.combo}
-                <em>×</em>
-              </b>
-            </div>
-            <div>
-              <small>ACCURACY</small>
-              <b>
-                {solo.accuracy}
-                <em>%</em>
-              </b>
-            </div>
-          </div>
-          <aside
-            className="amplifier"
-            aria-label="Guitar scoring"
-            data-tier={tier(solo.combo)}
-          >
-            <span className="eyebrow">MULTIPLIER</span>
-            <strong>
-              {solo.multiplier}
-              <i>×</i>
-            </strong>
-            <div className="streak-pips">
-              {Array.from({ length: 10 }, (_, i) => (
-                <span
-                  key={i}
-                  className={
-                    solo.combo >= 30 || i < solo.combo % 10 ? "lit" : ""
-                  }
-                />
-              ))}
-            </div>
-            <span>
-              {solo.combo >= 30
-                ? "MAXIMUM GAIN"
-                : `${10 - (solo.combo % 10)} TO NEXT MULTIPLIER`}
-            </span>
+            <aside
+              className="amplifier"
+              aria-label="Guitar scoring"
+              data-tier={tier(solo.combo)}
+            >
+              <span className="eyebrow">MULTIPLIER</span>
+              <strong>
+                {solo.multiplier}
+                <i>×</i>
+              </strong>
+              <div className="streak-pips">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <span
+                    key={i}
+                    className={
+                      solo.combo >= 30 || i < solo.combo % 10 ? "lit" : ""
+                    }
+                  />
+                ))}
+              </div>
+              <span>
+                {solo.combo >= 30
+                  ? "MAXIMUM GAIN"
+                  : `${10 - (solo.combo % 10)} TO NEXT MULTIPLIER`}
+              </span>
+            </aside>
             <div
               className={"power-meter" + (solo.power >= 0.5 ? " charged" : "")}
             >
@@ -629,16 +752,29 @@ export default function Game({
                     : "HIT GLOWING PHRASES"}
               </button>
             </div>
-          </aside>
+          </div>
           <canvas
             ref={(el) => {
               canvases.current[0] = el;
             }}
             className="highway"
           />
-          <div className={"hit-label " + solo.last.toLowerCase()}>
+          <div
+            className={
+              "hit-label " +
+              solo.last.toLowerCase() +
+              (bursts.some((b) => b.player === 0 && b.kind === "chord")
+                ? " chord"
+                : "")
+            }
+          >
             {phase === "playing" ? solo.last : ""}
           </div>
+          {bursts
+            .filter((b) => b.player === 0)
+            .map((b) => (
+              <i key={b.id} className={"hit-burst " + b.kind} aria-hidden />
+            ))}
         </>
       )}
       {phase !== "playing" && (
@@ -823,7 +959,11 @@ export default function Game({
             onChange={(e) => {
               const value = Number(e.target.value);
               setVolume(value);
-              audio.current?.volume(value);
+              volumeRef.current = value;
+              feedback.current?.fx.setVolume(value);
+              audio.current?.volume(
+                value * (feedback.current?.gain.current ?? 1),
+              );
             }}
           />
         </label>

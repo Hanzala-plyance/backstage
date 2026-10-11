@@ -75,8 +75,8 @@ export class PlayerRuntime {
     duration: number,
     pixelRatio: number,
   ) {
-    this.judge = new Judgment(init.chart.notes, 0.14, init.chart);
     this.strumMode = mode === "strum" && init.chart.part !== "Drums";
+    this.judge = this.newJudge();
     const last = init.chart.notes[init.chart.notes.length - 1];
     this.visual = createHighway(
       canvas,
@@ -90,6 +90,16 @@ export class PlayerRuntime {
   get device() {
     return this.init.device;
   }
+  /** Strumming players hold the strum bar through strummed sustains. */
+  private newJudge() {
+    return new Judgment(this.init.chart.notes, 0.14, this.init.chart, {
+      holdStrum: this.strumMode,
+    });
+  }
+  /** Whether the keyboard player's strum keys are held. */
+  private keyStrum() {
+    return ["Space", "ArrowUp", "ArrowDown"].some((k) => this.keys.has(k));
+  }
   private strike(t: number, held: boolean[]) {
     this.judge.strike(t, held, this.strumMode);
   }
@@ -98,7 +108,8 @@ export class PlayerRuntime {
     this.keys.add(code);
     const lanes = keyboardLanes.map((k) => this.keys.has(k));
     if (code.startsWith("Shift")) this.judge.activate(t);
-    if (code === "KeyW") this.judge.update(t, lanes, true);
+    if (code === "KeyW")
+      this.judge.update(t, lanes, true, true, this.keyStrum());
     if (this.strumMode) {
       if (["Space", "ArrowUp", "ArrowDown"].includes(code))
         this.strike(t, lanes);
@@ -110,7 +121,8 @@ export class PlayerRuntime {
     const held = keyboardLanes.map((k) => this.keys.has(k));
     if (this.strumMode && keyboardLanes.includes(code))
       this.judge.fret(t, held);
-    else this.judge.update(t, held, this.keys.has("KeyW"));
+    else
+      this.judge.update(t, held, this.keys.has("KeyW"), true, this.keyStrum());
   }
   midiHit(lane: number, t: number) {
     this.pulse[lane] = performance.now() + 80;
@@ -168,7 +180,13 @@ export class PlayerRuntime {
       } else if (state.lanes.some((v, i) => v && !prev.lanes[i]))
         this.strike(t, state.lanes);
       if (state.starPower && !prev.starPower) this.judge.activate(t);
-      this.judge.update(t, state.lanes, state.whammy);
+      this.judge.update(
+        t,
+        state.lanes,
+        state.whammy,
+        true,
+        state.strumUp || state.strumDown,
+      );
     }
     this.prev = state;
     return edges;
@@ -180,7 +198,13 @@ export class PlayerRuntime {
     else if (this.device === "midi") this.held = this.pulse.map((p) => p > now);
     if (playing) {
       if (this.device === "keyboard")
-        this.judge.update(t, this.held, this.keys.has("KeyW"));
+        this.judge.update(
+          t,
+          this.held,
+          this.keys.has("KeyW"),
+          true,
+          this.keyStrum(),
+        );
       else if (!isPad(this.device)) this.judge.advance(t);
     }
     this.draw(t);
@@ -221,10 +245,14 @@ export class PlayerRuntime {
       multiplier: j.multiplier,
       power: j.power,
       powerActive: j.powerActive,
+      perfects: j.perfects,
+      chords: j.chords,
+      sustained: j.sustained,
+      overstrums: j.overstrums,
     };
   }
   reset() {
-    this.judge = new Judgment(this.init.chart.notes, 0.14, this.init.chart);
+    this.judge = this.newJudge();
     this.visual.reset();
     this.release();
     this.held = [false, false, false, false, false];

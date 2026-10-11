@@ -18,7 +18,7 @@ export type Lesson = {
   id: string;
   title: string;
   summary: string;
-  /** What to do, in order; `{frets}`, `{strum}` and `{power}` name the
+  /** What to do, in order; `{frets}`, `{strum}`, `{hold}` and `{power}` name the
    * player's own controls. */
   steps: string[];
   goal: Goal;
@@ -77,7 +77,7 @@ export const lessons: Lesson[] = [
     summary: "Keep holding long notes for bonus points.",
     steps: [
       "A gem with a tail is a sustain.",
-      "Hit it, then keep the fret held until the tail ends.",
+      "Hit it, then {hold} until the tail ends.",
       "Letting go early drops the bonus points.",
     ],
     goal: { kind: "sustain", target: 0.6 },
@@ -313,9 +313,21 @@ export function cueFor(n: Note, strumMode: boolean, drums = false) {
       : strumMode
         ? "Strum"
         : "Press";
-  return `${frets} · ${action}${n.duration > 0 ? " and hold" : ""}`;
+  const hold =
+    n.duration > 0
+      ? strumMode && action === "Strum"
+        ? " and hold (strum too)"
+        : " and hold"
+      : "";
+  return `${frets} · ${action}${hold}`;
 }
-export type DemoInput = { lanes: boolean[]; strum: boolean; power: boolean };
+export type DemoInput = {
+  lanes: boolean[];
+  strum: boolean;
+  power: boolean;
+  /** The strum bar is held (through a strummed sustain's tail). */
+  strumHeld?: boolean;
+};
 const LEAD = 0.1,
   TAP = 0.12;
 /** Plays a chart perfectly for lesson demos: frets go down just before strum
@@ -352,7 +364,13 @@ export class DemoPlayer {
       t >= n.time &&
       this.strummed < this.cursor;
     if (strum) this.strummed = this.cursor;
-    return { lanes, strum, power: this.power };
+    // Strummed sustains keep the strum bar down until the tail ends.
+    const strumHeld =
+      this.strumMode &&
+      this.strumNote(n) &&
+      t >= n.time &&
+      t < n.time + Math.max(n.duration, TAP);
+    return { lanes, strum, power: this.power, strumHeld };
   }
 }
 /** Feeds demo input to a judge the way a pad's input reaches it, so demos
@@ -371,7 +389,7 @@ export function applyDemo(
   } else if (held.some((v, i) => v && !previous[i]))
     judge.strike(t, held, false);
   if (input.power && judge.canActivate) judge.activate(t);
-  judge.update(t, held);
+  judge.update(t, held, false, true, input.strumHeld ?? false);
   return held;
 }
 /** Controller check: every input a player needs, named for their device. */
