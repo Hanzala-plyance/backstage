@@ -4260,3 +4260,52 @@ body,
     margin: 8px 0;
   }
 }
+
+/* Character select: 24 tiles in two rows; gear on cards reads clearly. */
+.select-grid {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+.card-gear {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.card-gear button {
+  display: grid;
+  gap: 2px;
+  padding: 7px 9px;
+  text-align: left;
+  background: #1f1b2b;
+  box-shadow: inset 0 -2px 0 var(--pc);
+}
+.card-gear button small {
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #8f89a6;
+}
+.card-gear button b {
+  overflow: hidden;
+  font-family: var(--display);
+  font-style: italic;
+  font-size: 15px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.card-gear button:hover {
+  background: #2a2340;
+}
+.card-colors {
+  align-items: center;
+}
+.card-colors small {
+  width: 100%;
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: #8f89a6;
+}
+.card-colors .swatch {
+  width: 24px;
+  height: 24px;
+}

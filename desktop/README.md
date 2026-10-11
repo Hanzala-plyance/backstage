@@ -57,7 +57,8 @@ implemented yet.
 ### Library
 
 **Avatars** (main menu or sidebar) is a Smash-style select screen. Every joined
-player has their own token on the grid of 10 avatars and a Camera tile, moved with
+player has their own token on the grid of 23 avatars (including long-haired
+rockers and tributes to rock face paint and psychedelic style) and a Camera tile, moved with
 their own controller (strum) and picked with green, so players choose at the same
 time. Cards along the bottom show each player's avatar (with their guitar), name
 plate, guitar style, drum kit, stage side and finish colours; on your controller

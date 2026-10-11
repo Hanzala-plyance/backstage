@@ -442,7 +442,8 @@ export default function Avatars({
                         })
                       }
                     >
-                      🎸 {style.name}
+                      <small>Guitar · blue</small>
+                      <b>{style.name}</b>
                     </button>
                     <button
                       aria-label={`Player ${i + 1} drum kit`}
@@ -456,7 +457,8 @@ export default function Avatars({
                         })
                       }
                     >
-                      🥁 {kit.name}
+                      <small>Drum kit</small>
+                      <b>{kit.name}</b>
                     </button>
                     <button
                       aria-label={`Player ${i + 1} stage side`}
@@ -466,7 +468,8 @@ export default function Avatars({
                         })
                       }
                     >
-                      Stands {gear.side}
+                      <small>Stage</small>
+                      <b>{gear.side === "left" ? "Left" : "Right"}</b>
                     </button>
                   </div>
                   <div
@@ -474,6 +477,7 @@ export default function Avatars({
                     role="group"
                     aria-label={`Player ${i + 1} finish`}
                   >
+                    <small>Color · yellow</small>
                     {finishes.map((f, k) => (
                       <button
                         key={f}

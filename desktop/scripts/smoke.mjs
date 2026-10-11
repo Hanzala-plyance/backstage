@@ -686,7 +686,7 @@ try {
   await page.getByRole("button", { name: "Player 1 stage side" }).click();
   await expect(
     page.getByRole("button", { name: "Player 1 stage side" }),
-  ).toContainText("left");
+  ).toContainText("Left");
   // Player 2 joins with Start, then picks with their own controller while
   // Player 1 keeps the mouse: strum down moves their token, green picks.
   await hold(9, () =>

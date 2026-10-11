@@ -12,6 +12,19 @@ const PRESETS = [
   "rook",
   "vex",
   "zara",
+  "siren",
+  "raven",
+  "halo",
+  "viper",
+  "juno",
+  "lyric",
+  "starla",
+  "rogue",
+  "axel",
+  "duke",
+  "gunner",
+  "demon",
+  "voodoo",
 ];
 const MAX_PHOTO = 400 * 1024;
 const GUITARS = ["classic-s", "classic-t", "single-cut", "double-cut", "arrow"];
