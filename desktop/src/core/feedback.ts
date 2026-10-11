@@ -1,6 +1,6 @@
-// Play feedback: a quiet "missed riff" clunk, a plucked guitar note when a
-// sustain is held to its end, and a song volume that dips a little on misses
-// and comes back (slightly above the player's setting) on perfect hits.
+// Play feedback: a power-up when Star Power ignites, and a song volume that
+// dips a little on misses and comes back (slightly above the player's
+// setting) on perfect hits.
 // Everything here is generated; no samples or recordings.
 
 /** How loud the song is, relative to the player's volume. Pure, so its
@@ -30,14 +30,10 @@ export class SongGain {
   }
 }
 
-// Lane pitches: an E minor pentatonic run, low to high (E3 G3 A3 B3 D4).
-const LANE_HZ = [164.81, 196.0, 220.0, 246.94, 293.66];
-
 /** Sound effects, kept well under the music. */
 export class Feedback {
   private ctx: AudioContext | null = null;
   private out: GainNode | null = null;
-  private lastMiss = -Infinity;
   /** `volume` is the player's song volume (0..1). */
   constructor(private volume = 0.65) {}
   private context() {
@@ -57,72 +53,41 @@ export class Feedback {
     // Effects sit at about a fifth of the music's level.
     if (this.out) this.out.gain.value = 0.22 * volume;
   }
-  /** Old-school missed riff: a short detuned stab that bends down and is
-   * muffled, so it reads as "wrong" without covering the song. */
-  miss() {
+  /** Star Power ignites: a rising sweep with a bright sparkle on top. */
+  powerUp() {
     const ctx = this.context();
     if (!ctx || !this.out) return;
     const now = ctx.currentTime;
-    // Rapid misses share one sound instead of stacking up.
-    if (now - this.lastMiss < 0.12) return;
-    this.lastMiss = now;
-    const filter = ctx.createBiquadFilter();
+    const sweep = ctx.createOscillator(),
+      sweepGain = ctx.createGain(),
+      filter = ctx.createBiquadFilter();
+    sweep.type = "sawtooth";
+    sweep.frequency.setValueAtTime(180, now);
+    sweep.frequency.exponentialRampToValueAtTime(1400, now + 0.45);
     filter.type = "lowpass";
-    filter.frequency.setValueAtTime(1400, now);
-    filter.frequency.exponentialRampToValueAtTime(380, now + 0.16);
-    const env = ctx.createGain();
-    env.gain.setValueAtTime(0.0001, now);
-    env.gain.exponentialRampToValueAtTime(0.5, now + 0.008);
-    env.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
-    filter.connect(env).connect(this.out);
-    for (const [type, hz, detune] of [
-      ["sawtooth", 196, -18],
-      ["square", 207.65, 14],
-      ["sawtooth", 98, 0],
-    ] as const) {
-      const osc = ctx.createOscillator();
-      osc.type = type;
-      osc.frequency.setValueAtTime(hz, now);
-      osc.frequency.exponentialRampToValueAtTime(hz * 0.78, now + 0.18);
-      osc.detune.value = detune;
-      osc.connect(filter);
-      osc.start(now);
-      osc.stop(now + 0.22);
-    }
-  }
-  /** A plucked guitar note for each lane (Karplus-Strong), for a sustain
-   * held to the end. */
-  sustain(lanes: number[]) {
-    const ctx = this.context();
-    if (!ctx || !this.out) return;
-    const now = ctx.currentTime;
-    const notes = lanes.length ? lanes : [0];
-    for (const lane of notes) {
-      const hz = LANE_HZ[lane] ?? LANE_HZ[0];
-      const seconds = 1.1,
-        rate = ctx.sampleRate,
-        buffer = ctx.createBuffer(1, Math.floor(rate * seconds), rate),
-        data = buffer.getChannelData(0),
-        period = Math.max(2, Math.round(rate / hz)),
-        ring = new Float32Array(period);
-      let seed = 1 + lane;
-      for (let i = 0; i < period; i++) {
-        seed = (seed * 16807) % 2147483647;
-        ring[i] = (seed / 2147483647) * 2 - 1;
-      }
-      for (let i = 0; i < data.length; i++) {
-        const j = i % period;
-        const next = ring[(j + 1) % period];
-        data[i] = ring[j];
-        ring[j] = 0.996 * 0.5 * (ring[j] + next);
-      }
-      const src = ctx.createBufferSource();
-      src.buffer = buffer;
-      const env = ctx.createGain();
-      env.gain.value = 0.55 / notes.length;
-      src.connect(env).connect(this.out);
-      src.start(now);
-    }
+    filter.frequency.setValueAtTime(600, now);
+    filter.frequency.exponentialRampToValueAtTime(5200, now + 0.45);
+    filter.Q.value = 6;
+    sweepGain.gain.setValueAtTime(0.0001, now);
+    sweepGain.gain.exponentialRampToValueAtTime(0.35, now + 0.08);
+    sweepGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.6);
+    sweep.connect(filter).connect(sweepGain).connect(this.out);
+    sweep.start(now);
+    sweep.stop(now + 0.62);
+    // Sparkle: a quick major arpeggio once the sweep peaks.
+    [1046.5, 1318.5, 1568, 2093].forEach((hz, i) => {
+      const at = now + 0.32 + i * 0.06,
+        osc = ctx.createOscillator(),
+        env = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = hz;
+      env.gain.setValueAtTime(0.0001, at);
+      env.gain.exponentialRampToValueAtTime(0.28, at + 0.01);
+      env.gain.exponentialRampToValueAtTime(0.0001, at + 0.35);
+      osc.connect(env).connect(this.out!);
+      osc.start(at);
+      osc.stop(at + 0.4);
+    });
   }
   dispose() {
     void this.ctx?.close().catch(() => {});

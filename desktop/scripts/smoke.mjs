@@ -254,6 +254,10 @@ try {
         .toBe("50");
       await page.keyboard.press("Shift");
       await expect(page.locator(".game-screen")).toHaveClass(/power-active/);
+      // A big comic burst pops up over the performer.
+      await expect(page.locator(".comic-caption.power")).toBeVisible();
+      await page.waitForTimeout(400);
+      await page.screenshot({ path: "/tmp/backstage-desktop-caption.png" });
       await expect(page.locator(".amplifier > strong")).toHaveText("2×");
       // Numbers sit beside the highway (the meter itself is the strip under
       // the frets); stars fall during Star Power.

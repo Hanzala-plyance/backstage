@@ -109,7 +109,7 @@ export default function Game({
   const caption = (player: number, text: string, kind: string) => {
     const id = ++captionId.current;
     setCaptions((c) => [...c.slice(-5), { id, player, text, kind }]);
-    setTimeout(() => setCaptions((c) => c.filter((x) => x.id !== id)), 1100);
+    setTimeout(() => setCaptions((c) => c.filter((x) => x.id !== id)), 1300);
   };
   // Big celebrations in the hit zone: a clean chord, a sustain held out.
   const burst = (player: number, kind: "chord" | "sustain") => {
@@ -291,7 +291,7 @@ export default function Game({
       gain = new SongGain();
     feedback.current = { fx, gain };
     // Judge counters last frame, to hear what changed this frame.
-    let counts = all.map(() => ({ bad: 0, perfects: 0, sustained: 0 }));
+    let counts = all.map(() => ({ bad: 0, perfects: 0, power: false }));
     let lastFrame = performance.now();
     const clock = () => music.time - offset / 1000;
     const keys = all[keyboardPlayer];
@@ -433,20 +433,16 @@ export default function Game({
             c = counts[i];
           // A restart starts the counters again.
           if (j.misses + j.overstrums < c.bad || j.perfects < c.perfects)
-            counts[i] = { bad: 0, perfects: 0, sustained: 0 };
+            counts[i] = { bad: 0, perfects: 0, power: false };
           const bad = j.misses + j.overstrums - counts[i].bad,
-            good = j.perfects - counts[i].perfects,
-            held = j.sustained - counts[i].sustained;
-          if (bad > 0) {
-            fx.miss();
-            gain.miss(bad);
-          }
+            good = j.perfects - counts[i].perfects;
+          if (bad > 0) gain.miss(bad);
           if (good > 0) gain.perfect(good);
-          if (held > 0) fx.sustain(j.sustainedLanes);
+          if (j.powerActive && !counts[i].power) fx.powerUp();
           counts[i] = {
             bad: j.misses + j.overstrums,
             perfects: j.perfects,
-            sustained: j.sustained,
+            power: j.powerActive,
           };
         });
         music.volume(gain.step((now - lastFrame) / 1000, volumeRef.current));
@@ -454,7 +450,7 @@ export default function Game({
         counts = all.map((r) => ({
           bad: r.judge.misses + r.judge.overstrums,
           perfects: r.judge.perfects,
-          sustained: r.judge.sustained,
+          power: r.judge.powerActive,
         }));
       lastFrame = now;
       unassigned(now);
@@ -535,7 +531,12 @@ export default function Game({
           anchors[c.player] ? (
             <b
               key={c.id}
-              className={"comic-caption " + c.kind}
+              className={
+                "comic-caption " +
+                c.kind +
+                // Grow toward the middle so the burst stays on screen.
+                (anchors[c.player].x > 0.5 ? " flip" : "")
+              }
               style={{
                 left: `${anchors[c.player].x * 100}%`,
                 top: `${anchors[c.player].y * 100}%`,

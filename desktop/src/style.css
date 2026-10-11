@@ -4955,9 +4955,6 @@ body,
 .results small {
   font-size: 13px;
 }
-.comic-caption {
-  font-size: 22px;
-}
 .player-hud .power-meter.mini label {
   margin-top: 4px;
   font-family: var(--display);
@@ -5020,4 +5017,121 @@ body,
 }
 .player-hud .power-meter.mini label {
   gap: 6px;
+}
+/* Comic pop-ups: a big Spider-Verse style burst over the performer, with
+   a halftone starburst panel behind thick, outlined lettering. */
+.comic-caption {
+  z-index: 4;
+  isolation: isolate;
+  padding: 28px 42px;
+  font-size: 76px;
+  line-height: 1;
+  letter-spacing: 2px;
+  -webkit-text-stroke: 4px #07060b;
+  paint-order: stroke fill;
+  text-shadow:
+    6px 6px 0 #ff2e88,
+    10px 10px 0 #07060b;
+  background: none;
+  filter: drop-shadow(0 0 0 #07060b) drop-shadow(5px 6px 0 #07060b);
+  animation: comic-burst 1.3s cubic-bezier(0.2, 1.6, 0.4, 1) forwards;
+}
+.comic-caption::before {
+  content: "";
+  position: absolute;
+  inset: -18% -14%;
+  z-index: -1;
+  background:
+    radial-gradient(circle, #ff2e8855 2.5px, transparent 3px) 0 0 / 11px 11px,
+    #ffe03a;
+  clip-path: polygon(
+    50% 0%,
+    58% 22%,
+    80% 6%,
+    74% 30%,
+    100% 26%,
+    82% 46%,
+    100% 64%,
+    76% 64%,
+    86% 92%,
+    62% 76%,
+    52% 100%,
+    42% 78%,
+    18% 96%,
+    24% 70%,
+    0% 72%,
+    16% 52%,
+    0% 32%,
+    24% 34%,
+    16% 8%,
+    38% 24%
+  );
+}
+.comic-caption.miss::before {
+  background:
+    radial-gradient(circle, #2f8cff66 2.5px, transparent 3px) 0 0 / 11px 11px,
+    #ffffff;
+}
+.comic-caption.power {
+  font-size: 88px;
+}
+.comic-caption.power::before {
+  background:
+    radial-gradient(circle, #c04bff66 2.5px, transparent 3px) 0 0 / 11px 11px,
+    #9beaff;
+}
+.multi .comic-caption {
+  font-size: 60px;
+}
+.players-3 .comic-caption,
+.players-4 .comic-caption {
+  font-size: 44px;
+  padding: 18px 26px;
+}
+@keyframes comic-burst {
+  0% {
+    opacity: 0;
+    scale: 0.2;
+    rotate: -18deg;
+  }
+  18% {
+    opacity: 1;
+    scale: 1.15;
+    rotate: 4deg;
+  }
+  30% {
+    scale: 1;
+    rotate: 0deg;
+  }
+  82% {
+    opacity: 1;
+    scale: 1.04;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.1;
+  }
+}
+/* Scores read from across the room. */
+.side-stats .game-metrics div:first-child b {
+  font-size: 84px;
+}
+.side-stats .game-metrics b {
+  font-size: 50px;
+}
+.player-score b {
+  font-size: 64px;
+  line-height: 1;
+}
+.players-3 .player-score b,
+.players-4 .player-score b {
+  font-size: 44px;
+}
+.comic-caption,
+.comic-caption.miss {
+  transform: translate(-12%, -55%) rotate(-7deg);
+}
+.comic-caption.flip,
+.comic-caption.miss.flip {
+  transform: translate(-88%, -55%) rotate(6deg);
 }
