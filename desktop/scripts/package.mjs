@@ -98,6 +98,9 @@ try {
       /^\/node_modules\/(three|react|react-dom|scheduler)($|\/)/,
       /^\/node_modules\/\.(vite|cache|bin)($|\/)/,
       /^\/node_modules\/\.package-lock\.json$/,
+      // usb: keep only this platform's prebuilt binary; drop sources.
+      new RegExp(`^/node_modules/usb/prebuilds/(?!${process.platform}-)`),
+      /^\/node_modules\/usb\/(libusb|src)($|\/)/,
     ],
     extraResource: [service, licensedSource],
   });
