@@ -30,10 +30,10 @@ test("names keep up to 8 capital letters and digits", () => {
     "ACE",
   );
 });
-test("31 distinct premade avatars, matching the store", () => {
-  assert.equal(presets.length, 31);
-  assert.equal(new Set(presets.map((p) => p.id)).size, 31);
-  assert.equal(presets.filter((p) => p.build === "slim").length, 9);
+test("36 distinct premade avatars, matching the store", () => {
+  assert.equal(presets.length, 36);
+  assert.equal(new Set(presets.map((p) => p.id)).size, 36);
+  assert.equal(presets.filter((p) => p.build === "slim").length, 10);
   assert.deepEqual(
     presets.map((p) => p.id),
     PRESETS,

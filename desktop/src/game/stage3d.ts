@@ -124,7 +124,7 @@ const cylinder = (rt: number, rb: number, h: number) =>
   new THREE.CylinderGeometry(rt, rb, h, 18);
 // Faces are drawn on a canvas and wrapped on the front of the head, one texture
 // per expression, so changing mood only swaps a texture.
-type Face = Mood | "blink" | "wink" | "smirk" | "grimace";
+type Face = Mood | "blink" | "wink" | "smirk" | "grimace" | "pout" | "shout";
 const FACES: Face[] = [
   "groove",
   "hyped",
@@ -135,6 +135,8 @@ const FACES: Face[] = [
   "wink",
   "smirk",
   "grimace",
+  "pout",
+  "shout",
 ];
 /** Skin's light halftone. */
 const SKIN_DOTS = 0.35;
@@ -313,6 +315,25 @@ function drawGraphic(kind: Graphic, color: string) {
     ])
       g.lineTo(x, y);
     g.closePath();
+  } else if (kind === "palm") {
+    // A small palm tree, like a pocket print.
+    g.lineWidth = 7;
+    g.strokeStyle = color;
+    g.beginPath();
+    g.moveTo(58, 118);
+    g.quadraticCurveTo(70, 80, 62, 46);
+    g.stroke();
+    for (const a of [-2.7, -2.1, -1.5, -0.9, -0.35]) {
+      g.beginPath();
+      g.moveTo(62, 46);
+      g.quadraticCurveTo(
+        62 + Math.cos(a) * 30,
+        46 + Math.sin(a) * 30 - 8,
+        62 + Math.cos(a) * 50,
+        46 + Math.sin(a) * 50 + 14,
+      );
+      g.stroke();
+    }
   } else if (kind === "star") star(64, 66, 54);
   else if (kind === "heart") {
     g.beginPath();
@@ -355,7 +376,7 @@ function drawGraphic(kind: Graphic, color: string) {
       g.stroke();
     }
   }
-  if (kind !== "skull" && kind !== "target") {
+  if (kind !== "skull" && kind !== "target" && kind !== "palm") {
     g.fill();
     g.stroke();
   }
@@ -370,6 +391,8 @@ function drawFace(
   /** Shades cover the eyes, so none are drawn. */
   shades = false,
   skin = "#f1c7a8",
+  /** Cat eyes, whiskers and a w-shaped mouth. */
+  cat = false,
 ) {
   const c = document.createElement("canvas");
   c.width = 256;
@@ -451,6 +474,24 @@ function drawFace(
       g.stroke();
       g.lineWidth = 9;
       g.fillStyle = ink;
+    } else if (cat) {
+      // Big green eyes with slit pupils.
+      g.fillStyle = "#9bd84a";
+      g.beginPath();
+      g.ellipse(x, 62, 22, 25, 0, 0, Math.PI * 2);
+      g.fill();
+      g.lineWidth = 5;
+      g.stroke();
+      g.fillStyle = ink;
+      g.beginPath();
+      g.ellipse(x, 64, 5, 18, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "#fff";
+      g.beginPath();
+      g.arc(x + 8, 54, 5, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = ink;
+      g.lineWidth = 9;
     } else {
       g.fillStyle = "#fff";
       g.beginPath();
@@ -501,7 +542,8 @@ function drawFace(
     // Brows set the mood; lashes for the long-haired looks.
     g.strokeStyle = ink;
     g.lineWidth = 7;
-    for (const side of [-1, 1]) {
+    // Cats get no brows.
+    for (const side of cat ? [] : [-1, 1]) {
       const x = 128 + side * 38;
       const lift =
         face === "hyped" ? -8 : face === "power" || face === "shred" ? 4 : 0;
@@ -534,10 +576,59 @@ function drawFace(
     g.ellipse(64, 96, 16, 9, 0, 0, Math.PI * 2);
     g.ellipse(192, 96, 16, 9, 0, 0, Math.PI * 2);
     g.fill();
+    if (cat) {
+      // Whiskers fanning out from the cheeks.
+      g.strokeStyle = ink;
+      g.lineWidth = 3;
+      for (const side of [-1, 1])
+        for (const k of [-1, 0, 1]) {
+          g.beginPath();
+          g.moveTo(128 + side * 34, 98 + k * 6);
+          g.lineTo(128 + side * 104, 92 + k * 16);
+          g.stroke();
+        }
+    }
     if (style.mustache) mustache(g, style.mustache);
+    g.strokeStyle = ink;
     g.fillStyle = ink;
     g.beginPath();
-    if (face === "grimace") {
+    if (face === "pout") {
+      // Puckered lips, pushed out for a selfie.
+      g.fillStyle = style.lips ?? "#c0505e";
+      g.ellipse(132, 110, 15, 12, 0, 0, Math.PI * 2);
+      g.fill();
+      g.lineWidth = 5;
+      g.stroke();
+      g.beginPath();
+      g.moveTo(120, 110);
+      g.lineTo(144, 110);
+      g.lineWidth = 3;
+      g.stroke();
+    } else if (face === "shout") {
+      // A huge open-mouthed yell with both rows of teeth.
+      g.ellipse(128, 114, 30, 30, 0, 0, Math.PI * 2);
+      g.fill();
+      g.fillStyle = "#fff";
+      g.fillRect(106, 88, 44, 10);
+      g.fillRect(108, 132, 40, 9);
+      g.fillStyle = "#ff5a6e";
+      g.beginPath();
+      g.ellipse(128, 128, 14, 7, 0, 0, Math.PI * 2);
+      g.fill();
+    } else if (
+      cat &&
+      (face === "groove" ||
+        face === "smirk" ||
+        face === "wink" ||
+        face === "blink")
+    ) {
+      // Cat mouth: a little w.
+      g.moveTo(108, 104);
+      g.quadraticCurveTo(118, 116, 128, 104);
+      g.quadraticCurveTo(138, 116, 148, 104);
+      g.lineWidth = 6;
+      g.stroke();
+    } else if (face === "grimace") {
       // Clenched teeth.
       g.fillStyle = "#fff";
       g.roundRect(94, 104, 68, 22, 8);
@@ -706,7 +797,7 @@ function hair(mats: Mats, p: Preset) {
       // Set back so it frames the face instead of fighting it for depth,
       // with a fringe over the forehead.
       add(part(mats, sphere(0.82), c), 0, 0.06, -0.16).scale.set(1.08, 0.9, 1);
-      const fringe = add(part(mats, sphere(0.78), c), 0, 0.36, 0.08);
+      const fringe = add(part(mats, sphere(0.78), c), 0, 0.42, 0.08);
       fringe.scale.set(1.02, 0.5, 0.98);
       break;
     }
@@ -840,6 +931,24 @@ function hair(mats: Mats, p: Preset) {
       crest.scale.set(1.3, 0.8, 1.4);
       break;
     }
+    case "slick": {
+      // Short and combed straight back, a little volume at the crown.
+      const back = add(part(mats, sphere(0.78), c), 0, 0.24, -0.12);
+      back.scale.set(1.02, 0.62, 1.05);
+      break;
+    }
+    case "tabby":
+      // Grey patches on a white cat: the scalp cap, plus stripes.
+      for (const x of [-0.18, 0, 0.18]) {
+        const stripe = add(
+          part(mats, sphere(0.12), "#5a5652", false),
+          x,
+          0.68,
+          0.44,
+        );
+        stripe.scale.set(0.5, 1, 0.5);
+      }
+      break;
     case "teased":
       // Big glam-metal hair.
       add(part(mats, sphere(1.02), c), 0, 0.5, -0.42).scale.set(1.2, 1, 1);
@@ -951,6 +1060,75 @@ function extra(mats: Mats, p: Preset) {
     );
     ring.position.set(0.05, -0.16, 0.8);
     g.add(ring);
+  } else if (p.extra === "glasses") {
+    // Frames only, so the eyes show through; an optional tinted lens.
+    const frame = p.extraColor ?? "#0b0a10",
+      square = p.frames === "square";
+    for (const side of [-1, 1]) {
+      const x = side * 0.27;
+      // A four-segment torus turned 45 degrees is a square frame; the
+      // holder stretches it into a rectangle.
+      const holder = new THREE.Group();
+      holder.position.set(x, 0.16, 0.75);
+      holder.rotation.y = x * 0.9;
+      if (square) holder.scale.set(1.15, 0.8, 1);
+      const rim = part(
+        mats,
+        square
+          ? new THREE.TorusGeometry(0.24, 0.05, 6, 4)
+          : new THREE.TorusGeometry(0.2, 0.025, 6, 28),
+        frame,
+        false,
+      );
+      if (square) rim.rotation.z = Math.PI / 4;
+      holder.add(rim);
+      if (p.lens) {
+        const lens = new THREE.Mesh(
+          new THREE.CircleGeometry(square ? 0.24 : 0.2, square ? 4 : 28),
+          new THREE.MeshBasicMaterial({
+            color: p.lens,
+            transparent: true,
+            opacity: 0.3,
+            depthWrite: false,
+          }),
+        );
+        if (square) lens.rotation.z = Math.PI / 4;
+        lens.position.z = -0.005;
+        holder.add(lens);
+      }
+      // The arm back to the ear.
+      const temple = part(
+        mats,
+        new THREE.BoxGeometry(0.035, 0.035, 0.62),
+        frame,
+        false,
+      );
+      temple.position.set(side * 0.64, 0.14, 0.32);
+      temple.rotation.y = -side * 0.32;
+      g.add(holder, temple);
+    }
+    const bridge = part(
+      mats,
+      new THREE.BoxGeometry(0.14, 0.035, 0.035),
+      frame,
+      false,
+    );
+    bridge.position.set(0, 0.2, 0.77);
+    g.add(bridge);
+  } else if (p.extra === "scarf") {
+    // Wrapped round the neck with one end hanging, white polka dots.
+    const wrap = part(mats, new THREE.TorusGeometry(0.3, 0.1, 8, 24), p.accent);
+    wrap.rotation.x = Math.PI / 2;
+    wrap.position.y = -0.74;
+    const end = part(mats, capsule(0.09, 0.42), p.accent);
+    end.position.set(0.16, -1.06, 0.3);
+    end.rotation.z = 0.15;
+    g.add(wrap, end);
+    for (const a of [-1.1, -0.55, 0, 0.55, 1.1]) {
+      const dot = part(mats, sphere(0.03), "#f5f0ff", false);
+      dot.position.set(Math.sin(a) * 0.4, -0.72, Math.cos(a) * 0.4);
+      g.add(dot);
+    }
   }
   return g;
 }
@@ -1337,6 +1515,8 @@ type Rig = {
   pieces: Piece[];
   face: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   faces: Record<Face, THREE.Texture>;
+  /** The look's signature expression, if it has one. */
+  idle?: Face;
   aura: THREE.Mesh;
   kind: Instrument;
 };
@@ -1357,7 +1537,8 @@ function performer(
     legs = (!photo && p.legs) || "straight",
     pants = (!photo && p.pants) || "#14121c",
     shoes = (!photo && p.shoes) || "sneakers",
-    sleeve = (!photo && p.jacket) || outfit;
+    sleeve = (!photo && p.jacket) || outfit,
+    cat = !photo && p.species === "cat";
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
@@ -1415,6 +1596,11 @@ function performer(
       shoe.scale.set(1, 0.6, 1.3);
       shoe.position.set(0, 0.14, 0.06);
       foot.add(sole, shoe);
+    } else if (cat) {
+      const paw = part(mats, sphere(0.2), skin, true, SKIN_DOTS);
+      paw.scale.set(1, 0.6, 1.3);
+      paw.position.z = 0.08;
+      foot.add(paw);
     } else {
       const shoe = part(mats, sphere(0.22), accent);
       shoe.scale.set(1, 0.6, 1.4);
@@ -1454,6 +1640,8 @@ function performer(
   );
   buckle.position.set(0, 0.86, slim ? 0.44 : 0.48);
   body.add(neck, belt, buckle);
+  // Cats wear no belt.
+  belt.visible = buckle.visible = !cat;
   if (!photo && p.jacket)
     for (const side of [-1, 1]) {
       const panel = part(mats, capsule(0.24, 0.5), p.jacket);
@@ -1478,6 +1666,24 @@ function performer(
   stripe.rotation.x = Math.PI / 2;
   stripe.position.y = 1.05;
   body.add(torso, stripe);
+  stripe.visible = !cat;
+  if (cat) {
+    // A tail curling up behind.
+    const base = part(mats, capsule(0.08, 0.5), p.hair);
+    base.position.set(0.22, 0.75, -0.5);
+    base.rotation.set(-0.9, 0, -0.5);
+    const tip = part(mats, capsule(0.08, 0.4), p.hair);
+    tip.position.set(0.42, 1.12, -0.7);
+    tip.rotation.set(-0.2, 0, -0.15);
+    body.add(base, tip);
+  }
+  if (!photo && p.collar)
+    for (const side of [-1, 1]) {
+      const flap = part(mats, new THREE.BoxGeometry(0.2, 0.14, 0.04), outfit);
+      flap.position.set(side * 0.13, 1.66, 0.3);
+      flap.rotation.set(-0.5, 0, side * -0.55);
+      body.add(flap);
+    }
   const chest = slim ? 0.42 : 0.46;
   if (top === "stripes")
     for (const y of [1.2, 1.36]) {
@@ -1537,12 +1743,34 @@ function performer(
   head.add(part(mats, sphere(0.75), skin, true, SKIN_DOTS));
   // Ears and a nose give the head some shape.
   for (const x of [-1, 1]) {
+    if (cat) {
+      // Pointed cat ears with pink insides.
+      const ear = part(mats, new THREE.ConeGeometry(0.24, 0.44, 12), p.hair);
+      ear.position.set(x * 0.46, 0.66, -0.02);
+      ear.rotation.z = -x * 0.45;
+      const inner = part(
+        mats,
+        new THREE.ConeGeometry(0.14, 0.3, 12),
+        "#f4a6b8",
+        false,
+      );
+      inner.position.set(x * 0.46, 0.62, 0.1);
+      inner.rotation.z = -x * 0.45;
+      inner.scale.z = 0.4;
+      head.add(ear, inner);
+      continue;
+    }
     const ear = part(mats, sphere(0.15), skin, true, SKIN_DOTS);
     ear.scale.set(0.6, 1, 0.8);
     ear.position.set(x * 0.74, -0.04, 0);
     head.add(ear);
   }
-  if (!photo) {
+  if (cat) {
+    const nose = part(mats, sphere(0.07), "#f29bb0", true);
+    nose.scale.set(1.25, 0.8, 0.8);
+    nose.position.set(0, 0.04, 0.76);
+    head.add(nose);
+  } else if (!photo) {
     // Between the eyes and the mouth on the face texture.
     const nose = part(mats, sphere(0.1), skin, true, SKIN_DOTS);
     nose.scale.set(0.85, 1, 0.9);
@@ -1557,6 +1785,7 @@ function performer(
       photo ? {} : p.face,
       !photo && p.extra === "shades",
       skin,
+      cat,
     );
   const face = new THREE.Mesh(
     new THREE.SphereGeometry(0.76, 24, 16, Math.PI / 2 - 0.95, 1.9, 0.95, 1.05),
@@ -1643,6 +1872,7 @@ function performer(
     pieces,
     face,
     faces,
+    idle: photo ? undefined : p.idle,
     aura,
     kind: instrument,
   };
@@ -1956,6 +2186,8 @@ export async function createStage(
     let face: Face = mood;
     if (mood === "groove") {
       if (tick % 110 >= 107) face = cycle % 3 === 2 ? "wink" : "blink";
+      // A signature look shows in portraits and on some idle beats.
+      else if (rig.idle && (!playing || cycle % 3 === 1)) face = rig.idle;
       else if (playing && cycle % 4 === 1) face = "smirk";
     } else if (mood === "miss" && s.misses % 2 === 0) face = "grimace";
     if (rig.face.material.map !== rig.faces[face]) {

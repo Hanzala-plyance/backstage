@@ -80,7 +80,9 @@ export type Hair =
   | "mullet"
   | "curls"
   | "teased"
-  | "quiff";
+  | "quiff"
+  | "slick"
+  | "tabby";
 export type Extra =
   | "shades"
   | "visor"
@@ -91,6 +93,8 @@ export type Extra =
   | "tophat"
   | "headband"
   | "nosering"
+  | "glasses"
+  | "scarf"
   | "none";
 /** Makeup and face paint drawn on the face. */
 export type FaceStyle = {
@@ -109,7 +113,7 @@ export type FaceStyle = {
 export type Top = "tank" | "tee" | "longsleeve" | "stripes" | "hoodie";
 export type Legs = "straight" | "skinny" | "ripped" | "shorts" | "flares";
 export type Shoes = "sneakers" | "boots" | "platforms";
-export type Graphic = "bolt" | "star" | "skull" | "heart" | "target";
+export type Graphic = "bolt" | "star" | "skull" | "heart" | "target" | "palm";
 export type Preset = {
   id: string;
   name: string;
@@ -131,8 +135,16 @@ export type Preset = {
   shoes?: Shoes;
   graphic?: Graphic;
   tie?: string;
-  /** Frame colour for shades. */
+  /** Frame colour for shades and glasses. */
   extraColor?: string;
+  /** Glasses frame shape and an optional lens tint. */
+  frames?: "round" | "square";
+  lens?: string;
+  /** A polo collar on the top. */
+  collar?: boolean;
+  /** A signature expression: shown in portraits and on some idle beats. */
+  idle?: "pout" | "shout";
+  species?: "cat";
 };
 export const presets: Preset[] = [
   {
@@ -497,6 +509,97 @@ export const presets: Preset[] = [
     legs: "flares",
     pants: "#c04bff",
     shoes: "boots",
+  },
+  // The family.
+  {
+    // Slicked-back hair, thick square glasses with tinted lenses, light polo.
+    id: "rehan",
+    name: "Rehan",
+    skin: "#b07a56",
+    hair: "#1c1612",
+    style: "slick",
+    outfit: "#e6e4df",
+    accent: "#3a3a44",
+    extra: "glasses",
+    extraColor: "#0b0a10",
+    frames: "square",
+    lens: "#c8a27a",
+    collar: true,
+    top: "longsleeve",
+    legs: "straight",
+    pants: "#2e2c34",
+    shoes: "boots",
+    face: { stubble: true },
+  },
+  {
+    // Curly hair, round glasses, black tee with a palm print, mid-scream.
+    id: "aali",
+    name: "Aali",
+    skin: "#b98260",
+    hair: "#17110d",
+    style: "curls",
+    outfit: "#121116",
+    accent: "#f0e2c4",
+    extra: "glasses",
+    extraColor: "#2a2420",
+    frames: "round",
+    top: "tee",
+    graphic: "palm",
+    legs: "straight",
+    pants: "#2a3a5a",
+    shoes: "sneakers",
+    idle: "shout",
+  },
+  {
+    // Short dark hair, big smile, camel jumper and a polka-dot navy scarf.
+    id: "wajiha",
+    name: "Wajiha",
+    skin: "#c08a64",
+    hair: "#1e1410",
+    style: "bob",
+    outfit: "#c9a46a",
+    accent: "#1c2440",
+    extra: "scarf",
+    build: "slim",
+    top: "longsleeve",
+    legs: "straight",
+    pants: "#3a3040",
+    shoes: "boots",
+    face: { lashes: true, lips: "#a0485a" },
+  },
+  {
+    // Big curly hair, round glasses, grey hoodie, pouting.
+    id: "huz",
+    name: "Huz",
+    skin: "#bb8462",
+    hair: "#1f1712",
+    style: "curls",
+    outfit: "#55627a",
+    accent: "#9fb0c8",
+    extra: "glasses",
+    extraColor: "#3a3430",
+    frames: "round",
+    top: "hoodie",
+    legs: "straight",
+    pants: "#1c1a26",
+    shoes: "sneakers",
+    idle: "pout",
+  },
+  {
+    // The cat: white with grey tabby patches, pink nose, big green eyes.
+    id: "oreo",
+    name: "Oreo",
+    skin: "#f2efe9",
+    hair: "#8a8580",
+    style: "tabby",
+    outfit: "#f2efe9",
+    accent: "#8a8580",
+    extra: "none",
+    species: "cat",
+    top: "tank",
+    legs: "straight",
+    pants: "#f2efe9",
+    shoes: "sneakers",
   },
   // Tributes to well-known rock and indie looks, by costume only.
   {
