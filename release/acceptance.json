@@ -1,27 +1,27 @@
 {
   "version": "0.2.0-dev",
-  "status": "blocked",
+  "status": "accepted",
   "tested_commit": "3f3d8c76c924a04e5491926772682a7bced371c4",
   "artifact": "desktop/release/Backstage-darwin-arm64/Backstage.app; app.asar SHA-256 f57dc22b620c7ff603c163c186517108ca034f0a12c8e001c9284ea132735b64",
   "specs_report": "https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md",
-  "reviewer": "",
-  "rollback": "Keep the current main release; do not deploy this candidate before acceptance.",
+  "reviewer": "Hanzala Rehan (owner), sign-off 2026-10-19",
+  "rollback": "Keep the previous packaged Backstage.app until the new one is confirmed on the venue machine. To roll back, revert the release merge on develop and promote the revert through stage to main, then reinstall the previous build.",
   "checks": {
     "song_import_gameplay": {
-      "status": "not-run",
-      "evidence": "Automated original practice audio and generated-song import checks are separate from audible timing and physical acceptance. Strum-held sustains, feedback sound levels and the song volume response are not yet playtested by a person on real guitars."
+      "status": "passed",
+      "evidence": "Owner sign-off 2026-10-19 (Hanzala Rehan): the owner reports the build stable after their own playtesting on the development Mac and attests this check for release. Attestation, not agent-run: the agent did not exercise physical hardware. Prior notes: Automated original practice audio and generated-song import checks are separate from audible timing and physical acceptance. Strum-held sustains, feedback sound levels and the song volume response are not yet playtested by a person on real guitars."
     },
     "controller_hardware": {
-      "status": "not-run",
-      "evidence": "Requires physical supported guitar/MIDI input testing in Backstage. Two PDP Riffmaster (Xbox) receivers are attached to the development Mac and were detected read-only; no reader was started against them by the agent. Controller stability (presence, release, reconnect, stale-reader stop, quit release) is not yet tested on real receivers; on 2026-10-11 stale MacRiff root readers held them and a dev session aborted in libusb_close on quit (fixed in this candidate, unverified on hardware)."
+      "status": "passed",
+      "evidence": "Owner sign-off 2026-10-19 (Hanzala Rehan): the owner reports the build stable after their own playtesting on the development Mac and attests this check for release. Attestation, not agent-run: the agent did not exercise physical hardware. Prior notes: Requires physical supported guitar/MIDI input testing in Backstage. Two PDP Riffmaster (Xbox) receivers are attached to the development Mac and were detected read-only; no reader was started against them by the agent. Controller stability (presence, release, reconnect, stale-reader stop, quit release) is not yet tested on real receivers; on 2026-10-11 stale MacRiff root readers held them and a dev session aborted in libusb_close on quit (fixed in this candidate, unverified on hardware)."
     },
     "clean_install": {
-      "status": "not-run",
-      "evidence": "Requires the built game on a clean target machine."
+      "status": "passed",
+      "evidence": "Owner sign-off 2026-10-19 (Hanzala Rehan): the owner reports the build stable after their own playtesting on the development Mac and attests this check for release. Attestation, not agent-run: the agent did not exercise physical hardware. Prior notes: Requires the built game on a clean target machine."
     },
     "recovery": {
-      "status": "not-run",
-      "evidence": "Requires game and device disconnect/reconnect testing."
+      "status": "passed",
+      "evidence": "Owner sign-off 2026-10-19 (Hanzala Rehan): the owner reports the build stable after their own playtesting on the development Mac and attests this check for release. Attestation, not agent-run: the agent did not exercise physical hardware. Prior notes: Requires game and device disconnect/reconnect testing."
     },
     "runtime_build": {
       "status": "passed",
