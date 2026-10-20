@@ -5,10 +5,12 @@ local hardware/employee tools, and a future multi-venue management platform.
 
 ## Play Backstage
 
-![Star Power on stage](docs/media/08-star-power.jpg)
+[![Backstage gameplay: Star Power on stage (click for the full video with sound)](docs/media/demo.gif)](https://github.com/Hanzala-plyance/backstage/releases/latest/download/backstage-demo.mp4)
 
-**[Download the latest release](https://github.com/Hanzala-plyance/backstage/releases/latest)**
-· [Watch the demo video](https://github.com/Hanzala-plyance/backstage/releases/latest/download/backstage-demo.mp4)
+**⬇️ [Download Backstage for Mac (Apple silicon)](https://github.com/Hanzala-plyance/backstage/releases/latest/download/Backstage-0.2.0-macOS-AppleSilicon.zip)**
+· [Demo song](https://github.com/Hanzala-plyance/backstage/releases/latest/download/Neon-Nights-demo-song.zip)
+· [Full demo video (72 s, with sound)](https://github.com/Hanzala-plyance/backstage/releases/latest/download/backstage-demo.mp4)
+· [Release notes](https://github.com/Hanzala-plyance/backstage/releases/latest)
 
 A five-lane rhythm game for one to four local players: guitar controllers
 (PDP Riffmaster and other gamepads), keyboard or MIDI drums, a 3D comic-book
@@ -35,7 +37,7 @@ Only add music you have the rights to use.
 | | | |
 | --- | --- | --- |
 | ![Title](docs/media/01-title.jpg) | ![Pick your character](docs/media/04-characters.jpg) | ![Song library](docs/media/03-library.jpg) |
-| ![Gameplay](docs/media/07-gameplay.jpg) | ![A 45-note streak](docs/media/09-streak.jpg) | ![Results](docs/media/10-results.jpg) |
+| ![Gameplay](docs/media/07-gameplay.jpg) | ![Star Power](docs/media/08-star-power.jpg) | ![Results](docs/media/10-results.jpg) |
 
 **Every agent and contributor starts with [backstage-specs / meta](https://github.com/Hanzala-plyance/backstage-specs/tree/meta).**
 That branch owns the [business logic](https://github.com/Hanzala-plyance/backstage-specs/blob/meta/business/product.md),
