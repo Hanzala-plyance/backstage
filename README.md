@@ -3,6 +3,40 @@
 Backstage is a rhythm gaming and venue operations product: a customer game,
 local hardware/employee tools, and a future multi-venue management platform.
 
+## Play Backstage
+
+![Star Power on stage](docs/media/08-star-power.jpg)
+
+**[Download the latest release](https://github.com/Hanzala-plyance/backstage/releases/latest)**
+· [Watch the demo video](https://github.com/Hanzala-plyance/backstage/releases/latest/download/backstage-demo.mp4)
+
+A five-lane rhythm game for one to four local players: guitar controllers
+(PDP Riffmaster and other gamepads), keyboard or MIDI drums, a 3D comic-book
+band on stage, Star Power, Soundcheck lessons and 36 characters to pick from.
+
+**Install (Mac with Apple silicon):**
+
+1. Download `Backstage-0.2.0-macOS-AppleSilicon.zip` from the release, unzip it,
+   and drag **Backstage.app** into Applications.
+2. The app is not notarized by Apple, so macOS blocks the first launch. Either open
+   **System Settings → Privacy & Security** and click **Open Anyway** after trying
+   once, or run this once in Terminal:
+   `xattr -dr com.apple.quarantine /Applications/Backstage.app`
+3. Open Backstage. The Soundcheck practice track works straight away.
+
+**Songs:** download `Neon-Nights-demo-song.zip` from the same release and unzip
+it into `~/Music/Backstage/Songs` (create the folder if needed), then refresh the
+library. Any song folder with `notes.mid`, `song.ini` and an audio file works.
+Only add music you have the rights to use.
+
+**Keyboard controls:** `A S D F G` frets · `Space` strum · `Shift` Star Power ·
+`W` whammy · `Esc` pause. Guitars and gamepads are set up under **Controllers**.
+
+| | | |
+| --- | --- | --- |
+| ![Title](docs/media/01-title.jpg) | ![Pick your character](docs/media/04-characters.jpg) | ![Song library](docs/media/03-library.jpg) |
+| ![Gameplay](docs/media/07-gameplay.jpg) | ![A 45-note streak](docs/media/09-streak.jpg) | ![Results](docs/media/10-results.jpg) |
+
 **Every agent and contributor starts with [backstage-specs / meta](https://github.com/Hanzala-plyance/backstage-specs/tree/meta).**
 That branch owns the [business logic](https://github.com/Hanzala-plyance/backstage-specs/blob/meta/business/product.md),
 [constitution](https://github.com/Hanzala-plyance/backstage-specs/blob/meta/governance/constitution.md),
@@ -21,8 +55,8 @@ code and poor designs with concrete reasoning and a better alternative.
 
 All product changes travel **feature -> develop -> stage -> main**. Main cannot
 receive failing checks, unbuilt candidates, or unverified gameplay/hardware.
-The initial stage/main bootstrap contains documentation and promotion controls;
-no game release has passed acceptance yet. See the [release evidence](https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md).
+0.2.0 is the first game release on main, accepted on the owner's playtest
+sign-off with automated evidence. See the [release evidence](https://github.com/Hanzala-plyance/backstage-specs/blob/meta/releases/0.2.0-desktop.md).
 
 ## Desktop web application
 
