@@ -3,6 +3,9 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -15,9 +18,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          cache: pip
+          cache-dependency-path: song-converter/requirements.txt
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
       - name: Test promotion rules
         run: python -m unittest discover -s scripts -p 'test_promotion.py'
       - name: Install converter dependencies
@@ -35,6 +42,24 @@ jobs:
       - name: Test controller routing
         if: hashFiles('mac-riff/build/session-plan.js') != ''
         run: node --test mac-riff/build/tests/*.test.js
+      - name: Install desktop dependencies
+        if: hashFiles('desktop/package-lock.json') != ''
+        working-directory: desktop
+        run: npm ci
+      - name: Test and build desktop
+        if: hashFiles('desktop/package-lock.json') != ''
+        working-directory: desktop
+        run: |
+          npm test
+          npm run build
+      - name: Smoke test desktop
+        if: hashFiles('desktop/package-lock.json') != ''
+        working-directory: desktop
+        run: xvfb-run -a npm run test:app
+      - name: Smoke test desktop dev mode
+        if: hashFiles('desktop/package-lock.json') != ''
+        working-directory: desktop
+        run: xvfb-run -a npm run test:dev
       - name: Check promotion route and release evidence
         if: github.event_name == 'pull_request'
         run: python scripts/check_promotion.py
@@ -42,3 +67,10 @@ jobs:
           BACKSTAGE_BASE_BRANCH: ${{ github.base_ref }}
           BACKSTAGE_HEAD_BRANCH: ${{ github.head_ref }}
           BACKSTAGE_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      - name: Upload smoke failure screenshot
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-smoke-failure
+          path: desktop/test-results/
+          if-no-files-found: ignore

@@ -1,0 +1,387 @@
+{
+ "_comment": "Recorded iTunes Search API responses (2026-10-10) for cover matching tests.",
+ "searches": [
+  {
+   "title": "Janice STFU",
+   "artist": "Drake",
+   "results": [
+    {
+     "kind": "song",
+     "artistName": "Drake",
+     "trackName": "Janice STFU",
+     "collectionName": "ICEMAN",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7f/39/61/7f396123-be56-bc11-eaab-976441808e58/26UMGIM63622.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "3 Dope Brothas",
+     "trackName": "Janice Stfu (Originally Performed by Drake) [Instrumental]",
+     "collectionName": "Janice Stfu (Originally Performed by Drake) [Instrumental] - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/d9/34/45/d9344522-0637-37e2-74f9-d64021eedb1e/199999658139.png/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Oishi Manko",
+     "trackName": "Janice Stfu (Remix)",
+     "collectionName": "Janice Stfu (Remix) - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/31/47/e2/3147e2a4-6a98-4b6f-8a02-7588699e9757/5064021624381_cover.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Strings From Paris",
+     "trackName": "Janice STFU",
+     "collectionName": "Janice STFU - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/c1/7a/28/c17a286e-af93-b039-0c5c-0a95eca5f09c/1113010.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Cris Cape",
+     "trackName": "Janice STFU (Cris Cape Remix)",
+     "collectionName": "Janice STFU (Cris Cape Remix) - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/e4/9b/71/e49b7178-746e-cd30-f63c-d387e36e331c/artwork.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "The Grey",
+     "trackName": "Janice STFU (The Grey Remix)",
+     "collectionName": "Janice STFU (The Grey Remix) - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ba/91/df/ba91df23-b102-05a6-edbc-ef7d3eb21f60/artwork.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "BARON",
+     "trackName": "Janice STFU",
+     "collectionName": "Janice STFU - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/01/1b/0a/011b0a26-e95c-38f1-c149-f8b5790198f3/artwork.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "KPH",
+     "trackName": "Janice Stfu (Instrumental)",
+     "collectionName": "4 Bangerz!!!! - EP",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/dc/6d/37/dc6d3718-6c68-d8ae-affe-3111c71f9a27/199999658184.png/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Guns N' Roses",
+     "trackName": "Sweet Child O' Mine",
+     "collectionName": "Appetite For Destruction",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/a0/4d/c4/a04dc484-03cc-02aa-fa82-5334fcb4bc16/18UMGIM24878.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Troy Tha Studio Rat",
+     "trackName": "Janice STFU (Originally Performed by Drake) [Instrumental Version]",
+     "collectionName": "Janice STFU (Originally Performed by Drake) [Instrumental Version] - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/59/44/fa/5944faf6-7c8b-dae5-0438-897df6d99506/824296783573_cover.jpg/100x100bb.jpg"
+    }
+   ]
+  },
+  {
+   "title": "One More Time",
+   "artist": "Daft Punk",
+   "results": [
+    {
+     "kind": "song",
+     "artistName": "Daft Punk",
+     "trackName": "One More Time",
+     "collectionName": "Discovery",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/fd/4a/77/fd4a77db-0ebc-d043-41a2-f32fa1bb0fb4/dj.qrikkdwj.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Daft Punk",
+     "trackName": "One More Time (Short Radio Edit)",
+     "collectionName": "Musique, Vol. 1 (1993-2005)",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Features114/v4/ba/04/2e/ba042ef2-6682-3ad0-7070-2eaad226477b/dj.frtlfdqh.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Daft Punk",
+     "trackName": "One More Time (12 Mix)",
+     "collectionName": "One More Time - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/5d/7c/8e/5d7c8e84-9e75-0e06-8876-f98c13df1694/dj.mpyxowas.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Daft Punk",
+     "trackName": "One More Time / Aerodynamic (Live)",
+     "collectionName": "Alive 2007",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/b7/15/5f/b7155f62-f93a-2fe7-d98d-cc19240b4bd0/5099951165857_1500x1500_300dpi.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Daft Punk",
+     "trackName": "Human After All / Together / One More Time / Music Sounds Better with You (Bonus Track)",
+     "collectionName": "Alive 2007",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/b7/15/5f/b7155f62-f93a-2fe7-d98d-cc19240b4bd0/5099951165857_1500x1500_300dpi.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Daft Punk",
+     "trackName": "One More Time (Romanthony's Unplugged)",
+     "collectionName": "Daft Club",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Features124/v4/ac/e1/07/ace10786-a064-0ed0-17ff-ba0cebecefe9/dj.mpdjtkyu.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Rockabye Baby!",
+     "trackName": "One More Time",
+     "collectionName": "Lullaby Renditions of Daft Punk",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/db/b6/bb/dbb6bb97-235c-cf98-7c19-c5ac768a6c52/1820.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Daft Punk",
+     "trackName": "One More Time (Radio Edit)",
+     "collectionName": "One More Time - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/5d/7c/8e/5d7c8e84-9e75-0e06-8876-f98c13df1694/dj.mpyxowas.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Daft Punk",
+     "trackName": "One More Time (Short Radio Edit)",
+     "collectionName": "One More Time - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/5d/7c/8e/5d7c8e84-9e75-0e06-8876-f98c13df1694/dj.mpyxowas.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Jbizz",
+     "trackName": "One More Time",
+     "collectionName": "Tattoos & Love Notes",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/05/b2/0c/05b20c1a-d620-75a5-6515-3d7641d3a9fb/artwork.jpg/100x100bb.jpg"
+    }
+   ]
+  },
+  {
+   "title": "I Wonder",
+   "artist": "Kanye West",
+   "results": [
+    {
+     "kind": "song",
+     "artistName": "Kanye West",
+     "trackName": "I Wonder",
+     "collectionName": "Graduation",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/39/25/2d/39252d65-2d50-b991-0962-f7a98a761271/00602517483507.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "thepianokid",
+     "trackName": "I Wonder (Piano Version)",
+     "collectionName": "Piano Covers Tribute to Kanye West",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/9f/3f/eb/9f3feb14-b8b7-4921-c9b9-7b5c716f5394/198001987663.png/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Kanye West",
+     "trackName": "God Is",
+     "collectionName": "JESUS IS KING",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/21/fd/d3/21fdd3d4-0c00-53ef-3903-d0569c49a812/19UMGIM89397.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Kanye West",
+     "trackName": "Follow God",
+     "collectionName": "JESUS IS KING",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/21/fd/d3/21fdd3d4-0c00-53ef-3903-d0569c49a812/19UMGIM89397.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Kanye West",
+     "trackName": "Heartless",
+     "collectionName": "808s & Heartbreak (Exclusive Edition)",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/f3/61/19/f36119b9-4d88-05eb-4306-2ae0e7decf88/08UMGIM26559.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Rihanna and Kanye West and Paul McCartney",
+     "trackName": "FourFiveSeconds",
+     "collectionName": "FourFiveSeconds - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/b1/f2/24/b1f224ad-40fb-ae22-b632-de330c70b540/00602547235398.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Sturgill Simpson",
+     "trackName": "I Wonder",
+     "collectionName": "Cuttin' Grass - Vol. 1 (Butcher Shoppe Sessions)",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/29/2f/e0/292fe074-0e8e-3c16-aa39-fdb8da233698/195497084135.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Russell Dickerson",
+     "trackName": "I Wonder",
+     "collectionName": "Russell Dickerson",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/08/0f/0f/080f0fca-4961-4ed4-3750-b1e2c40d9952/196589436382.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Kellie Pickler",
+     "trackName": "I Wonder",
+     "collectionName": "Small Town Girl",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Features114/v4/17/b5/dd/17b5dd88-ac55-6491-5b57-53f81b4a5b7f/dj.rwytsxlw.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Shawn Mendes",
+     "trackName": "Wonder",
+     "collectionName": "Wonder",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/d5/f0/d2/d5f0d270-fc16-5691-d83e-917c067a6561/20UMGIM83351.rgb.jpg/100x100bb.jpg"
+    }
+   ]
+  },
+  {
+   "title": "fukumean",
+   "artist": "Gunna",
+   "results": [
+    {
+     "kind": "song",
+     "artistName": "Gunna",
+     "trackName": "umean",
+     "collectionName": "a Gift & a Curse",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/af/f8/ef/aff8ef1c-e1e7-8c70-75fa-2201d8785f3d/075679678492.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Gunna",
+     "trackName": "fukumean (instrumental)",
+     "collectionName": "fukumean - EP",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/5c/9d/0c/5c9d0c9b-ae5a-5b4c-fb27-f2d1a606411d/075679675576.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Covers Unplugged",
+     "trackName": "Fukumean (slowed + reverb)",
+     "collectionName": "LOFI CAFE VOL. 2 (Slowed & Reverbed)",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/7d/70/16/7d701618-845a-1555-4512-526e2df7ef3e/cover_4062851414098.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Seener",
+     "trackName": "Fukumean",
+     "collectionName": "Terapia",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/28/20/d0/2820d082-9120-061f-399e-9ba7b207b6e2/artwork.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Heater & Crunch, Drama B & Benz Boyz",
+     "trackName": "Fukumean",
+     "collectionName": "Fukumean - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/db/2d/7d/db2d7dff-a954-d446-5256-e5c9544bad3a/5063585456025_cover.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Singer's Edge Karaoke",
+     "trackName": "Fukumean (Originally Performed By Gunna) [Karaoke]",
+     "collectionName": "Fukumean (Originally Performed By Gunna) [Karaoke Version] - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/5f/1e/4f/5f1e4f65-6167-77d6-700a-10bbff10ebf5/805570077694.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "210 Toven",
+     "trackName": "FukuMean (feat. BunnaB)",
+     "collectionName": "FukuMean (feat. BunnaB) - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/c9/55/90/c95590f6-5532-ed99-f7c0-36d082c01732/199316110531_cover.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "home alone.",
+     "trackName": "fukumean",
+     "collectionName": "kill 'em with kindness",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/1c/14/92/1c1492b5-5851-44d5-6875-8459ac1456fa/artwork.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Producer_Max",
+     "trackName": "Fukumean (instrumental Chopped n' Screwed)",
+     "collectionName": "Fukumean (instrumental Chopped n' Screwed) - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/c4/f9/24/c4f924cb-ad45-08ee-e23a-0b09c18cb89f/artwork.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Bolo3k",
+     "trackName": "Fukumean (Radio Edit)",
+     "collectionName": "Fukumean (Radio Edit) - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/7b/93/8d7b9385-a5cf-f7dc-10fc-67e88fcd3370/055905965589.png/100x100bb.jpg"
+    }
+   ]
+  },
+  {
+   "title": "Smoke & Drive (feat. blackbear)",
+   "artist": "Yung Pinch",
+   "results": [
+    {
+     "kind": "song",
+     "artistName": "Yung Pinch",
+     "trackName": "Perfect",
+     "collectionName": "Perfect - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/77/51/a4/7751a492-2e87-20d6-abb9-7b327676d38e/886447770382.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "mgk & Camila Cabello",
+     "trackName": "Bad Things",
+     "collectionName": "bloom",
+     "collectionArtistName": "mgk",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/c1/0c/aa/c10caa4a-262c-ab72-4ab2-10f93545590f/17UMGIM89198.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "mgk, X Ambassadors & Bebe Rexha",
+     "trackName": "Home",
+     "collectionName": "Bright: The Album",
+     "collectionArtistName": "Various Artists",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/53/40/c2/5340c242-122b-33b6-2c51-e2438d3339e2/075679886491.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Florida Georgia Line",
+     "trackName": "Smoke",
+     "collectionName": "Anything Goes",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/11/af/23/11af2360-5695-9a3a-6a4b-d8eb842ffd40/14UMGIM37974.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "mgk & Jelly Roll",
+     "trackName": "Lonely Road",
+     "collectionName": "Lonely Road - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/78/90/c0/7890c0ec-60f9-fb8e-c46a-284d7043065f/24UMGIM77580.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Incubus",
+     "trackName": "Drive",
+     "collectionName": "Make Yourself",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/dd/a4/c1/dda4c166-da07-ba22-60e4-499b477c6e77/mzi.ffqrqnqb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "mgk",
+     "trackName": "Let You Go",
+     "collectionName": "bloom",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/c1/0c/aa/c10caa4a-262c-ab72-4ab2-10f93545590f/17UMGIM89198.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "mgk",
+     "trackName": "At My Best (feat. Hailee Steinfeld)",
+     "collectionName": "bloom",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/c1/0c/aa/c10caa4a-262c-ab72-4ab2-10f93545590f/17UMGIM89198.rgb.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "\"Weird Al\" Yankovic",
+     "trackName": "White & Nerdy (Parody of \"Ridin'\" by Chamillionaire feat. Krayzie Bone)",
+     "collectionName": "Straight Outta Lynwood",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/cc/5c/3b/cc5c3b37-af82-f1e6-afa5-10be62ee7461/888880968999.jpg/100x100bb.jpg"
+    },
+    {
+     "kind": "song",
+     "artistName": "Bobby Mahoney",
+     "trackName": "Smoke and Drive",
+     "collectionName": "Smoke and Drive - Single",
+     "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/a6/1d/19/a61d195f-ce9c-c274-a504-448ec5053390/199538763263.jpg/100x100bb.jpg"
+    }
+   ]
+  }
+ ]
+}

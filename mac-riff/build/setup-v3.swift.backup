@@ -1,0 +1,381 @@
+import SwiftUI
+import AppKit
+import IOKit
+import IOKit.hid
+
+struct ControllerProfile: Decodable {
+    let id: String, name: String, decoder: String, pairing: String
+    let vendorId: Int
+    let productIds: [Int]
+    let games: [String: String]
+}
+struct ProfileCatalog: Decodable { let schemaVersion: Int; let profiles: [ControllerProfile] }
+struct DeviceRow: Identifiable, Hashable {
+    let id: String, name: String
+    let vendor: Int, product: Int
+    let native: Bool
+}
+
+@MainActor final class SetupModel: ObservableObject {
+    @Published var devices: [DeviceRow] = []
+    @Published var selected = ""
+    @Published var game = "clonehero"
+    @Published var message = "Connect your receiver, turn on your guitar, then click Connect Guitar."
+    @Published var status: [String: Any] = [:]
+    @Published var running = false
+    @Published var testing = false
+    @Published var busy = false
+    @Published var launchProgress = ""
+    let root: URL
+    let profiles: [ControllerProfile]
+    var host: Process?
+    var operation: Process?
+    var testSession: URL?
+    var runtimeError: String?
+    var timer: Timer?
+    var scanTick = 0
+    var savedChecks = 0
+
+    init() {
+        root = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/MacRiff")
+        do { try Self.installRuntime(at: root) }
+        catch { runtimeError = error.localizedDescription; message = "Could not prepare the app: \(error.localizedDescription)" }
+        profiles = (try? JSONDecoder().decode(ProfileCatalog.self, from: Data(contentsOf: root.appendingPathComponent("profiles/controllers.json"))))?.profiles ?? []
+        scan(); refresh()
+        timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
+            guard let owner = self else { return }
+            Task { @MainActor in
+                owner.refresh()
+                owner.scanTick += 1
+                if owner.scanTick == 15 { owner.scanTick = 0; owner.scan() }
+            }
+        }
+    }
+    static func installRuntime(at root: URL) throws {
+        let fm = FileManager.default
+        guard let payload = Bundle.main.resourceURL?.appendingPathComponent("Runtime") else { throw CocoaError(.fileNoSuchFile) }
+        let version = try String(contentsOf: payload.appendingPathComponent("payload-version"), encoding: .utf8) + payload.path
+        if (try? String(contentsOf: root.appendingPathComponent("payload-version"), encoding: .utf8)) == version { return }
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        guard let items = fm.enumerator(at: payload, includingPropertiesForKeys: [.isDirectoryKey]) else { throw CocoaError(.fileReadUnknown) }
+        for case let source as URL in items {
+            let relative = String(source.path.dropFirst(payload.path.count + 1))
+            if relative == "payload-version" { continue }
+            let target = root.appendingPathComponent(relative)
+            // The large, read-only runtime stays inside the installed app.
+            if relative == "bin" || relative == "node_modules" {
+                items.skipDescendants()
+                if fm.fileExists(atPath: target.path) || (try? fm.destinationOfSymbolicLink(atPath: target.path)) != nil { try fm.removeItem(at: target) }
+                try fm.createSymbolicLink(at: target, withDestinationURL: source)
+            } else if try source.resourceValues(forKeys: [.isDirectoryKey]).isDirectory == true {
+                try fm.createDirectory(at: target, withIntermediateDirectories: true)
+            } else {
+                if fm.fileExists(atPath: target.path) { try fm.removeItem(at: target) }
+                try fm.copyItem(at: source, to: target)
+            }
+        }
+        // Only payload files are updated. Game copies and settings backups remain intact.
+        try Data(version.utf8).write(to: root.appendingPathComponent("payload-version"), options: .atomic)
+    }
+    var device: DeviceRow? { devices.first { $0.id == selected } }
+    var profile: ControllerProfile? {
+        guard let d = device else { return nil }
+        return profiles.first { $0.vendorId == d.vendor && $0.productIds.contains(d.product) }
+    }
+    var gameURL: URL? {
+        let names = game == "clonehero" ? ["Clone Hero.app"] : ["YARG.app", "YARG (Nightly).app"]
+        for base in [URL(fileURLWithPath: "/Applications"), FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")] {
+            for name in names {
+                let url = base.appendingPathComponent(name)
+                if FileManager.default.fileExists(atPath: url.path) { return url }
+            }
+        }
+        return nil
+    }
+    var inputReceived: Bool { status["connected"] as? Bool == true && (status["reports"] as? Int ?? 0) > 0 }
+    var observed: Int { (status["observed"] as? Int ?? 0) | (running ? savedChecks : 0) }
+    var coreChecks: Int { observed & 0x7f }
+    var canTest: Bool {
+        guard !busy, !running, !testing, runtimeError == nil, let d = device else { return false }
+        return profile?.decoder == "xbox-gip-riffmaster" && devices.filter { $0.vendor == d.vendor && $0.product == d.product }.count == 1
+    }
+    var canStart: Bool {
+        guard !busy, !running, gameURL != nil, runtimeError == nil, let d = device else { return false }
+        if let p = profile { return p.games[game] == "bridge" && testing && inputReceived && coreChecks == 0x7f }
+        return d.native && !testing
+    }
+    func scan() {
+        var found: [DeviceRow] = []
+        var iterator: io_iterator_t = 0
+        if IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOUSBHostDevice"), &iterator) == KERN_SUCCESS {
+            defer { IOObjectRelease(iterator) }
+            while true {
+                let service = IOIteratorNext(iterator)
+                if service == 0 { break }
+                defer { IOObjectRelease(service) }
+                func property(_ key: String) -> Any? { IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() }
+                let vendor = (property("idVendor") as? NSNumber)?.intValue ?? 0
+                let product = (property("idProduct") as? NSNumber)?.intValue ?? 0
+                let name = property("USB Product Name") as? String ?? "USB device"
+                if profiles.contains(where: { $0.vendorId == vendor && $0.productIds.contains(product) }) || ["guitar", "riff", "controller", "gamepad", "joystick", "drum", "santroller"].contains(where: { name.lowercased().contains($0) }) {
+                    var entry: UInt64 = 0
+                    IORegistryEntryGetRegistryEntryID(service, &entry)
+                    found.append(DeviceRow(id: "usb-\(entry)", name: name, vendor: vendor, product: product, native: false))
+                }
+            }
+        }
+        let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
+        IOHIDManagerSetDeviceMatchingMultiple(manager, [4, 5, 8].map { [kIOHIDDeviceUsagePageKey: 1, kIOHIDDeviceUsageKey: $0] as NSDictionary } as CFArray)
+        if let devices = IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice> {
+            for hid in devices {
+                let vendor = (IOHIDDeviceGetProperty(hid, kIOHIDVendorIDKey as CFString) as? NSNumber)?.intValue ?? 0
+                let product = (IOHIDDeviceGetProperty(hid, kIOHIDProductIDKey as CFString) as? NSNumber)?.intValue ?? 0
+                let name = IOHIDDeviceGetProperty(hid, kIOHIDProductKey as CFString) as? String ?? "HID game controller"
+                if let i = found.firstIndex(where: { $0.vendor == vendor && $0.product == product }) {
+                    let old = found[i]
+                    found[i] = DeviceRow(id: old.id, name: old.name, vendor: vendor, product: product, native: true)
+                } else {
+                    var entry: UInt64 = 0
+                    IORegistryEntryGetRegistryEntryID(IOHIDDeviceGetService(hid), &entry)
+                    found.append(DeviceRow(id: "hid-\(entry)", name: name, vendor: vendor, product: product, native: true))
+                }
+            }
+        }
+        self.devices = found.sorted { $0.name < $1.name }
+        if !self.devices.contains(where: { $0.id == selected }) { selected = self.devices.first?.id ?? "" }
+    }
+    var gameSession: URL? {
+        guard let path = try? String(contentsOf: root.appendingPathComponent("build/latest-controller-session.txt"), encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines), path.hasPrefix("/tmp/macriff-controller.") else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+    var session: URL? { testing ? testSession : gameSession ?? testSession }
+    func refresh() {
+        let copy = root.appendingPathComponent("build/Clone Hero (MacRiff).app").path
+        running = NSWorkspace.shared.runningApplications.contains { $0.bundleURL?.path == copy }
+        testing = host?.isRunning == true
+        if (running || testing), let dir = session, let data = try? Data(contentsOf: dir.appendingPathComponent("status.json")), let info = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            status = info
+            if testing { savedChecks = info["observed"] as? Int ?? 0 }
+        } else if !busy { status = [:] }
+        if busy && !testing {
+            launchProgress = ((try? String(contentsOf: root.appendingPathComponent("build/setup-launch.log"), encoding: .utf8)) ?? "").split(separator: "\n").last.map(String.init) ?? ""
+        }
+    }
+    func process(_ executable: URL, _ args: [String], log: URL, environment: [String: String]? = nil) throws -> Process {
+        FileManager.default.createFile(atPath: log.path, contents: nil)
+        let handle = try FileHandle(forWritingTo: log)
+        let task = Process()
+        task.executableURL = executable; task.arguments = args; task.currentDirectoryURL = root
+        task.environment = environment ?? ProcessInfo.processInfo.environment
+        task.standardOutput = handle; task.standardError = handle; task.standardInput = FileHandle.nullDevice
+        try task.run()
+        try? handle.close()
+        return task
+    }
+    func problem(_ text: String) -> NSError { NSError(domain: "MacRiff", code: 1, userInfo: [NSLocalizedDescriptionKey: text]) }
+    func beginTest() {
+        guard canTest else { return }
+        busy = true; status = [:]; savedChecks = 0; launchProgress = ""
+        Task {
+            defer { busy = false; operation = nil; refresh() }
+            do {
+                var template = Array("/tmp/macriff-test.XXXXXX".utf8CString)
+                guard let path = mkdtemp(&template) else { throw problem("Could not create a test session. Check available disk space.") }
+                let dir = URL(fileURLWithPath: String(cString: path)); testSession = dir
+                let socket = dir.appendingPathComponent("controller.sock")
+                var env = ProcessInfo.processInfo.environment
+                env["MACRIFF_CONTROLLER_SOCKET"] = socket.path
+                env["DYLD_INSERT_LIBRARIES"] = root.appendingPathComponent("build/libMacRiffController.dylib").path
+                message = "Connecting your guitar… approve the macOS USB-access dialog if it appears."
+                host = try process(root.appendingPathComponent("build/controller-test-host"), [], log: dir.appendingPathComponent("test.log"), environment: env)
+                testing = true
+                for _ in 0..<50 {
+                    if FileManager.default.fileExists(atPath: socket.path) { break }
+                    try await Task.sleep(nanoseconds: 100_000_000)
+                }
+                guard host?.isRunning == true, FileManager.default.fileExists(atPath: socket.path) else { throw problem("The tester could not start. Open Logs for details.") }
+                operation = try process(URL(fileURLWithPath: "/bin/bash"), [root.appendingPathComponent("authorize-reader.sh").path, root.appendingPathComponent("node_modules").path, root.appendingPathComponent("bin/node").path, root.appendingPathComponent("controller-reader.js").path, socket.path, dir.appendingPathComponent("bridge.log").path], log: dir.appendingPathComponent("authorization.log"))
+                while operation?.isRunning == true { try await Task.sleep(nanoseconds: 100_000_000) }
+                guard operation?.terminationStatus == 0 else { throw problem("USB access was cancelled or unavailable. Click Connect Guitar to try again.") }
+                for _ in 0..<50 {
+                    if ((try? String(contentsOf: dir.appendingPathComponent("bridge.log"), encoding: .utf8)) ?? "").contains("Starting packet polling") { break }
+                    try await Task.sleep(nanoseconds: 100_000_000)
+                }
+                guard ((try? String(contentsOf: dir.appendingPathComponent("bridge.log"), encoding: .utf8)) ?? "").contains("Starting packet polling") else { throw problem("Could not open the receiver. Stop other bridges, reconnect it, then retry. Open Logs for details.") }
+                message = "Connected. Press all five frets, then strum up and down. Clone Hero stays closed until you click Play."
+            } catch { await endTest(); message = error.localizedDescription }
+        }
+    }
+    func endTest() async {
+        if host?.isRunning == true { host?.terminate() }
+        for _ in 0..<30 {
+            if host?.isRunning != true { break }
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        if let dir = testSession {
+            // Wait for the reader to release USB before the game reader claims it.
+            for _ in 0..<50 {
+                let log = (try? String(contentsOf: dir.appendingPathComponent("bridge.log"), encoding: .utf8)) ?? ""
+                if !log.contains("Starting packet polling") || log.contains("USB connection closed") { break }
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+        }
+        host = nil; testing = false
+    }
+    func launch() {
+        guard canStart, let url = gameURL else { return }
+        if profile?.games[game] != "bridge" { NSWorkspace.shared.open(url); return }
+        busy = true; message = "Starting Clone Hero… your guitar test is complete."; launchProgress = "Preparing game…"
+        Task {
+            defer { busy = false; operation = nil; refresh() }
+            await endTest()
+            do {
+                var env = ProcessInfo.processInfo.environment
+                env["MACRIFF_GAME_APP"] = url.path
+                operation = try process(URL(fileURLWithPath: "/bin/bash"), [root.appendingPathComponent("Play Clone Hero.command").path], log: root.appendingPathComponent("build/setup-launch.log"), environment: env)
+                while operation?.isRunning == true { try await Task.sleep(nanoseconds: 200_000_000) }
+                if operation?.terminationStatus == 0 { message = "Ready to play. Choose your profile, 5-fret guitar, and Gamepad Mode off in Clone Hero." }
+                else {
+                    let log = (try? String(contentsOf: root.appendingPathComponent("build/setup-launch.log"), encoding: .utf8)) ?? ""
+                    message = "Could not launch: " + (log.split(separator: "\n").last.map(String.init) ?? "Open Logs for details.")
+                }
+            } catch { message = error.localizedDescription }
+        }
+    }
+    func stop() {
+        guard !busy else { return }
+        if testing {
+            busy = true
+            Task { await endTest(); busy = false; status = [:]; message = "Disconnected. Connect Guitar to test again." }
+        } else {
+            let copy = root.appendingPathComponent("build/Clone Hero (MacRiff).app").path
+            for app in NSWorkspace.shared.runningApplications where app.bundleURL?.path == copy { app.terminate() }
+            message = "Closing Clone Hero and releasing the guitar."
+        }
+    }
+}
+
+struct SetupView: View {
+    @StateObject var model = SetupModel()
+    let names = ["Green", "Red", "Yellow", "Blue", "Orange"]
+    let colors: [Color] = [.green, .red, .yellow, .blue, .orange]
+    let extras = ["Whammy", "Tilt", "Joystick X", "Joystick Y", "Stick click", "Start", "Select"]
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Image(systemName: "guitars.fill").font(.largeTitle).foregroundColor(.accentColor)
+                    VStack(alignment: .leading) {
+                        Text("MacRiff").font(.largeTitle.bold())
+                        Text("Connect. Test. Then play.").foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Help") { NSWorkspace.shared.open(model.root.appendingPathComponent("CONTROLLER-MODE.md")) }
+                }
+                GroupBox("1. Connect your guitar") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        if model.devices.isEmpty { Text("Plug in the original USB receiver and turn on your guitar.") }
+                        else {
+                            Picker("Controller", selection: $model.selected) {
+                                ForEach(model.devices) { Text($0.name).tag($0.id) }
+                            }.disabled(model.testing || model.running || model.busy)
+                        }
+                        Text(model.profile?.pairing ?? "Connect by USB or pair in macOS Bluetooth settings.").font(.callout).foregroundColor(.secondary)
+                        HStack {
+                            Button(model.testing ? "Guitar connected" : "Connect Guitar") { model.beginTest() }
+                                .buttonStyle(.borderedProminent).disabled(!model.canTest)
+                            Button(model.running ? "Stop Game" : "Disconnect") { model.stop() }
+                                .disabled(model.busy || (!model.running && !model.testing))
+                            Spacer()
+                            Button("Refresh") { model.scan() }.disabled(model.busy)
+                        }
+                    }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                GroupBox("2. Test your controls — no game needed") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            indicator("Guitar input received", model.inputReceived)
+                            Spacer()
+                            indicator("Frets and strumming checked", model.coreChecks == 0x7f)
+                        }
+                        Text(model.coreChecks == 0x7f ? "Ready to play. Check the remaining controls below if you like." : "Press all five frets, then strum up and down to unlock Play.")
+                            .font(.callout).foregroundColor(model.coreChecks == 0x7f ? .green : .secondary)
+                        HStack(spacing: 24) {
+                            ForEach(0..<5) { index in
+                                let pressed = (model.status["frets"] as? [Bool] ?? Array(repeating: false, count: 5))[index]
+                                VStack {
+                                    Circle().fill(colors[index].opacity(pressed ? 1 : 0.2))
+                                        .overlay(Circle().stroke(colors[index], lineWidth: pressed ? 3 : 1))
+                                        .overlay(Image(systemName: model.observed & (1 << index) != 0 ? "checkmark" : ""))
+                                        .frame(width: 40, height: 40)
+                                    Text(names[index]).font(.caption)
+                                }
+                            }
+                            Spacer()
+                            VStack(alignment: .leading, spacing: 10) {
+                                indicator("Strum up", model.coreChecks & 32 != 0)
+                                indicator("Strum down", model.coreChecks & 64 != 0)
+                            }
+                        }
+                        Divider()
+                        Text("Optional checks").font(.subheadline.bold())
+                        HStack { meter("Whammy", "whammy"); meter("Tilt / Star Power", "tilt") }
+                        Text(String(format: "Joystick   X: %.2f    Y: %.2f", model.status["stickX"] as? Double ?? 0, model.status["stickY"] as? Double ?? 0)).font(.caption).monospacedDigit()
+                        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 4), alignment: .leading) {
+                            ForEach(0..<extras.count, id: \.self) { i in indicator(extras[i], model.observed & (1 << (i + 7)) != 0) }
+                        }
+                        Text("Checks stay after release. Test both fret rows. Clone Hero stays closed until you click Play.")
+                            .font(.caption).foregroundColor(.secondary)
+                    }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                GroupBox("3. Play when you’re ready") {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Picker("Game", selection: $model.game) {
+                            Text("Clone Hero").tag("clonehero"); Text("YARG").tag("yarg")
+                        }.pickerStyle(.segmented).disabled(model.busy || model.running)
+                        if model.gameURL == nil { Text("Install this game in Applications to continue.").foregroundColor(.secondary) }
+                        if model.game == "yarg" && model.profile != nil { Text("YARG bridging for this guitar is not supported yet.").font(.caption).foregroundColor(.secondary) }
+                        HStack {
+                            Button(model.running ? "Game running" : (model.game == "clonehero" ? "Play Clone Hero" : "Open YARG")) { model.launch() }
+                                .buttonStyle(.borderedProminent).controlSize(.large).disabled(!model.canStart)
+                            if model.running { indicator("Controller registered", model.status["gameDetected"] as? Bool == true) }
+                            Spacer()
+                            Button("View Logs") { NSWorkspace.shared.open(model.session ?? model.root.appendingPathComponent("build")) }
+                        }
+                        if model.profile == nil && model.device != nil { Text("This controller uses native game setup. Standalone testing currently supports Xbox Riffmaster.").font(.caption).foregroundColor(.secondary) }
+                    }.padding(10).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                HStack(alignment: .top) {
+                    if model.busy { ProgressView().controlSize(.small) }
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(model.message).font(.callout)
+                        if model.busy && !model.launchProgress.isEmpty { Text(model.launchProgress).font(.caption).foregroundColor(.secondary) }
+                    }
+                }
+                Text("For normal guitar play: choose 5-fret guitar and turn Gamepad Mode off in Clone Hero.").font(.caption).foregroundColor(.secondary)
+            }.padding(24)
+        }.frame(width: 760, height: 800)
+    }
+    func indicator(_ text: String, _ on: Bool) -> some View {
+        Label(text, systemImage: on ? "checkmark.circle.fill" : "circle").foregroundColor(on ? .green : .secondary).font(.caption)
+    }
+    func meter(_ name: String, _ key: String) -> some View {
+        VStack(alignment: .leading) { Text(name).font(.caption); ProgressView(value: model.status[key] as? Double ?? 0, total: 1) }.frame(maxWidth: .infinity)
+    }
+}
+@main struct MacRiffSetup: App {
+    init() {
+        if CommandLine.arguments.contains("--diagnose") {
+            let model = SetupModel()
+            for d in model.devices { print("\(d.name) \(String(format: "%04x:%04x", d.vendor, d.product)) nativeHID=\(d.native)") }
+            print("Runtime: \(model.root.path)")
+            print("Runtime error: \(model.runtimeError ?? "none")")
+            print("Profiles loaded: \(model.profiles.count)")
+            print("Clone Hero installed: \(model.gameURL != nil)")
+            print("Can connect before game launch: \(model.canTest)")
+            print("Play locked until fret/strum test: \(!model.canStart)")
+            exit(model.runtimeError == nil ? 0 : 1)
+        }
+    }
+    var body: some Scene { Window("MacRiff Setup", id: "setup") { SetupView() }.windowResizability(.contentSize) }
+}

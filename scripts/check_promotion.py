@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import subprocess
 
-REQUIRED = ('unity_build', 'song_import_gameplay', 'controller_hardware', 'clean_install', 'recovery')
+REQUIRED = ('runtime_build', 'song_import_gameplay', 'controller_hardware', 'clean_install', 'recovery')
 
 
 def check_report(base, head, report):
@@ -14,7 +14,9 @@ def check_report(base, head, report):
         return
     if head != expected:
         raise ValueError(f'{base} accepts promotion only from {expected}, not {head}.')
-    required = ('unity_build',) if base == 'stage' else REQUIRED
+    if report.get('runtime') not in ('electron', 'unity'):
+        raise ValueError('Promotion must identify the tested runtime as electron or unity.')
+    required = ('runtime_build',) if base == 'stage' else REQUIRED
     checks = report.get('checks', {})
     for key in required:
         entry = checks.get(key, {})
