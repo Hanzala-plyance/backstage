@@ -1,0 +1,189 @@
+{
+ "_comment": "Shared by desktop (electron/names.cjs) and converter (songmaker/names.py) tests. Inputs are real YouTube-derived song.ini values.",
+ "clean": [
+  [
+   [
+    "Drake - Janice STFU",
+    "Drake"
+   ],
+   [
+    "Janice STFU",
+    "Drake"
+   ]
+  ],
+  [
+   [
+    "Daft Punk - One More Time (Official Video)",
+    "Daft Punk"
+   ],
+   [
+    "One More Time",
+    "Daft Punk"
+   ]
+  ],
+  [
+   [
+    "Gunna - fukumean [Official Visualizer]",
+    "Gunna"
+   ],
+   [
+    "fukumean",
+    "Gunna"
+   ]
+  ],
+  [
+   [
+    "Yung Pinch Feat. Blackbear & P-Lo  Smoke & Drive  (WSHH Exclusive - Official Music Video)",
+    "WORLDSTARHIPHOP"
+   ],
+   [
+    "Smoke & Drive (feat. Blackbear & P-Lo)",
+    "Yung Pinch"
+   ]
+  ],
+  [
+   [
+    "Yung Pinch - Smoke & Drive ft. blackbear (Official Video)",
+    "GalaxyMusic"
+   ],
+   [
+    "Smoke & Drive (feat. blackbear)",
+    "Yung Pinch"
+   ]
+  ],
+  [
+   [
+    "I Wonder",
+    "Kanye West"
+   ],
+   [
+    "I Wonder",
+    "Kanye West"
+   ]
+  ],
+  [
+   [
+    "My override",
+    "YouTube artist"
+   ],
+   [
+    "My override",
+    ""
+   ]
+  ],
+  [
+   [
+    "Song (Lyrics)",
+    "A"
+   ],
+   [
+    "Song",
+    "A"
+   ]
+  ],
+  [
+   [
+    "Song [HD] (Official Audio)",
+    "A"
+   ],
+   [
+    "Song",
+    "A"
+   ]
+  ],
+  [
+   [
+    "Song (Live at Wembley)",
+    "A"
+   ],
+   [
+    "Song (Live at Wembley)",
+    "A"
+   ]
+  ],
+  [
+   [
+    "Artist - Title - Remix",
+    "Artist"
+   ],
+   [
+    "Title - Remix",
+    "Artist"
+   ]
+  ],
+  [
+   [
+    "Bohemian Rhapsody - Remastered 2011",
+    "Queen"
+   ],
+   [
+    "Bohemian Rhapsody - Remastered 2011",
+    "Queen"
+   ]
+  ],
+  [
+   [
+    "I  Wonder",
+    "Kanye West"
+   ],
+   [
+    "I Wonder",
+    "Kanye West"
+   ]
+  ],
+  [
+   [
+    "",
+    "Unknown artist"
+   ],
+   [
+    "",
+    ""
+   ]
+  ]
+ ],
+ "folder": [
+  [
+   [
+    "Janice STFU",
+    "Drake"
+   ],
+   "Drake - Janice STFU"
+  ],
+  [
+   [
+    "My override",
+    ""
+   ],
+   "My override"
+  ],
+  [
+   [
+    "Back In Black",
+    "AC/DC"
+   ],
+   "AC DC - Back In Black"
+  ],
+  [
+   [
+    "..hidden: part?",
+    ""
+   ],
+   "hidden part"
+  ],
+  [
+   [
+    "",
+    ""
+   ],
+   "Untitled song"
+  ],
+  [
+   [
+    "x",
+    "y"
+   ],
+   "y - x"
+  ]
+ ]
+}
