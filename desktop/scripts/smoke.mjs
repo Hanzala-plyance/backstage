@@ -516,6 +516,8 @@ try {
     timeout: 20000,
   });
   await expect(page.locator(".game-dialog .stars").first()).toBeVisible();
+  // Results don't repeat the pause screen's rewind message.
+  await expect(page.locator(".game-dialog")).not.toContainText("two seconds");
   await expect(page.locator(".game-dialog .new-best").first()).toBeVisible();
   await page.getByRole("button", { name: "Back to library" }).click();
   await expect(page.locator(".song-row").first()).toBeFocused();

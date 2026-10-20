@@ -880,7 +880,9 @@ export default function Game({
                         chart.part !== "Drums"
                       ? "Strum solid gems. White caps are HOPOs; hollow caps are taps. Hold long notes and complete glowing phrases to earn Star Power."
                       : "Tap the matching controls as notes cross the line."
-                  : "Your score is safe. The song picks up two seconds back, with a count-down to where you left off.")}
+                  : phase === "paused"
+                    ? "Your score is safe. The song picks up two seconds back, with a count-down to where you left off."
+                    : "")}
             </p>
             {keyboardPlayer >= 0 && phase !== "finished" && (
               <div className="key-row">
