@@ -25,6 +25,19 @@ const PRESETS = [
   "gunner",
   "demon",
   "voodoo",
+  "rehan",
+  "aali",
+  "wajiha",
+  "huz",
+  "oreo",
+  "thunder",
+  "champ",
+  "grunge",
+  "stripe",
+  "gabba",
+  "quiff",
+  "karma",
+  "mod",
 ];
 const MAX_PHOTO = 400 * 1024;
 const GUITARS = ["classic-s", "classic-t", "single-cut", "double-cut", "arrow"];

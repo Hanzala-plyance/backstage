@@ -378,6 +378,8 @@ export function createHighway(
     firstBeat = 0,
     seenHit = -Infinity,
     lastFrame = performance.now(),
+    lastTime = -Infinity,
+    shownNotes = -1,
     lastTier = 0,
     tierFlash = 0,
     random = 12345;
@@ -452,6 +454,7 @@ export function createHighway(
     reset() {
       first = 0;
       firstBeat = 0;
+      lastTime = -Infinity;
       seenHit = -Infinity;
       spark.life.fill(0);
     },
@@ -470,6 +473,10 @@ export function createHighway(
         dt = Math.min(0.05, (now - lastFrame) / 1000),
         seconds = now / 1000;
       lastFrame = now;
+      // The pointers below only move forward; when the clock goes back (a
+      // restart, or the rewind on resume) scan again from the start.
+      if (time < lastTime - 0.001) first = firstBeat = 0;
+      lastTime = time;
       board.offset.y = ((time * SPEED) / 15) % 1;
       cones.forEach((cone, i) => {
         cone.rotation.z = Math.sin(seconds * 0.45 + i * 1.7) * 0.45;
@@ -691,6 +698,9 @@ export function createHighway(
           1.5,
         );
       }
+      // How many notes are on screen, for tests (set only when it changes).
+      if (count !== shownNotes)
+        canvas.dataset.notes = String((shownNotes = count));
       for (const [p, n] of [
         [lines, lineCount],
         [gems, count],

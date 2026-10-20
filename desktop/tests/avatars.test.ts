@@ -30,15 +30,15 @@ test("names keep up to 8 capital letters and digits", () => {
     "ACE",
   );
 });
-test("23 distinct premade avatars, matching the store", () => {
-  assert.equal(presets.length, 23);
-  assert.equal(new Set(presets.map((p) => p.id)).size, 23);
-  assert.equal(presets.filter((p) => p.build === "slim").length, 8);
+test("36 distinct premade avatars, matching the store", () => {
+  assert.equal(presets.length, 36);
+  assert.equal(new Set(presets.map((p) => p.id)).size, 36);
+  assert.equal(presets.filter((p) => p.build === "slim").length, 10);
   assert.deepEqual(
     presets.map((p) => p.id),
     PRESETS,
   );
-  assert.ok(new Set(presets.map((p) => p.style)).size >= 19, "varied hair");
+  assert.ok(new Set(presets.map((p) => p.style)).size >= 20, "varied hair");
 });
 test("photos are restyled onto the stage palette with contrast stretch", () => {
   // A dim gradient still spans the palette after stretching.
@@ -81,6 +81,10 @@ test("moods follow Star Power, misses and streaks", () => {
   assert.equal(
     moodFor({ powerActive: false, combo: 12, missedRecently: false }),
     "hyped",
+  );
+  assert.equal(
+    moodFor({ powerActive: false, combo: 30, missedRecently: false }),
+    "shred",
   );
   assert.equal(
     moodFor({ powerActive: false, combo: 3, missedRecently: false }),
